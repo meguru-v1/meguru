@@ -34,13 +34,19 @@ function createIcon(size, text) {
     ctx.rotate(-Math.PI / 4); // 45 deg tilt
 
     // Draw simplified needle
-    // ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    // ctx.beginPath();
-    // ctx.moveTo(0, -size * 0.3);
-    // ctx.lineTo(size * 0.1, 0);
-    // ctx.lineTo(0, size * 0.3);
-    // ctx.lineTo(-size * 0.1, 0);
-    // ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.35); // Tip
+    ctx.lineTo(size * 0.12, 0);  // Right
+    ctx.lineTo(0, size * 0.35);  // Bottom
+    ctx.lineTo(-size * 0.12, 0); // Left
+    ctx.fill();
+
+    // Add a center point
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.05, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
 

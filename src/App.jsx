@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import SearchInterface from './components/SearchInterface';
 import MapVisualization from './components/MapVisualization'; // Leaflet
 import { fetchNearbySpots } from './lib/osm';
@@ -268,7 +268,6 @@ function App() {
           radius={radius}
           spots={selectedCourse ? selectedCourse.spots : []}
           focusedSpot={focusedSpot}
-          routeMode={true}
         />
       </div>
 

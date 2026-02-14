@@ -51,13 +51,8 @@ export const searchNearbyPlaces = async (mapInstanceOrNode, center, radius) => {
         }
 
         const service = new window.google.maps.places.PlacesService(mapInstanceOrNode);
-        const request = {
-            location: new window.google.maps.LatLng(center.lat, center.lon),
-            radius: radius,
-            // Use broadly inclusive types to get variety
-            type: ['tourist_attraction', 'point_of_interest', 'museum', 'park', 'shrine', 'place_of_worship', 'restaurant', 'cafe', 'store']
-            // Note: 'keyword' can be used for more specific things if needed, but 'type' is good for general
-        };
+
+
 
         // We might need multiple searches to get diversity if one type dominates
         // For now, let's try a broad 'nearbySearch'

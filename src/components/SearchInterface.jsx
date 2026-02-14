@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, MapPin, Clock, Compass, Navigation } from 'lucide-react';
-import { motion } from 'framer-motion';
+
 
 const SearchInterface = ({ onSearch }) => {
     const [query, setQuery] = useState('');
@@ -19,9 +19,7 @@ const SearchInterface = ({ onSearch }) => {
     };
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+        <div
             className="glass-panel p-8 max-w-md w-full mx-auto relative z-10"
         >
             <div className="text-center mb-8">
@@ -103,7 +101,7 @@ const SearchInterface = ({ onSearch }) => {
                     )}
                 </button>
             </form>
-        </motion.div>
+        </div>
     );
 };
 

@@ -30,7 +30,7 @@ const MapController = ({ center, zoom, focusedSpot }) => {
     return null;
 };
 
-const MapVisualization = ({ center, radius, spots, routeMode = false, focusedSpot }) => {
+const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
     const mapCenter = center || { lat: 34.9858, lon: 135.7588 };
     const zoomLevel = 14;
 

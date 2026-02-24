@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
+// Cache bust: 2026-02-17
 export default defineConfig({
   plugins: [
     react(),

@@ -16,7 +16,7 @@ export const generateSmartCourses = async (candidates, center, durationMinutes) 
     // Helper to generate content
     const generate = async () => {
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.0-flash",
         });
 
         const candidateList = candidates.map((s, i) =>

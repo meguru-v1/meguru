@@ -25,7 +25,9 @@ function App() {
 
     try {
       // 1. Geocode via OSM (Nominatim)
-      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
+        headers: { 'Accept': 'application/json' }
+      });
       const geoData = await geoRes.json();
 
       if (!geoData || geoData.length === 0) throw new Error("場所が見つかりませんでした。");

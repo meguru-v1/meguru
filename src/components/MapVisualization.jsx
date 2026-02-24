@@ -74,7 +74,7 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
                             pathOptions={{ color: '#F59E0B', fillColor: '#F59E0B', fillOpacity: 0.05, weight: 1, dashArray: '5, 5' }}
                         />
                         <Marker position={[center.lat, center.lon]} opacity={0.8}>
-                            <Popup>Startup Location</Popup>
+                            <Popup>出発地点</Popup>
                         </Marker>
                         <MapController center={[center.lat, center.lon]} zoom={zoomLevel} focusedSpot={focusedSpot} />
                     </>

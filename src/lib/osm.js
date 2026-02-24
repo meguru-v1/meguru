@@ -74,16 +74,16 @@ export const fetchNearbySpots = async (lat, lon, radius) => {
         );
 
         return elements.map(el => {
-            let category = 'other';
+            let category = 'その他';
             const amenity = el.tags.amenity;
             const shop = el.tags.shop;
 
-            if (amenity === 'restaurant' || amenity === 'cafe' || amenity === 'fast_food' || amenity === 'food_court' || amenity === 'pub' || amenity === 'bar' || amenity === 'ice_cream' || amenity === 'biergarten') category = 'gourmet';
-            else if (shop === 'bakery' || shop === 'confectionery' || shop === 'pastry' || shop === 'chocolate' || shop === 'coffee' || shop === 'tea') category = 'gourmet';
-            else if (el.tags.historic || el.tags.religion) category = 'history';
-            else if (el.tags.leisure === 'park' || el.tags.leisure === 'garden' || el.tags.natural) category = 'nature';
-            else if (el.tags.tourism === 'museum' || el.tags.tourism === 'art_gallery' || el.tags.amenity === 'arts_centre') category = 'art';
-            else if (el.tags.tourism) category = 'tourism';
+            if (amenity === 'restaurant' || amenity === 'cafe' || amenity === 'fast_food' || amenity === 'food_court' || amenity === 'pub' || amenity === 'bar' || amenity === 'ice_cream' || amenity === 'biergarten') category = 'グルメ';
+            else if (shop === 'bakery' || shop === 'confectionery' || shop === 'pastry' || shop === 'chocolate' || shop === 'coffee' || shop === 'tea') category = 'グルメ';
+            else if (el.tags.historic || el.tags.religion) category = '歴史';
+            else if (el.tags.leisure === 'park' || el.tags.leisure === 'garden' || el.tags.natural) category = '自然';
+            else if (el.tags.tourism === 'museum' || el.tags.tourism === 'art_gallery' || el.tags.amenity === 'arts_centre') category = 'アート';
+            else if (el.tags.tourism) category = '観光';
 
             return {
                 id: el.id,

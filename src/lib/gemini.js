@@ -124,9 +124,13 @@ export const generateSmartCourses = async (candidates, center, durationMinutes) 
     let text;
     try {
         console.log("Attempting Gemini generation...");
+        console.log("API Key present:", !!API_KEY, "Key prefix:", API_KEY ? API_KEY.substring(0, 10) + '...' : 'MISSING');
         text = await generate();
     } catch (error) {
-        console.error("Gemini generation failed:", error);
+        console.error("Gemini generation failed:", error.message || error);
+        if (error.response) {
+            console.error("Response status:", error.response.status);
+        }
         return [];
     }
 

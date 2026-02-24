@@ -13,12 +13,10 @@ const genAI = new GoogleGenerativeAI(API_KEY);
  */
 export const generateSmartCourses = async (candidates, center, durationMinutes) => {
 
-    // Helper to generate content with or without tools
-    const generate = async (useTools = true) => {
+    // Helper to generate content
+    const generate = async () => {
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-            tools: useTools ? [{ googleSearch: {} }] : undefined,
-            // strict JSON only works if tools are disabled, so we rely on regex for both to be safe/consistent
+            model: "gemini-1.5-flash",
         });
 
         const candidateList = candidates.map((s, i) =>
@@ -125,20 +123,11 @@ export const generateSmartCourses = async (candidates, center, durationMinutes) 
 
     let text;
     try {
-        // First attempt: With Google Search Grounding
-        console.log("Attempting generation with Google Search...");
-        text = await generate(true);
+        console.log("Attempting Gemini generation...");
+        text = await generate();
     } catch (error) {
-        console.warn("Google Search generation failed (likely 429 or timeout). Falling back to standard model.", error);
-
-        // Second attempt: Without tools (Standard Model)
-        try {
-            console.log("Attempting standard generation...");
-            text = await generate(false);
-        } catch (retryError) {
-            console.error("Standard generation also failed:", retryError);
-            return []; // Give up
-        }
+        console.error("Gemini generation failed:", error);
+        return [];
     }
 
     console.log("Gemini Raw Response:", text); // Debug log

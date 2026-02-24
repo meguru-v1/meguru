@@ -74,7 +74,7 @@ export const generateSmartCourses = async (candidates, center, durationMinutes) 
     - Each of the 5 courses must feature ** completely different locations **.
           - Exception: Large major landmarks(like Kyoto Station) can be start points, but try to vary the main attractions.
 
-    ${useTools ? '**CRITICAL**: Use **Google Search Tool** to find "hidden gems", "local legends", or "unique oddities" about these spots.' : '**IMPORTANT**: Dig deep into your knowledge for unique trivia.'}
+    **IMPORTANT**: Dig deep into your knowledge for unique trivia.
         
         ** CRITICAL RULES:**
     1. ** Output MUST be valid JSON(at the end) **.

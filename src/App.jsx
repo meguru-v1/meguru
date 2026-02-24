@@ -24,17 +24,27 @@ function App() {
     setStatus('場所を検索中...'); // Searching location
 
     try {
-      // 1. Geocode via OSM (Nominatim) with Photon fallback
+      // 1. Geocode via Photon (primary, CORS-friendly) with Nominatim fallback
       let geoData;
       try {
-        geoData = await searchLocation(query);
-      } catch (geoError) {
-        console.warn("Nominatim failed, trying Photon fallback:", geoError);
-        const photonRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=ja`);
+        const photonRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`);
         const photonData = await photonRes.json();
         if (photonData.features && photonData.features.length > 0) {
-          const coords = photonData.features[0].geometry.coordinates;
-          geoData = [{ lat: coords[1].toString(), lon: coords[0].toString(), display_name: photonData.features[0].properties.name }];
+          geoData = photonData.features.map(f => ({
+            lat: f.geometry.coordinates[1].toString(),
+            lon: f.geometry.coordinates[0].toString(),
+            display_name: f.properties.name || query
+          }));
+        }
+      } catch (photonError) {
+        console.warn("Photon failed, trying Nominatim fallback:", photonError);
+      }
+
+      if (!geoData || geoData.length === 0) {
+        try {
+          geoData = await searchLocation(query);
+        } catch (nomError) {
+          console.warn("Nominatim also failed:", nomError);
         }
       }
 

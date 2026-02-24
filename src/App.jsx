@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import SearchInterface from './components/SearchInterface';
 import MapVisualization from './components/MapVisualization'; // Leaflet
-import { fetchNearbySpots } from './lib/osm';
+import { fetchNearbySpots, searchLocation } from './lib/osm';
 import { generateSmartCourses } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
 import { Loader2, Footprints, Clock, MapPin, Star, Sparkles } from 'lucide-react';
@@ -24,11 +24,19 @@ function App() {
     setStatus('場所を検索中...'); // Searching location
 
     try {
-      // 1. Geocode via OSM (Nominatim)
-      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
-        headers: { 'Accept': 'application/json' }
-      });
-      const geoData = await geoRes.json();
+      // 1. Geocode via OSM (Nominatim) with Photon fallback
+      let geoData;
+      try {
+        geoData = await searchLocation(query);
+      } catch (geoError) {
+        console.warn("Nominatim failed, trying Photon fallback:", geoError);
+        const photonRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=ja`);
+        const photonData = await photonRes.json();
+        if (photonData.features && photonData.features.length > 0) {
+          const coords = photonData.features[0].geometry.coordinates;
+          geoData = [{ lat: coords[1].toString(), lon: coords[0].toString(), display_name: photonData.features[0].properties.name }];
+        }
+      }
 
       if (!geoData || geoData.length === 0) throw new Error("場所が見つかりませんでした。");
 

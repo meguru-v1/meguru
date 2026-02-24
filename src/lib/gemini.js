@@ -12,8 +12,8 @@ const genAI = new GoogleGenerativeAI(API_KEY);
  * @returns {Promise<Array>} - List of 3 course objects
  */
 export const generateSmartCourses = async (candidates, center, durationMinutes) => {
-    // Models to try in order (lite model often has better free tier availability)
-    const MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-pro"];
+    // Models to try in order (2.5-flash-lite works in hinowa on same project)
+    const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
 
     // Build prompt (same for all models)
     const candidateList = candidates.map((s, i) =>

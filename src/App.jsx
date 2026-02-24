@@ -285,12 +285,15 @@ function App() {
       </div>
 
       {/* ===== MOBILE: Top Search Bar (<md) ===== */}
-      <div className={`md:hidden absolute top-0 left-0 right-0 ${showBottomSheet && hasResults ? 'z-[400]' : 'z-[500]'} p-2.5 safe-top pointer-events-none`}>
-        <div className="pointer-events-auto flex flex-col gap-2">
-          <SearchInterface onSearch={handleSearch} />
-          {statusPanel}
+      {/* Hide search when bottom sheet is visible to prevent overlap */}
+      {!(hasResults && showBottomSheet) && (
+        <div className="md:hidden absolute top-0 left-0 right-0 z-[500] p-2.5 safe-top pointer-events-none">
+          <div className="pointer-events-auto flex flex-col gap-2">
+            <SearchInterface onSearch={handleSearch} />
+            {statusPanel}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ===== MOBILE: Peek button when bottom sheet is closed ===== */}
       {hasResults && !showBottomSheet && (

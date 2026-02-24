@@ -4,7 +4,7 @@ import MapVisualization from './components/MapVisualization'; // Leaflet
 import { fetchNearbySpots, searchLocation } from './lib/osm';
 import { generateSmartCourses } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
-import { Loader2, Footprints, Clock, MapPin, Star, Sparkles } from 'lucide-react';
+import { Loader2, Footprints, Clock, MapPin, Star, Sparkles, X, ChevronUp } from 'lucide-react';
 
 function App() {
   const [center, setCenter] = useState(null);
@@ -15,6 +15,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(''); // For granular loading status
   const [error, setError] = useState(null);
+  const [showBottomSheet, setShowBottomSheet] = useState(false);
 
   const handleSearch = async ({ query, radius, duration }) => {
     setLoading(true);
@@ -91,7 +92,7 @@ function App() {
       }
 
       setCourses(generatedCourses);
-      setSelectedCourse(generatedCourses[0]);
+      setShowBottomSheet(true);
 
     } catch (err) {
       console.error(err);
@@ -284,19 +285,41 @@ function App() {
       </div>
 
       {/* ===== MOBILE: Top Search Bar (<md) ===== */}
-      <div className="md:hidden absolute top-0 left-0 right-0 z-[500] p-2.5 safe-top pointer-events-none">
+      <div className={`md:hidden absolute top-0 left-0 right-0 ${showBottomSheet && hasResults ? 'z-[400]' : 'z-[500]'} p-2.5 safe-top pointer-events-none`}>
         <div className="pointer-events-auto flex flex-col gap-2">
           <SearchInterface onSearch={handleSearch} />
           {statusPanel}
         </div>
       </div>
 
+      {/* ===== MOBILE: Peek button when bottom sheet is closed ===== */}
+      {hasResults && !showBottomSheet && (
+        <div className="md:hidden fixed bottom-4 left-0 right-0 z-[500] flex justify-center">
+          <button
+            onClick={() => setShowBottomSheet(true)}
+            className="bg-slate-900 text-white px-5 py-2.5 rounded-full shadow-xl flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
+          >
+            <ChevronUp size={16} /> コース一覧を表示 ({courses.length})
+          </button>
+        </div>
+      )}
+
       {/* ===== MOBILE: Bottom Sheet for Results (<md) ===== */}
-      {hasResults && (
+      {hasResults && showBottomSheet && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-[500] animate-slide-up-sheet">
           <div className="bg-white/95 backdrop-blur-xl rounded-t-2xl shadow-2xl border-t border-slate-200/50 safe-bottom">
-            <div className="drag-handle mt-3"></div>
-            <div className="px-3 pb-3 max-h-[55dvh] overflow-y-auto scrollbar-hide">
+            {/* Header with close button */}
+            <div className="flex items-center justify-between px-4 pt-3 pb-1">
+              <div className="drag-handle"></div>
+              <button
+                onClick={() => { setShowBottomSheet(false); setSelectedCourse(null); setFocusedSpot(null); }}
+                className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors active:scale-90"
+                aria-label="閉じる"
+              >
+                <X size={16} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="px-3 pb-3 max-h-[50dvh] overflow-y-auto scrollbar-hide">
               {courseListUI}
               {courseDetailUI}
             </div>

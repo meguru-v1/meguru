@@ -27,7 +27,7 @@ export const generateSmartCourses = async (candidates, center, durationMinutes) 
         "🌿 Nature's Whisper: 静寂と緑",
         "🏙️ Urban Jungle: 都会の喧騒と魅力を歩く",
         "⛩️ Spiritual Awakening: 神社仏閣とパワースポット",
-        "🍽️ Gourmet Adventure: 美食と食べ歩き（※食事回数制限注意）",
+        "🍽️ Gourmet Adventure: 美食と食べ歩き",
         "🎨 Art & Soul: アートとクリエイティブ",
         "💎 Hidden Gems: 地元民しか知らない穴場",
         "📸 Photogenic: 思わず写真を撮りたくなる風景",

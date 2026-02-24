@@ -50,7 +50,10 @@ export const generateCourses = (center, allSpots, durationMinutes) => {
 
             // Allow slight time overrun (up to 10%) for the last spot to make it fit better
             if (!skip && (timeUsed + walkTime + stayTime) <= (durationMinutes * 1.1)) {
-                courseSpots.push(nextSpot);
+                courseSpots.push({
+                    ...nextSpot,
+                    travel_time_minutes: courseSpots.length === 0 ? 0 : Math.round(walkTime)
+                });
                 timeUsed += (walkTime + stayTime);
                 distUsed += dist;
                 if (nextSpot.category === 'グルメ') gourmetCount++;

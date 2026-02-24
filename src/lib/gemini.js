@@ -146,13 +146,48 @@ ${themeInstructions}
             return {
                 ...original,
                 stayTime: s.stayTime,
-                aiDescription: s.recommendation_reason || s.description
+                aiDescription: s.recommendation_reason || s.description,
+                must_see: s.must_see || null,
+                pro_tip: s.pro_tip || null
             };
         }).filter(Boolean);
 
-        return {
-            ...course,
-            spots: hydratedSpots
-        };
+        // Sort spots by nearest-neighbor for proper walking order
+        if (hydratedSpots.length > 1) {
+            const sorted = [hydratedSpots[0]];
+            const remaining = hydratedSpots.slice(1);
+            while (remaining.length > 0) {
+                const current = sorted[sorted.length - 1];
+                let nearestIdx = 0;
+                let nearestDist = Infinity;
+                for (let i = 0; i < remaining.length; i++) {
+                    const dx = (remaining[i].lat - current.lat) * 111000;
+                    const dy = (remaining[i].lon - current.lon) * 111000 * Math.cos(current.lat * Math.PI / 180);
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestIdx = i;
+                    }
+                }
+                sorted.push(remaining.splice(nearestIdx, 1)[0]);
+            }
+
+            // Calculate travel_time_minutes between consecutive spots
+            for (let i = 0; i < sorted.length; i++) {
+                if (i === 0) {
+                    sorted[i].travel_time_minutes = 0;
+                } else {
+                    const prev = sorted[i - 1];
+                    const dx = (sorted[i].lat - prev.lat) * 111000;
+                    const dy = (sorted[i].lon - prev.lon) * 111000 * Math.cos(prev.lat * Math.PI / 180);
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    sorted[i].travel_time_minutes = Math.round(dist / 80); // 80m/min walking
+                }
+            }
+
+            return { ...course, spots: sorted };
+        }
+
+        return { ...course, spots: hydratedSpots };
     });
 };

@@ -20,7 +20,8 @@ export const generateSmartCourses = async (candidates, center, durationMinutes) 
         `${i}: ${s.name} (${s.category})`
     ).join('\n');
 
-    const maxDining = durationMinutes <= 90 ? 1 : (durationMinutes <= 300 ? 2 : 3);
+    const maxDining = durationMinutes <= 90 ? 1 : (durationMinutes <= 300 ? 2 : (durationMinutes <= 480 ? 3 : 4));
+    const targetSpots = Math.min(Math.ceil(durationMinutes / 50), 15);
 
     const allThemes = [
         "🕰️ Time Travel: 時代を感じる歴史旅",
@@ -56,9 +57,10 @@ Create 5 distinct, **exciting** model courses.
 ${themeInstructions}
 
 **NEGATIVE CONSTRAINTS (MUST FOLLOW):**
-- **DINING LIMIT**: For ${durationMinutes} min, you must have **MAX ${maxDining}** food/drink spot.
+- **DINING LIMIT**: For ${durationMinutes} min, you must have **MAX ${maxDining}** food/drink spots.
   - (If ${maxDining} is 1, do NOT include a Cafe AND a Restaurant. Choose only one.)
 - **NO DUPLICATE SPOTS**: A spot used in Course 1 CANNOT be used in Course 2, 3, 4, or 5.
+- **SPOT COUNT**: Each course should have approximately **${targetSpots} spots** to fill ${durationMinutes} minutes. NEVER make a course shorter than requested.
 
 **IMPORTANT**: Dig deep into your knowledge for unique trivia.
 

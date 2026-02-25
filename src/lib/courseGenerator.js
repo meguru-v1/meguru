@@ -13,6 +13,8 @@ export const generateCourses = (center, allSpots, durationMinutes) => {
 
     // Helper to build a single course
     const buildCourse = (id, title, desc, candidates) => {
+        // Dynamic max spots based on duration (~50min avg per spot)
+        const maxSpots = Math.min(Math.ceil(durationMinutes / 50), 20);
         let currentLoc = center;
         let timeUsed = 0;
         let distUsed = 0;
@@ -23,7 +25,7 @@ export const generateCourses = (center, allSpots, durationMinutes) => {
         let available = shuffle(candidates).filter(s => s.lat && s.lon);
 
         // Max 8 spots for realistic travel
-        while (timeUsed < durationMinutes && courseSpots.length < 8 && available.length > 0) {
+        while (timeUsed < durationMinutes && courseSpots.length < maxSpots && available.length > 0) {
             // Find nearest neighbor strategy to avoid zig-zag
             available.sort((a, b) => {
                 const da = getDistance(currentLoc, { latitude: a.lat, longitude: a.lon });

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -9,6 +9,49 @@ L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
     iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Create a numbered circle marker icon
+const createNumberedIcon = (number, isStart, isEnd, isFocused) => {
+    const bgColor = isStart ? '#F59E0B' : isEnd ? '#EF4444' : '#0F172A';
+    const size = isFocused ? 32 : 26;
+    const fontSize = isFocused ? 14 : 11;
+    const border = isFocused ? '3px solid white' : '2px solid white';
+    const shadow = isFocused ? '0 0 12px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.3)';
+
+    return L.divIcon({
+        className: 'custom-numbered-marker',
+        html: `<div style="
+            width:${size}px;height:${size}px;
+            background:${bgColor};
+            border-radius:50%;
+            display:flex;align-items:center;justify-content:center;
+            color:white;font-weight:800;font-size:${fontSize}px;
+            border:${border};
+            box-shadow:${shadow};
+            transition:transform 0.2s;
+            font-family:'Noto Sans JP',sans-serif;
+        ">${number}</div>`,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+        popupAnchor: [0, -size / 2 - 4],
+    });
+};
+
+// Start location marker
+const startIcon = L.divIcon({
+    className: 'custom-start-marker',
+    html: `<div style="
+        width:20px;height:20px;
+        background:#6366F1;
+        border-radius:50%;
+        display:flex;align-items:center;justify-content:center;
+        border:2px solid white;
+        box-shadow:0 2px 6px rgba(0,0,0,0.3);
+    "><div style="width:6px;height:6px;background:white;border-radius:50%;"></div></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -14],
 });
 
 // Component to control map movement
@@ -23,7 +66,7 @@ const MapController = ({ center, zoom, focusedSpot }) => {
     // Fly to focused spot
     useEffect(() => {
         if (focusedSpot) {
-            map.flyTo([focusedSpot.lat, focusedSpot.lon], 18, { duration: 1.5 });
+            map.flyTo([focusedSpot.lat, focusedSpot.lon], 17, { duration: 1.5 });
         }
     }, [focusedSpot, map]);
 
@@ -51,6 +94,18 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
     // Add start point to route for visualization if available
     const fullRoute = center ? [[center.lat, center.lon], ...routePositions] : routePositions;
 
+    // Memoize icons to avoid re-creating on every render
+    const spotIcons = useMemo(() => {
+        return spots.map((spot, index) =>
+            createNumberedIcon(
+                index + 1,
+                index === 0,
+                index === spots.length - 1,
+                focusedSpot && focusedSpot.id === spot.id
+            )
+        );
+    }, [spots, focusedSpot]);
+
     return (
         <div className="w-full h-full relative rounded-2xl overflow-hidden shadow-inner border border-slate-200">
             <MapContainer
@@ -73,7 +128,7 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
                             radius={radius}
                             pathOptions={{ color: '#F59E0B', fillColor: '#F59E0B', fillOpacity: 0.05, weight: 1, dashArray: '5, 5' }}
                         />
-                        <Marker position={[center.lat, center.lon]} opacity={0.8}>
+                        <Marker position={[center.lat, center.lon]} icon={startIcon}>
                             <Popup>出発地点</Popup>
                         </Marker>
                         <MapController center={[center.lat, center.lon]} zoom={zoomLevel} focusedSpot={focusedSpot} />
@@ -84,16 +139,18 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
                 {fullRoute.length > 1 && (
                     <Polyline
                         positions={fullRoute}
-                        pathOptions={{ color: '#0F172A', weight: 4, opacity: 0.8, dashArray: '10, 10' }}
+                        pathOptions={{ color: '#0F172A', weight: 3, opacity: 0.6, dashArray: '8, 8' }}
                     />
                 )}
 
-                {/* Spots */}
+                {/* Spots with numbered markers */}
                 {spots.map((spot, index) => (
                     <Marker
                         key={spot.id}
                         position={[spot.lat, spot.lon]}
+                        icon={spotIcons[index]}
                         ref={el => markerRefs.current[spot.id] = el}
+                        zIndexOffset={focusedSpot && focusedSpot.id === spot.id ? 1000 : index * 10}
                     >
                         <Popup>
                             <div className="p-1 min-w-[200px]">
@@ -105,7 +162,6 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
                                 </div>
                                 <h3 className="font-bold text-slate-800 text-sm mb-1">{spot.name}</h3>
 
-                                {/* Rich Data Display */}
                                 <div className="flex items-center gap-2 mb-2">
                                     {spot.rating && (
                                         <span className="flex items-center text-xs text-amber-500 font-bold">
@@ -151,3 +207,4 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
 };
 
 export default MapVisualization;
+

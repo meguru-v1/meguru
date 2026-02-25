@@ -111,3 +111,10 @@ body {
     bottom: auto !important;
   }
 }
+
+/* Reset Leaflet DivIcon default styles for custom markers */
+.custom-numbered-marker,
+.custom-start-marker {
+  background: transparent !important;
+  border: none !important;
+}

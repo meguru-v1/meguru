@@ -17,7 +17,7 @@ export const generateSmartCourses = async (candidates, center, durationMinutes) 
 
     // Build prompt (same for all models)
     const candidateList = candidates.map((s, i) =>
-        `${i}: ${s.name} (${s.category})`
+        `${i}: ${s.name} (${s.category}, ※${s.estimatedStayTime || 30}分)`
     ).join('\n');
 
     const maxDining = durationMinutes <= 90 ? 1 : (durationMinutes <= 300 ? 2 : (durationMinutes <= 480 ? 3 : 4));
@@ -71,7 +71,7 @@ ${themeInstructions}
 4. **VARIETY & BALANCE**: Ensure a good mix. AVOID GENERIC SPOTS.
 5. **DESCRIPTIONS (The Hook)**: Focus on Story, Legend, Atmosphere, Secret Tips.
 6. **RICHER DETAILS (Required)**:
-   - **stayTime**: MUST vary by spot type (e.g. 神社仏閣: 40-60min, 飲食店: 30-50min, 公園/自然: 20-40min, 美術館/博物館: 60-90min, ショッピング: 20-30min, カフェ: 20-30min). Do NOT use the same stayTime for every spot.
+   - **stayTime**: Use the ※推定分数 shown next to each spot as a baseline. You may adjust ±10 min based on the spot's significance, but NEVER use the same stayTime for all spots.
    - **travel_time_minutes**: Estimate walking time from previous spot.
    - **must_see**: ONE specific thing to look for/do.
    - **pro_tip**: A savvy traveler tip.

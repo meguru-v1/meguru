@@ -156,7 +156,7 @@ function App() {
   const courseDetailUI = selectedCourse && (
     <div className="space-y-3 md:space-y-4">
       {/* Header */}
-      <div className="sticky top-0 bg-white/95 backdrop-blur z-10 py-2 border-b border-slate-100 mb-2">
+      <div className="sticky top-0 z-10 py-2 mb-2">
         <button
           onClick={() => { setSelectedCourse(null); setFocusedSpot(null); }}
           className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 transition-colors mb-2 py-1"

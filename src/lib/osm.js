@@ -85,6 +85,39 @@ export const fetchNearbySpots = async (lat, lon, radius) => {
             else if (el.tags.tourism === 'museum' || el.tags.tourism === 'art_gallery' || el.tags.amenity === 'arts_centre') category = 'アート';
             else if (el.tags.tourism) category = '観光';
 
+            // Estimate stay time based on specific tags
+            let estimatedStayTime = 30; // default
+            const tourism = el.tags.tourism;
+            if (tourism === 'museum' || tourism === 'zoo' || tourism === 'aquarium' || tourism === 'theme_park') {
+                estimatedStayTime = 75; // large attractions
+            } else if (tourism === 'art_gallery' || amenity === 'arts_centre') {
+                estimatedStayTime = 50;
+            } else if (tourism === 'viewpoint') {
+                estimatedStayTime = 15;
+            } else if (el.tags.historic === 'castle') {
+                estimatedStayTime = 60;
+            } else if (el.tags.religion === 'buddhist') {
+                estimatedStayTime = 45; // temple
+            } else if (el.tags.religion === 'shinto') {
+                estimatedStayTime = 30; // shrine (usually quicker)
+            } else if (el.tags.historic) {
+                estimatedStayTime = 35;
+            } else if (el.tags.leisure === 'park' || el.tags.leisure === 'garden') {
+                estimatedStayTime = 35;
+            } else if (amenity === 'restaurant') {
+                estimatedStayTime = 50;
+            } else if (amenity === 'cafe' || amenity === 'ice_cream') {
+                estimatedStayTime = 25;
+            } else if (amenity === 'fast_food') {
+                estimatedStayTime = 15;
+            } else if (amenity === 'pub' || amenity === 'bar') {
+                estimatedStayTime = 45;
+            } else if (shop === 'department_store' || shop === 'mall') {
+                estimatedStayTime = 60;
+            } else if (shop) {
+                estimatedStayTime = 20; // bakery, gift, etc.
+            }
+
             return {
                 id: el.id,
                 type: el.type,
@@ -92,6 +125,7 @@ export const fetchNearbySpots = async (lat, lon, radius) => {
                 lon: el.lon || el.center.lon,
                 name: el.tags['name:ja'] || el.tags.name,
                 category,
+                estimatedStayTime,
                 tags: el.tags
             };
         });

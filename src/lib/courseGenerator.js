@@ -38,11 +38,8 @@ export const generateCourses = (center, allSpots, durationMinutes) => {
 
             // Walking 80m/min
             const walkTime = dist / 80;
-            // Stay time depends on category
-            let stayTime = 30; // default
-            if (nextSpot.category === 'グルメ') stayTime = 60;
-            if (nextSpot.category === '歴史' || nextSpot.category === 'アート') stayTime = 45;
-            if (nextSpot.category === '自然') stayTime = 40;
+            // Use data-driven stay time from OSM tags
+            const stayTime = nextSpot.estimatedStayTime || 30;
 
             // Check gourmet limit
             let skip = false;

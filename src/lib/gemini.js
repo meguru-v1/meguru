@@ -71,6 +71,7 @@ ${themeInstructions}
 4. **VARIETY & BALANCE**: Ensure a good mix. AVOID GENERIC SPOTS.
 5. **DESCRIPTIONS (The Hook)**: Focus on Story, Legend, Atmosphere, Secret Tips.
 6. **RICHER DETAILS (Required)**:
+   - **stayTime**: MUST vary by spot type (e.g. 神社仏閣: 40-60min, 飲食店: 30-50min, 公園/自然: 20-40min, 美術館/博物館: 60-90min, ショッピング: 20-30min, カフェ: 20-30min). Do NOT use the same stayTime for every spot.
    - **travel_time_minutes**: Estimate walking time from previous spot.
    - **must_see**: ONE specific thing to look for/do.
    - **pro_tip**: A savvy traveler tip.
@@ -82,15 +83,23 @@ ${themeInstructions}
         "title": "Title including Theme Name",
         "theme": "The assigned theme string",
         "description": "Course Description (Japanese)",
-        "totalTime": 180,
+        "totalTime": ${durationMinutes},
         "spots": [
             {
                 "id": 12,
-                "stayTime": 45,
+                "stayTime": 60,
                 "travel_time_minutes": 10,
                 "recommendation_reason": "Specific reason...",
                 "must_see": "Specific highlight...",
                 "pro_tip": "Specific tip..."
+            },
+            {
+                "id": 5,
+                "stayTime": 25,
+                "travel_time_minutes": 8,
+                "recommendation_reason": "...",
+                "must_see": "...",
+                "pro_tip": "..."
             }
         ]
     }

@@ -191,47 +191,51 @@ function App() {
 
     // ===== ステータスパネル =====
     const statusPanel = error ? (
-        <div className="glass-panel p-4 text-red-500 text-sm font-medium animate-fade-in flex items-center gap-2 mx-4 mt-4">
-            <AlertCircle size={16} /> {error}
+        <div className="mx-4 mt-4 p-4 rounded-2xl animate-scale-in flex items-center gap-3 text-sm font-medium"
+            style={{ background: 'linear-gradient(135deg, #fef2f2, #fee2e2)', border: '1px solid #fecaca' }}>
+            <AlertCircle size={18} className="text-red-400 shrink-0" /> <span className="text-red-600">{error}</span>
         </div>
     ) : loading ? (
-        <div className="flex flex-col items-center justify-center gap-4 text-slate-500 py-20 animate-slide-up">
-            <Loader2 className="animate-spin text-slate-900 w-10 h-10" />
-            <span className="text-sm font-medium">{status || '読み込み中...'}</span>
+        <div className="flex flex-col items-center justify-center gap-5 py-24 animate-fade-in">
+            <div className="relative">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center animate-glow-pulse"
+                    style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }}>
+                    <Loader2 className="animate-spin text-accent w-8 h-8" />
+                </div>
+            </div>
+            <span className="text-sm font-medium text-slate-400">{status || '読み込み中...'}</span>
         </div>
     ) : null;
 
     // ===== コースカード =====
-    const CourseCard = ({ course, onClick }: { course: Course; onClick: () => void }) => {
+    const CourseCard = ({ course, onClick, index }: { course: Course; onClick: () => void; index?: number }) => {
         const fav = isFavorite(course.id);
         return (
-            <div
-                onClick={onClick}
-                className="relative p-4 rounded-2xl cursor-pointer transition-all duration-300 border border-slate-100 bg-white hover:shadow-lg group active:scale-[0.98]"
-            >
+            <div onClick={onClick}
+                className="card-premium relative p-5 cursor-pointer group active:scale-[0.98] animate-slide-up"
+                style={{ animationDelay: `${(index || 0) * 0.06}s`, animationFillMode: 'backwards' }}>
                 {course.theme && (
-                    <div className="text-[10px] font-bold text-amber-600 mb-1.5 flex items-center gap-1">
+                    <div className="tag-badge mb-2.5">
                         <Sparkles size={10} /> {course.theme.split(':')[0]}
                     </div>
                 )}
-                <div className="flex justify-between items-start mb-2 pr-8">
-                    <h4 className="font-bold text-base leading-tight group-hover:text-slate-900 transition-colors">{course.title}</h4>
-                    <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded-full whitespace-nowrap ml-2 shrink-0">
-                        {course.totalTime} min
+                <div className="flex justify-between items-start mb-2 pr-10">
+                    <h4 className="font-bold text-base leading-tight text-primary group-hover:text-accent transition-colors">{course.title}</h4>
+                    <span className="text-[11px] font-mono px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shrink-0"
+                        style={{ background: 'rgba(226,176,64,0.1)', color: '#b8860b' }}>
+                        {course.totalTime}分
                     </span>
                 </div>
-                <p className="text-xs text-slate-500 mb-3 line-clamp-2">{course.description}</p>
-                <div className="flex items-center gap-3 text-[10px] text-slate-400">
+                <p className="text-xs text-slate-400 mb-3.5 line-clamp-2 leading-relaxed">{course.description}</p>
+                <div className="flex items-center gap-3 text-[10px] text-slate-300 font-medium">
                     <span className="flex items-center gap-1"><MapPin size={10} /> {course.spots.length}スポット</span>
                     <span className="flex items-center gap-1"><Clock size={10} /> {course.totalTime}分</span>
                 </div>
-                {/* お気に入りボタン (右下) */}
-                <button
-                    onClick={(e) => { e.stopPropagation(); fav ? removeFavorite(course.id) : addFavorite(course); }}
+                <button onClick={(e) => { e.stopPropagation(); fav ? removeFavorite(course.id) : addFavorite(course); }}
                     aria-label={fav ? 'お気に入りから削除' : 'お気に入りに追加'}
-                    className={`absolute bottom-4 right-4 w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90
-            ${fav ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-50 text-slate-300 hover:text-rose-400 hover:bg-rose-50'}`}
-                >
+                    className={`absolute bottom-4 right-4 w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-300 active:scale-90
+                        ${fav ? 'text-rose-500' : 'text-slate-200 hover:text-rose-400'}`}
+                    style={fav ? { background: 'rgba(244,63,94,0.08)' } : { background: 'rgba(0,0,0,0.02)' }}>
                     <Heart size={16} className={fav ? 'fill-current' : ''} />
                 </button>
             </div>
@@ -239,7 +243,7 @@ function App() {
     };
 
     // ==========================
-    //  検索タブ (全画面)
+    //  検索タブ
     // ==========================
     const searchView = (
         <div className="w-full h-full flex flex-col">
@@ -249,35 +253,42 @@ function App() {
     );
 
     // ==========================
-    //  モデルコースタブ (全画面)
+    //  モデルコースタブ
     // ==========================
     const coursesView = (
         <div className="flex flex-col min-h-full">
-            {/* コース一覧 */}
             {!selectedCourse && (
-                <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4 pb-20">
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-5 pb-20">
                     {courses.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center gap-4 text-slate-400 py-20">
-                            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center">
-                                <Footprints size={36} className="text-slate-300" />
+                        <div className="flex flex-col items-center justify-center gap-5 py-24 animate-fade-in">
+                            <div className="w-20 h-20 rounded-3xl flex items-center justify-center"
+                                style={{ background: 'rgba(0,0,0,0.03)' }}>
+                                <Footprints size={36} className="text-slate-200" />
                             </div>
                             <div className="text-center">
-                                <p className="font-medium text-slate-500 mb-1">まだコースがありません</p>
-                                <p className="text-xs text-slate-400">「検索」タブから場所を検索してコースを生成しましょう</p>
+                                <p className="font-semibold text-slate-600 mb-1 text-base">まだコースがありません</p>
+                                <p className="text-sm text-slate-300">検索タブから場所を検索して<br />モデルコースを生成しましょう</p>
                             </div>
-                            <button onClick={() => setActiveTab('search')} className="btn-primary flex items-center gap-2 py-2.5 px-5 text-sm">
+                            <button onClick={() => setActiveTab('search')} className="btn-primary flex items-center gap-2 py-3 px-6 text-sm">
                                 <Search size={16} /> 検索する
                             </button>
                         </div>
                     ) : (
                         <>
-                            <h2 className="font-bold text-slate-800 flex items-center gap-2 mb-4 text-lg">
-                                <Footprints size={20} /> おすすめモデルコース ({courses.length})
-                            </h2>
+                            <div className="flex items-center gap-3 mb-5 animate-fade-in">
+                                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                                    style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }}>
+                                    <Footprints size={18} className="text-accent" />
+                                </div>
+                                <div>
+                                    <h2 className="font-bold text-primary text-lg leading-tight">おすすめコース</h2>
+                                    <p className="text-[11px] text-slate-300 font-medium">{courses.length}件のプラン</p>
+                                </div>
+                            </div>
                             {loading && statusPanel}
                             <div className="space-y-3">
-                                {courses.map(course => (
-                                    <CourseCard key={course.id} course={course} onClick={() => handleSelectCourse(course)} />
+                                {courses.map((course, i) => (
+                                    <CourseCard key={course.id} course={course} onClick={() => handleSelectCourse(course)} index={i} />
                                 ))}
                             </div>
                         </>
@@ -285,101 +296,113 @@ function App() {
                 </div>
             )}
 
-            {/* コース詳細 */}
             {selectedCourse && (
-                <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4 pb-20">
-                    {/* ヘッダー */}
-                    <div className="mb-4">
-                        <button
-                            onClick={() => { setSelectedCourse(null); setFocusedSpot(null); }}
-                            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 transition-colors mb-3 py-1"
-                        >
-                            ← コース一覧に戻る
-                        </button>
-                        <div className="flex items-start justify-between gap-2">
-                            <h2 className="font-extrabold text-xl text-slate-900 leading-tight flex-1">{selectedCourse.title}</h2>
-                            <button
-                                onClick={() => isFavorite(selectedCourse.id) ? removeFavorite(selectedCourse.id) : addFavorite(selectedCourse)}
-                                className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90 shrink-0
-                  ${isFavorite(selectedCourse.id) ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-100 text-slate-400 hover:text-rose-400 hover:bg-rose-50'}`}
-                            >
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-5 pb-20">
+                    {/* 戻るボタン */}
+                    <button onClick={() => { setSelectedCourse(null); setFocusedSpot(null); }}
+                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-primary transition-colors mb-4 py-1 font-medium">
+                        ← コース一覧に戻る
+                    </button>
+
+                    {/* コースヘッダー */}
+                    <div className="mb-6 animate-fade-in">
+                        {selectedCourse.theme && (
+                            <div className="tag-badge mb-3">
+                                <Sparkles size={10} /> {selectedCourse.theme.split(':')[0]}
+                            </div>
+                        )}
+                        <div className="flex items-start justify-between gap-3">
+                            <h2 className="font-extrabold text-xl text-primary leading-tight flex-1">{selectedCourse.title}</h2>
+                            <button onClick={() => isFavorite(selectedCourse.id) ? removeFavorite(selectedCourse.id) : addFavorite(selectedCourse)}
+                                className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 active:scale-90 shrink-0
+                                    ${isFavorite(selectedCourse.id) ? 'text-rose-500' : 'text-slate-300 hover:text-rose-400'}`}
+                                style={isFavorite(selectedCourse.id) ? { background: 'rgba(244,63,94,0.08)' } : { background: 'rgba(0,0,0,0.03)' }}>
                                 <Heart size={20} className={isFavorite(selectedCourse.id) ? 'fill-current' : ''} />
                             </button>
                         </div>
-                        <div className="flex gap-3 text-xs text-slate-500 mt-2">
-                            <span className="flex items-center gap-1"><Clock size={12} /> {selectedCourse.totalTime}分</span>
-                            <span className="flex items-center gap-1"><MapPin size={12} /> {selectedCourse.spots.length}スポット</span>
+                        <div className="flex gap-3 mt-2.5">
+                            <span className="tag-badge"><Clock size={10} /> {selectedCourse.totalTime}分</span>
+                            <span className="tag-badge"><MapPin size={10} /> {selectedCourse.spots.length}スポット</span>
                         </div>
                         {selectedCourse.description && (
-                            <p className="text-sm text-slate-500 mt-2 leading-relaxed">{selectedCourse.description}</p>
+                            <p className="text-sm text-slate-400 mt-3 leading-relaxed">{selectedCourse.description}</p>
                         )}
                     </div>
 
                     {/* タイムライン */}
-                    <div className="relative pl-4 space-y-4 before:content-[''] before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                    <div className="relative pl-5 space-y-4">
+                        <div className="absolute left-[7px] top-4 bottom-4 w-[2px] rounded-full"
+                            style={{ background: 'linear-gradient(180deg, #e2b040, rgba(226,176,64,0.1))' }}></div>
                         {selectedCourse.spots.map((spot, index) => (
-                            <div key={spot.id} className="relative pl-6 group">
-                                <div className="absolute left-0 top-1.5 w-3.5 h-3.5 bg-slate-900 rounded-full border-2 border-white shadow-sm group-hover:scale-125 transition-transform z-10"></div>
+                            <div key={spot.id} className="relative pl-7 animate-slide-up"
+                                style={{ animationDelay: `${index * 0.08}s`, animationFillMode: 'backwards' }}>
+                                <div className="absolute left-0 top-5 w-4 h-4 rounded-full border-[3px] border-paper z-10 transition-transform group-hover:scale-125"
+                                    style={{
+                                        background: index === 0 ? 'linear-gradient(135deg, #e2b040, #f5d98b)'
+                                            : index === selectedCourse.spots.length - 1 ? 'linear-gradient(135deg, #ef4444, #f87171)'
+                                                : 'linear-gradient(135deg, #1a1a2e, #16213e)',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                                    }}></div>
 
-                                <div className="p-3 rounded-xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 transition-all">
-                                    <div className="flex justify-between items-start">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                                            {index === 0 ? 'START' : index === selectedCourse.spots.length - 1 ? 'GOAL' : `SPOT ${index + 1}`}
+                                <div className="card-premium p-4 group">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-widest"
+                                            style={{ color: index === 0 ? '#e2b040' : index === selectedCourse.spots.length - 1 ? '#ef4444' : '#94a3b8' }}>
+                                            {index === 0 ? '✦ START' : index === selectedCourse.spots.length - 1 ? '✦ GOAL' : `SPOT ${index + 1}`}
                                         </span>
-                                        <span className="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded ml-2 shrink-0">
-                                            {spot.category}
-                                        </span>
+                                        <span className="tag-badge text-[9px]">{spot.category}</span>
                                     </div>
 
-                                    <h4 className="font-bold text-base text-slate-800 mb-1 group-hover:text-amber-600 transition-colors">{spot.name}</h4>
+                                    <h4 className="font-bold text-base text-primary mb-1 group-hover:text-accent transition-colors">{spot.name}</h4>
 
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="flex items-center text-[10px] text-amber-500 font-bold">
+                                    <div className="flex items-center gap-2 mb-2.5">
+                                        <span className="flex items-center text-[10px] text-accent font-bold">
                                             <Star size={10} className="fill-current mr-0.5" /> {spot.rating || '-'}
                                         </span>
-                                        <span className="text-[10px] text-slate-400">({spot.user_ratings_total})</span>
+                                        <span className="text-[10px] text-slate-300">({spot.user_ratings_total || 0})</span>
                                     </div>
 
                                     {spot.tags.photo && (
-                                        <div className="w-full h-28 mb-3 rounded-lg overflow-hidden bg-slate-100">
+                                        <div className="w-full h-32 mb-3 rounded-2xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.03)' }}>
                                             <img src={spot.tags.photo} alt={spot.name} className="w-full h-full object-cover" />
                                         </div>
                                     )}
 
-                                    <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2">
+                                    <div className="text-xs text-slate-500 leading-relaxed rounded-2xl p-3.5 space-y-2.5"
+                                        style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.04)' }}>
                                         {(spot.travel_time_minutes ?? 0) > 0 && (
-                                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold border-b border-slate-100 pb-2 mb-2">
+                                            <div className="flex items-center gap-2 text-[10px] text-slate-300 font-bold pb-2 mb-2"
+                                                style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                                                 <Footprints size={12} /> 前のスポットから徒歩約{spot.travel_time_minutes}分
                                             </div>
                                         )}
                                         <p className="mb-2">{spot.aiDescription || spot.tags.description || "詳細情報なし"}</p>
                                         {spot.must_see && (
-                                            <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-100">
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 mb-0.5">
+                                            <div className="p-3 rounded-xl" style={{ background: 'rgba(226,176,64,0.06)', border: '1px solid rgba(226,176,64,0.12)' }}>
+                                                <span className="flex items-center gap-1 text-[10px] font-bold mb-0.5" style={{ color: '#b8860b' }}>
                                                     <Star size={10} /> 必見ポイント:
                                                 </span>
-                                                <span className="text-[10px] text-amber-900">{spot.must_see}</span>
+                                                <span className="text-[10px] text-slate-600">{spot.must_see}</span>
                                             </div>
                                         )}
                                         {spot.pro_tip && (
-                                            <div className="bg-blue-50 p-2.5 rounded-lg border border-blue-100">
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 mb-0.5">
+                                            <div className="p-3 rounded-xl" style={{ background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.1)' }}>
+                                                <span className="flex items-center gap-1 text-[10px] font-bold text-blue-500 mb-0.5">
                                                     <Sparkles size={10} /> 旅のヒント:
                                                 </span>
-                                                <span className="text-[10px] text-blue-900">{spot.pro_tip}</span>
+                                                <span className="text-[10px] text-slate-600">{spot.pro_tip}</span>
                                             </div>
                                         )}
                                     </div>
 
                                     {spot.tags.opening_hours && (
-                                        <div className="mt-2 text-[10px] text-green-600 font-medium">{spot.tags.opening_hours}</div>
+                                        <div className="mt-2 text-[10px] text-emerald-500 font-medium">{spot.tags.opening_hours}</div>
                                     )}
 
-                                    <a
-                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`}
+                                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`}
                                         target="_blank" rel="noopener noreferrer"
-                                        className="flex items-center justify-center gap-1.5 w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow active:scale-95 mt-3"
-                                    >
+                                        className="flex items-center justify-center gap-2 w-full text-[11px] font-bold py-2.5 rounded-xl transition-all active:scale-95 mt-3"
+                                        style={{ background: 'rgba(0,0,0,0.03)', color: '#64748b', border: '1px solid rgba(0,0,0,0.04)' }}>
                                         <span className="text-blue-500 font-extrabold">G</span> Googleマップで見る
                                     </a>
                                 </div>
@@ -392,85 +415,77 @@ function App() {
     );
 
     // ==========================
-    //  地図タブ (全画面)
+    //  地図タブ
     // ==========================
     const mapView = (
         <div className="w-full h-full">
-            <MapVisualization
-                center={center}
-                radius={radius}
-                spots={selectedCourse ? selectedCourse.spots : []}
-                focusedSpot={focusedSpot}
-            />
+            <MapVisualization center={center} radius={radius} spots={selectedCourse ? selectedCourse.spots : []} focusedSpot={focusedSpot} />
         </div>
     );
 
     // ==========================
-    //  履歴タブ (全画面)
+    //  履歴タブ
     // ==========================
     const favoritesView = (
-        <div className="flex flex-col min-h-full px-4 py-4 pb-20">
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
-                    <Heart size={20} className="text-rose-400 fill-current" /> お気に入りコース
-                </h2>
-                <span className="text-sm text-slate-400 font-medium">{favorites.length}件</span>
+        <div className="flex flex-col min-h-full px-5 py-5 pb-20">
+            <div className="flex items-center justify-between mb-5 animate-fade-in">
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                        style={{ background: 'rgba(244,63,94,0.08)' }}>
+                        <Heart size={18} className="text-rose-400 fill-current" />
+                    </div>
+                    <h2 className="font-bold text-primary text-lg">お気に入り</h2>
+                </div>
+                <span className="tag-badge">{favorites.length}件</span>
             </div>
 
             {favorites.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400 py-20">
-                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center">
-                        <Heart size={36} className="text-slate-300" />
+                <div className="flex-1 flex flex-col items-center justify-center gap-5 py-20 animate-fade-in">
+                    <div className="w-20 h-20 rounded-3xl flex items-center justify-center"
+                        style={{ background: 'rgba(0,0,0,0.03)' }}>
+                        <Heart size={36} className="text-slate-200" />
                     </div>
                     <div className="text-center">
-                        <p className="font-medium text-slate-500 mb-1">まだお気に入りがありません</p>
-                        <p className="text-xs text-slate-400">コース一覧の ♡ ボタンでお気に入り登録できます</p>
+                        <p className="font-semibold text-slate-600 mb-1 text-base">まだお気に入りがありません</p>
+                        <p className="text-sm text-slate-300">コースの ♡ ボタンでお気に入り登録</p>
                     </div>
-                    <button onClick={() => setActiveTab('search')} className="btn-primary flex items-center gap-2 py-2.5 px-5 text-sm">
+                    <button onClick={() => setActiveTab('search')} className="btn-primary flex items-center gap-2 py-3 px-6 text-sm">
                         <Search size={16} /> コースを探す
                     </button>
                 </div>
             ) : (
                 <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
-                    {favorites.map(course => (
-                        <div
-                            key={course.id}
-                            className="relative p-4 rounded-2xl bg-white border border-slate-100 hover:shadow-lg transition-all duration-200 group"
-                        >
+                    {favorites.map((course, i) => (
+                        <div key={course.id}
+                            className="card-premium relative p-5 group animate-slide-up"
+                            style={{ animationDelay: `${i * 0.06}s`, animationFillMode: 'backwards' }}>
                             <div className="flex items-start justify-between mb-1">
                                 {course.theme ? (
-                                    <div className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-                                        <Sparkles size={10} /> {course.theme.split(':')[0]}
-                                    </div>
+                                    <span className="tag-badge"><Sparkles size={10} /> {course.theme.split(':')[0]}</span>
                                 ) : <div />}
-                                <button
-                                    onClick={() => removeFavorite(course.id)}
-                                    aria-label="お気に入りから削除"
-                                    className="text-slate-300 hover:text-rose-400 transition-colors p-1 rounded-full hover:bg-rose-50 active:scale-90"
-                                >
+                                <button onClick={() => removeFavorite(course.id)} aria-label="お気に入りから削除"
+                                    className="text-slate-200 hover:text-rose-400 transition-colors p-1.5 rounded-xl hover:bg-rose-50 active:scale-90">
                                     <Trash2 size={14} />
                                 </button>
                             </div>
 
                             <button onClick={() => handleSelectCourse(course, true)} className="w-full text-left">
-                                <h3 className="font-bold text-slate-800 leading-tight mb-1 group-hover:text-amber-600 transition-colors pr-2">
-                                    {course.title}
-                                </h3>
-                                <p className="text-xs text-slate-500 line-clamp-2 mb-2">{course.description}</p>
-                                <div className="flex items-center gap-3 text-[10px] text-slate-400 mb-2">
-                                    <span className="flex items-center gap-1"><Clock size={10} /> {course.totalTime}分</span>
-                                    <span className="flex items-center gap-1"><MapPin size={10} /> {course.spots.length}スポット</span>
+                                <h3 className="font-bold text-primary leading-tight mb-1 group-hover:text-accent transition-colors pr-2">{course.title}</h3>
+                                <p className="text-xs text-slate-400 line-clamp-2 mb-2.5 leading-relaxed">{course.description}</p>
+                                <div className="flex items-center gap-3 mb-2">
+                                    <span className="tag-badge"><Clock size={10} /> {course.totalTime}分</span>
+                                    <span className="tag-badge"><MapPin size={10} /> {course.spots.length}スポット</span>
                                 </div>
-                                <div className="flex items-center gap-1 overflow-hidden opacity-50">
-                                    {course.spots.slice(0, 3).map((s, i) => (
-                                        <span key={i} className="text-[10px] truncate max-w-[70px]">
-                                            {s.name}{i < Math.min(course.spots.length, 3) - 1 ? ' →' : ''}
+                                <div className="flex items-center gap-1 overflow-hidden opacity-40">
+                                    {course.spots.slice(0, 3).map((s, idx) => (
+                                        <span key={idx} className="text-[10px] truncate max-w-[70px] font-medium">
+                                            {s.name}{idx < Math.min(course.spots.length, 3) - 1 ? ' →' : ''}
                                         </span>
                                     ))}
                                     {course.spots.length > 3 && <span className="text-[10px]">+{course.spots.length - 3}</span>}
                                 </div>
                                 {course.savedAt && (
-                                    <div className="mt-2 text-[10px] text-slate-300">
+                                    <div className="mt-2.5 text-[10px] text-slate-200 font-medium">
                                         {new Date(course.savedAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}に保存
                                     </div>
                                 )}
@@ -483,40 +498,22 @@ function App() {
     );
 
     return (
-        <div className="relative w-full h-[100dvh] bg-slate-50 overflow-hidden flex flex-col">
-
-            {/* ===== メインコンテンツ: タブごとに全画面切り替え ===== */}
+        <div className="relative w-full h-[100dvh] overflow-hidden flex flex-col" style={{ background: '#f5f0e8' }}>
             <div className="flex-1 overflow-hidden">
                 {activeTab === 'search' && (
-                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-gradient-to-b from-slate-50 to-white">
-                        {searchView}
-                    </div>
+                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{searchView}</div>
                 )}
                 {activeTab === 'courses' && (
-                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-white">
-                        {coursesView}
-                    </div>
+                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{coursesView}</div>
                 )}
                 {activeTab === 'map' && (
-                    <div className="w-full h-full">
-                        {mapView}
-                    </div>
+                    <div className="w-full h-full">{mapView}</div>
                 )}
                 {activeTab === 'favorites' && (
-                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-white">
-                        {favoritesView}
-                    </div>
+                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{favoritesView}</div>
                 )}
             </div>
-
-            {/* ===== タブバー ===== */}
-            <TabBar
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
-                coursesCount={courses.length}
-                favoritesCount={favorites.length}
-            />
-
+            <TabBar activeTab={activeTab} onTabChange={handleTabChange} coursesCount={courses.length} favoritesCount={favorites.length} />
         </div>
     );
 }

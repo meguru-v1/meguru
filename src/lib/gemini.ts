@@ -33,7 +33,18 @@ export const generateSmartCourses = async (
         "🛍️ Local Life: 商店街と地元民の暮らし",
         "🏛️ Architecture Walk: 名建築とユニークな建物",
         "🤫 Silence & Solitude: 究極の「おひとりさま」静寂",
-        "🌅 Morning/Evening Glow: 朝焼け・夕焼けが美しい場所"
+        "🌅 Morning/Evening Glow: 朝焼け・夕焼けが美しい場所",
+        // 追加された拡張テーマ
+        "♨️ Healing Waters: 温泉・銭湯と下町リラックス",
+        "🎯 Trend Hunter: 最新ショップと流行スポット",
+        "📚 Culture & Book: 本とカルチャー、知的好奇心を満たす旅",
+        "👾 Pop Culture & Anime: アニメ・ゲーム・サブカルの聖地へ",
+        "🏃 Active & Sports: 体を動かすアクティビティと自然",
+        "🍻 Evening Izakaya & Pub: 大人の夜遊び・はしご酒",
+        "🏭 Industrial & Night View: 工場夜景とインダストリアルな風景",
+        "👨‍👩‍👧‍👦 Family Fun: 子供と一緒に楽しむファミリープラン",
+        "🌊 Waterfront: 海や川辺の爽やかな風を感じて",
+        "🚂 Railway & Transit: 乗り物を楽しむ鉄分多めの旅"
     ];
 
     const selectedThemes = allThemes.sort(() => 0.5 - Math.random()).slice(0, 5);

@@ -97,7 +97,18 @@ export const generateCourses = (
         { id: 'local', key: 'Local', label: '🛍️ Local Life: 商店街と地元民の暮らし', filter: s => s.category === 'ショッピング' || s.category === 'グルメ', desc: '地元に愛される商店街や日常の風景を歩く。' },
         { id: 'architecture', key: 'Arch', label: '🏛️ Architecture Walk: 名建築とユニークな建物', filter: s => s.category === '歴史' || s.category === 'アート', desc: '建物のデザインや構造美を楽しむ建築探訪。' },
         { id: 'silence', key: 'Silence', label: '🤫 Silence & Solitude: 究極の「おひとりさま」静寂', filter: s => s.category === '自然' || s.category === '歴史', desc: '誰にも邪魔されず、静かに自分と向き合う時間。' },
-        { id: 'morning', key: 'Morning', label: '🌅 Morning/Evening Glow: 朝焼け・夕焼けが美しい場所', filter: s => s.category === '自然' || !!s.tags.photo, desc: '光と影が織りなす美しい瞬間を捉える旅。' }
+        { id: 'morning', key: 'Morning', label: '🌅 Morning/Evening Glow: 朝焼け・夕焼けが美しい場所', filter: s => s.category === '自然' || !!s.tags.photo, desc: '光と影が織りなす美しい瞬間を捉える旅。' },
+        // 追加された拡張テーマ
+        { id: 'healing', key: 'Healing', label: '♨️ Healing Waters: 温泉・銭湯と下町リラックス', filter: s => s.category === '温泉・サウナ' || s.category === '自然', desc: '日々の疲れを癒やすリラックスと温浴の旅。' },
+        { id: 'trend', key: 'Trend', label: '🎯 Trend Hunter: 最新ショップと流行スポット', filter: s => s.category === 'ショッピング' || s.category === 'グルメ', desc: '話題のお店や最新の買い物を楽しむトレンド巡り。' },
+        { id: 'culture', key: 'Culture', label: '📚 Culture & Book: 本とカルチャー、知的好奇心を満たす旅', filter: s => s.category === 'カルチャー' || s.category === '歴史', desc: '知と文化に触れる、落ち着いた大人の知見探索。' },
+        { id: 'pop', key: 'Pop', label: '👾 Pop Culture & Anime: アニメ・ゲーム・サブカルの聖地へ', filter: s => s.category === 'カルチャー' || s.category === 'エンタメ', desc: '日本が誇るポップカルチャーとエンターテインメントの聖地巡礼。' },
+        { id: 'active', key: 'Active', label: '🏃 Active & Sports: 体を動かすアクティビティと自然', filter: s => s.category === 'エンタメ' || s.category === '自然', desc: 'アクティブに体を動かしてリフレッシュするスポーティな旅。' },
+        { id: 'izakaya', key: 'Izakaya', label: '🍻 Evening Izakaya & Pub: 大人の夜遊び・はしご酒', filter: s => s.category === 'グルメ', desc: '美味しいお酒とローカルな雰囲気を楽しむ、夜のディープな時間。' },
+        { id: 'industrial', key: 'Industrial', label: '🏭 Industrial & Night View: 工場夜景とインダストリアルな風景', filter: s => s.category === '観光' || s.category === '歴史', desc: '機能美が光る無骨な風景や、輝く夜景を探す旅。' },
+        { id: 'family', key: 'Family', label: '👨‍👩‍👧‍👦 Family Fun: 子供と一緒に楽しむファミリープラン', filter: s => s.category === 'エンタメ' || s.category === '観光', desc: '家族みんなで笑顔になれる、安心で楽しいスポット巡り。' },
+        { id: 'waterfront', key: 'Waterfront', label: '🌊 Waterfront: 海や川辺の爽やかな風を感じて', filter: s => s.category === '自然' || s.category === '観光', desc: '水辺の開放的な景色と心地よい風を楽しむリフレッシュコース。' },
+        { id: 'transit', key: 'Transit', label: '🚂 Railway & Transit: 乗り物を楽しむ鉄分多めの旅', filter: s => s.category === '観光' || s.category === '歴史', desc: '駅舎や鉄道の歴史、乗り物そのものの魅力を堪能する旅。' }
     ];
 
     const selectedThemes = shuffle(themeDefinitions).slice(0, 5);

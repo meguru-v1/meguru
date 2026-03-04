@@ -61,40 +61,61 @@ function App() {
                 if (!startGeo) throw new Error(`「${query}」が見つかりませんでした。`);
                 if (!endGeo) throw new Error(`「${destination}」が見つかりませんでした。`);
 
-                // 2点間の中心と距離を算出
+                // 2点間の距離を算出 (メートル)
                 const midLat = (startGeo.lat + endGeo.lat) / 2;
                 const midLon = (startGeo.lon + endGeo.lon) / 2;
                 const dx = (startGeo.lat - endGeo.lat) * 111000;
                 const dy = (startGeo.lon - endGeo.lon) * 111000 * Math.cos(midLat * Math.PI / 180);
                 const directDist = Math.sqrt(dx * dx + dy * dy);
-                const searchRadius = Math.max(directDist * 0.6, 500); // ルートの幅方向の検索範囲
+
+                // 移動方法ごとの速度制限チェック (km/h)
+                const maxSpeeds: Record<string, { limit: number; label: string }> = {
+                    walk: { limit: 20, label: '徒歩' },
+                    bicycle: { limit: 40, label: '自転車' },
+                    transit: { limit: 200, label: '公共交通' },
+                    car: { limit: 200, label: '車' },
+                };
+                const mode = travelMode || 'walk';
+                const distKm = directDist / 1000;
+                const timeHours = duration / 60;
+                const requiredSpeed = distKm / timeHours;
+
+                if (requiredSpeed > maxSpeeds[mode].limit) {
+                    throw new Error(
+                        `${maxSpeeds[mode].label}では無理な距離です（直線${distKm.toFixed(1)}km、必要速度 ${requiredSpeed.toFixed(0)}km/h）。時間を増やすか、移動方法を変更してください。`
+                    );
+                }
 
                 setCenter({ lat: midLat, lon: midLon });
+                const searchRadius = Math.max(Math.min(directDist * 0.4, 2000), 500);
                 setRadius(searchRadius);
 
                 setStatus(`ルート周辺のスポットを探しています...`);
-                // ルート沿いのスポットを複数ポイントで収集
-                const numPoints = Math.max(3, Math.ceil(directDist / 1500));
-                const spotPromises = [];
-                for (let i = 0; i <= numPoints; i++) {
-                    const t = i / numPoints;
-                    const lat = startGeo.lat + (endGeo.lat - startGeo.lat) * t;
-                    const lon = startGeo.lon + (endGeo.lon - startGeo.lon) * t;
-                    spotPromises.push(fetchNearbySpots(lat, lon, Math.min(searchRadius, 2000)));
-                }
-                const allSpotsArrays = await Promise.all(spotPromises);
+                // リクエスト数を最大3に制限し、順次実行でAPI制限を回避
+                const numPoints = Math.min(3, Math.max(2, Math.ceil(directDist / 3000)));
                 const seen = new Set<string | number>();
                 const allSpots: Spot[] = [];
-                for (const spots of allSpotsArrays) {
-                    for (const spot of spots) {
-                        if (!seen.has(spot.id)) {
-                            seen.add(spot.id);
-                            allSpots.push(spot);
+
+                for (let i = 0; i < numPoints; i++) {
+                    const t = numPoints === 1 ? 0.5 : i / (numPoints - 1);
+                    const lat = startGeo.lat + (endGeo.lat - startGeo.lat) * t;
+                    const lon = startGeo.lon + (endGeo.lon - startGeo.lon) * t;
+                    try {
+                        const spots = await fetchNearbySpots(lat, lon, Math.min(searchRadius, 1500));
+                        for (const spot of spots) {
+                            if (!seen.has(spot.id)) {
+                                seen.add(spot.id);
+                                allSpots.push(spot);
+                            }
                         }
+                    } catch (e) {
+                        console.warn(`スポット取得エラー (point ${i}):`, e);
                     }
+                    // Overpass API レート制限を回避するためディレイ
+                    if (i < numPoints - 1) await new Promise(r => setTimeout(r, 1200));
                 }
 
-                if (allSpots.length < 3) throw new Error("ルート周辺にスポットがあまり見つかりませんでした。");
+                if (allSpots.length < 3) throw new Error("ルート周辺にスポットがあまり見つかりませんでした。検索範囲を短くしてみてください。");
 
                 setStatus('AIが最適なルートコースを生成中...');
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);

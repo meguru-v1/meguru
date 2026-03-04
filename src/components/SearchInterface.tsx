@@ -72,8 +72,8 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     {searchMode === 'area' && (
                         <>
                             <div className="space-y-2 animate-slide-up">
-                                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                    <MapPin size={12} /> 出発地点
+                                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                                    出発地点
                                 </label>
                                 <div className="relative">
                                     <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}

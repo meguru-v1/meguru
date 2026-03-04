@@ -1,16 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  /* ===== カラーパレット: ダークモダン ===== */
-  --color-primary: #1a1a2e;
-  --color-primary-light: #16213e;
-  --color-accent: #e2b040;
-  --color-accent-soft: #f5d98b;
-  --color-paper: #f5f0e8;
-  --color-surface: rgba(255, 255, 255, 0.85);
-  --color-dark-surface: rgba(26, 26, 46, 0.92);
-  --color-warm-gray: #f7f4ef;
-  --color-warm-gray-dark: #ede8df;
+  /* ===== カラーパレット: クリーンホワイト ===== */
+  --color-primary: #1e293b;
+  --color-accent: #f59e0b;
+  --color-accent-soft: #fcd34d;
+  --color-paper: #ffffff;
+  --color-surface: rgba(255, 255, 255, 0.9);
 
   /* ===== フォント ===== */
   --font-sans: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
@@ -18,14 +14,12 @@
   --font-display: 'Playfair Display', serif;
 
   /* ===== アニメーション ===== */
-  --animate-fade-in: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  --animate-slide-up: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-fade-in: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-up: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slide-up-sheet: slideUpSheet 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slide-down-indicator: slideDownIndicator 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-scale-in: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  --animate-glow-pulse: glowPulse 3s ease-in-out infinite;
   --animate-float: float 6s ease-in-out infinite;
-  --animate-shimmer: shimmer 2s linear infinite;
 
   @keyframes fadeIn {
     0% {
@@ -39,7 +33,7 @@
 
   @keyframes slideUp {
     0% {
-      transform: translateY(24px);
+      transform: translateY(20px);
       opacity: 0;
     }
 
@@ -83,18 +77,6 @@
     }
   }
 
-  @keyframes glowPulse {
-
-    0%,
-    100% {
-      box-shadow: 0 0 20px rgba(226, 176, 64, 0.15);
-    }
-
-    50% {
-      box-shadow: 0 0 40px rgba(226, 176, 64, 0.3);
-    }
-  }
-
   @keyframes float {
 
     0%,
@@ -103,40 +85,14 @@
     }
 
     50% {
-      transform: translateY(-8px);
-    }
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: -200% 0;
-    }
-
-    100% {
-      background-position: 200% 0;
-    }
-  }
-
-  @keyframes gentleBob {
-
-    0%,
-    100% {
-      transform: translateY(0) rotate(0deg);
-    }
-
-    25% {
-      transform: translateY(-3px) rotate(0.5deg);
-    }
-
-    75% {
-      transform: translateY(3px) rotate(-0.5deg);
+      transform: translateY(-6px);
     }
   }
 }
 
 /* ===== ベーススタイル ===== */
 body {
-  @apply bg-paper text-slate-900 antialiased;
+  @apply bg-white text-slate-900 antialiased;
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
@@ -152,67 +108,41 @@ body {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-/* ===== グラスモーフィズム ===== */
+/* ===== グラスモーフィズム（白ベース） ===== */
 .glass-panel {
-  @apply backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.55));
-}
-
-.glass-dark {
-  @apply backdrop-blur-xl border border-white/10 rounded-3xl;
-  background: linear-gradient(135deg, rgba(26, 26, 46, 0.9), rgba(22, 33, 62, 0.85));
+  @apply bg-white/80 backdrop-blur-xl border border-slate-100 shadow-xl rounded-2xl;
 }
 
 /* ===== ボタン ===== */
 .btn-primary {
-  @apply text-white px-7 py-3.5 rounded-2xl font-semibold transition-all duration-300 shadow-xl active:scale-95;
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  box-shadow: 0 8px 32px rgba(26, 26, 46, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  @apply bg-slate-900 text-white px-6 py-3.5 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl active:scale-95;
 }
 
 .btn-primary:hover {
-  box-shadow: 0 12px 40px rgba(26, 26, 46, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  @apply bg-slate-800;
   transform: translateY(-1px);
-}
-
-.btn-accent {
-  @apply text-primary px-7 py-3.5 rounded-2xl font-semibold transition-all duration-300 shadow-xl active:scale-95;
-  background: linear-gradient(135deg, #e2b040, #f5d98b);
-  box-shadow: 0 8px 32px rgba(226, 176, 64, 0.35);
 }
 
 /* ===== カード ===== */
 .card-premium {
-  @apply rounded-3xl border transition-all duration-300;
-  background: linear-gradient(135deg, #ffffff, #faf9f6);
-  border-color: rgba(0, 0, 0, 0.04);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  @apply bg-white rounded-2xl border border-slate-100 transition-all duration-300;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .card-premium:hover {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(226, 176, 64, 0.15);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
-  border-color: rgba(226, 176, 64, 0.2);
-}
-
-.card-dark {
-  @apply rounded-3xl border transition-all duration-300;
-  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95), rgba(22, 33, 62, 0.9));
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  @apply border-slate-200;
 }
 
 /* ===== 入力フィールド ===== */
 .input-premium {
-  @apply w-full rounded-2xl px-4 py-4 font-medium transition-all duration-200 outline-none;
-  background: rgba(255, 255, 255, 0.8);
-  border: 2px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03), inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  @apply w-full rounded-xl px-4 py-3.5 font-medium transition-all duration-200 outline-none bg-slate-50 border-2 border-slate-100;
 }
 
 .input-premium:focus {
-  border-color: #e2b040;
-  box-shadow: 0 0 0 4px rgba(226, 176, 64, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  @apply border-amber-400 bg-white;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
 }
 
 /* ===== レンジスライダー ===== */
@@ -221,7 +151,7 @@ input[type="range"] {
   appearance: none;
   height: 6px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #e2b040, #f5d98b);
+  background: linear-gradient(90deg, #f59e0b, #fcd34d);
   outline: none;
 }
 
@@ -231,10 +161,15 @@ input[type="range"]::-webkit-slider-thumb {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  background: #1e293b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   border: 3px solid white;
+}
+
+/* ===== タグバッジ ===== */
+.tag-badge {
+  @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700;
 }
 
 /* ===== Leaflet ===== */
@@ -259,7 +194,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 36px;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #cbd5e1, #94a3b8);
+  background: #cbd5e1;
   margin: 0 auto 8px;
 }
 
@@ -287,28 +222,6 @@ input[type="range"]::-webkit-slider-thumb {
   border: none !important;
 }
 
-/* ===== アクセントライン ===== */
-.accent-line {
-  width: 40px;
-  height: 3px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #e2b040, #f5d98b);
-}
-
-/* ===== タグバッジ ===== */
-.tag-badge {
-  @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider;
-  background: rgba(226, 176, 64, 0.12);
-  color: #b8860b;
-}
-
-/* ===== シマー効果 ===== */
-.shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(226, 176, 64, 0.08) 50%, transparent 100%);
-  background-size: 200% 100%;
-  animation: shimmer 2s linear infinite;
-}
-
 /* ===== スタッガードアニメーション ===== */
 .stagger-1 {
   animation-delay: 0.05s;
@@ -320,12 +233,4 @@ input[type="range"]::-webkit-slider-thumb {
 
 .stagger-3 {
   animation-delay: 0.15s;
-}
-
-.stagger-4 {
-  animation-delay: 0.2s;
-}
-
-.stagger-5 {
-  animation-delay: 0.25s;
 }

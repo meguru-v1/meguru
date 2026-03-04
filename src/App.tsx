@@ -8,7 +8,7 @@ import { generateSmartCourses } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
-    Navigation, AlertCircle
+    Navigation, AlertCircle, Map
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId } from './types';
 
@@ -196,14 +196,9 @@ function App() {
             <AlertCircle size={18} className="text-red-400 shrink-0" /> <span className="text-red-600">{error}</span>
         </div>
     ) : loading ? (
-        <div className="flex flex-col items-center justify-center gap-5 py-24 animate-fade-in">
-            <div className="relative">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center animate-glow-pulse"
-                    style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }}>
-                    <Loader2 className="animate-spin text-accent w-8 h-8" />
-                </div>
-            </div>
-            <span className="text-sm font-medium text-slate-400">{status || '読み込み中...'}</span>
+        <div className="flex flex-col items-center justify-center gap-4 py-20 animate-fade-in">
+            <Loader2 className="animate-spin text-slate-900 w-10 h-10" />
+            <span className="text-sm font-medium text-slate-500">{status || '読み込み中...'}</span>
         </div>
     ) : null;
 
@@ -220,9 +215,8 @@ function App() {
                     </div>
                 )}
                 <div className="flex justify-between items-start mb-2 pr-10">
-                    <h4 className="font-bold text-base leading-tight text-primary group-hover:text-accent transition-colors">{course.title}</h4>
-                    <span className="text-[11px] font-mono px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shrink-0"
-                        style={{ background: 'rgba(226,176,64,0.1)', color: '#b8860b' }}>
+                    <h4 className="font-bold text-base leading-tight text-slate-800 group-hover:text-amber-600 transition-colors">{course.title}</h4>
+                    <span className="text-[11px] font-mono bg-slate-100 px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shrink-0 text-slate-500">
                         {course.totalTime}分
                     </span>
                 </div>
@@ -233,9 +227,8 @@ function App() {
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); fav ? removeFavorite(course.id) : addFavorite(course); }}
                     aria-label={fav ? 'お気に入りから削除' : 'お気に入りに追加'}
-                    className={`absolute bottom-4 right-4 w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-300 active:scale-90
-                        ${fav ? 'text-rose-500' : 'text-slate-200 hover:text-rose-400'}`}
-                    style={fav ? { background: 'rgba(244,63,94,0.08)' } : { background: 'rgba(0,0,0,0.02)' }}>
+                    className={`absolute bottom-4 right-4 w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90
+                        ${fav ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-50 text-slate-300 hover:text-rose-400 hover:bg-rose-50'}`}>
                     <Heart size={16} className={fav ? 'fill-current' : ''} />
                 </button>
             </div>
@@ -275,15 +268,9 @@ function App() {
                         </div>
                     ) : (
                         <>
-                            <div className="flex items-center gap-3 mb-5 animate-fade-in">
-                                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                                    style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }}>
-                                    <Footprints size={18} className="text-accent" />
-                                </div>
-                                <div>
-                                    <h2 className="font-bold text-primary text-lg leading-tight">おすすめコース</h2>
-                                    <p className="text-[11px] text-slate-300 font-medium">{courses.length}件のプラン</p>
-                                </div>
+                            <div className="flex items-center gap-2 mb-5 animate-fade-in">
+                                <Footprints size={20} className="text-slate-700" />
+                                <h2 className="font-bold text-slate-800 text-lg">おすすめコース ({courses.length})</h2>
                             </div>
                             {loading && statusPanel}
                             <div className="space-y-3">
@@ -311,98 +298,89 @@ function App() {
                                 <Sparkles size={10} /> {selectedCourse.theme.split(':')[0]}
                             </div>
                         )}
-                        <div className="flex items-start justify-between gap-3">
-                            <h2 className="font-extrabold text-xl text-primary leading-tight flex-1">{selectedCourse.title}</h2>
+                        <div className="flex items-start justify-between gap-2">
+                            <h2 className="font-extrabold text-xl text-slate-900 leading-tight flex-1">{selectedCourse.title}</h2>
                             <button onClick={() => isFavorite(selectedCourse.id) ? removeFavorite(selectedCourse.id) : addFavorite(selectedCourse)}
-                                className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 active:scale-90 shrink-0
-                                    ${isFavorite(selectedCourse.id) ? 'text-rose-500' : 'text-slate-300 hover:text-rose-400'}`}
-                                style={isFavorite(selectedCourse.id) ? { background: 'rgba(244,63,94,0.08)' } : { background: 'rgba(0,0,0,0.03)' }}>
+                                className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90 shrink-0
+                                    ${isFavorite(selectedCourse.id) ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-100 text-slate-400 hover:text-rose-400 hover:bg-rose-50'}`}>
                                 <Heart size={20} className={isFavorite(selectedCourse.id) ? 'fill-current' : ''} />
                             </button>
                         </div>
-                        <div className="flex gap-3 mt-2.5">
-                            <span className="tag-badge"><Clock size={10} /> {selectedCourse.totalTime}分</span>
-                            <span className="tag-badge"><MapPin size={10} /> {selectedCourse.spots.length}スポット</span>
+                        <div className="flex gap-3 text-xs text-slate-500 mt-2">
+                            <span className="flex items-center gap-1"><Clock size={12} /> {selectedCourse.totalTime}分</span>
+                            <span className="flex items-center gap-1"><MapPin size={12} /> {selectedCourse.spots.length}スポット</span>
                         </div>
                         {selectedCourse.description && (
-                            <p className="text-sm text-slate-400 mt-3 leading-relaxed">{selectedCourse.description}</p>
+                            <p className="text-sm text-slate-500 mt-2 leading-relaxed">{selectedCourse.description}</p>
                         )}
+                        {/* 地図で見るボタン */}
+                        <button onClick={() => setActiveTab('map')}
+                            className="flex items-center justify-center gap-2 w-full mt-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold transition-all active:scale-95">
+                            <Map size={16} /> 地図で全体を見る
+                        </button>
                     </div>
 
                     {/* タイムライン */}
-                    <div className="relative pl-5 space-y-4">
-                        <div className="absolute left-[7px] top-4 bottom-4 w-[2px] rounded-full"
-                            style={{ background: 'linear-gradient(180deg, #e2b040, rgba(226,176,64,0.1))' }}></div>
+                    <div className="relative pl-4 space-y-4 before:content-[''] before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
                         {selectedCourse.spots.map((spot, index) => (
-                            <div key={spot.id} className="relative pl-7 animate-slide-up"
-                                style={{ animationDelay: `${index * 0.08}s`, animationFillMode: 'backwards' }}>
-                                <div className="absolute left-0 top-5 w-4 h-4 rounded-full border-[3px] border-paper z-10 transition-transform group-hover:scale-125"
-                                    style={{
-                                        background: index === 0 ? 'linear-gradient(135deg, #e2b040, #f5d98b)'
-                                            : index === selectedCourse.spots.length - 1 ? 'linear-gradient(135deg, #ef4444, #f87171)'
-                                                : 'linear-gradient(135deg, #1a1a2e, #16213e)',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                                    }}></div>
+                            <div key={spot.id} className="relative pl-6 group">
+                                <div className="absolute left-0 top-1.5 w-3.5 h-3.5 bg-slate-900 rounded-full border-2 border-white shadow-sm group-hover:scale-125 transition-transform z-10"></div>
 
-                                <div className="card-premium p-4 group">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[10px] font-extrabold uppercase tracking-widest"
-                                            style={{ color: index === 0 ? '#e2b040' : index === selectedCourse.spots.length - 1 ? '#ef4444' : '#94a3b8' }}>
-                                            {index === 0 ? '✦ START' : index === selectedCourse.spots.length - 1 ? '✦ GOAL' : `SPOT ${index + 1}`}
+                                <div className="p-3 rounded-xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 transition-all">
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                                            {index === 0 ? 'START' : index === selectedCourse.spots.length - 1 ? 'GOAL' : `SPOT ${index + 1}`}
                                         </span>
-                                        <span className="tag-badge text-[9px]">{spot.category}</span>
+                                        <span className="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded ml-2 shrink-0">{spot.category}</span>
                                     </div>
 
-                                    <h4 className="font-bold text-base text-primary mb-1 group-hover:text-accent transition-colors">{spot.name}</h4>
+                                    <h4 className="font-bold text-base text-slate-800 mb-1 group-hover:text-amber-600 transition-colors">{spot.name}</h4>
 
-                                    <div className="flex items-center gap-2 mb-2.5">
-                                        <span className="flex items-center text-[10px] text-accent font-bold">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="flex items-center text-[10px] text-amber-500 font-bold">
                                             <Star size={10} className="fill-current mr-0.5" /> {spot.rating || '-'}
                                         </span>
-                                        <span className="text-[10px] text-slate-300">({spot.user_ratings_total || 0})</span>
+                                        <span className="text-[10px] text-slate-400">({spot.user_ratings_total || 0})</span>
                                     </div>
 
                                     {spot.tags.photo && (
-                                        <div className="w-full h-32 mb-3 rounded-2xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.03)' }}>
+                                        <div className="w-full h-28 mb-3 rounded-lg overflow-hidden bg-slate-100">
                                             <img src={spot.tags.photo} alt={spot.name} className="w-full h-full object-cover" />
                                         </div>
                                     )}
 
-                                    <div className="text-xs text-slate-500 leading-relaxed rounded-2xl p-3.5 space-y-2.5"
-                                        style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.04)' }}>
+                                    <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2">
                                         {(spot.travel_time_minutes ?? 0) > 0 && (
-                                            <div className="flex items-center gap-2 text-[10px] text-slate-300 font-bold pb-2 mb-2"
-                                                style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold border-b border-slate-100 pb-2 mb-2">
                                                 <Footprints size={12} /> 前のスポットから徒歩約{spot.travel_time_minutes}分
                                             </div>
                                         )}
                                         <p className="mb-2">{spot.aiDescription || spot.tags.description || "詳細情報なし"}</p>
                                         {spot.must_see && (
-                                            <div className="p-3 rounded-xl" style={{ background: 'rgba(226,176,64,0.06)', border: '1px solid rgba(226,176,64,0.12)' }}>
-                                                <span className="flex items-center gap-1 text-[10px] font-bold mb-0.5" style={{ color: '#b8860b' }}>
+                                            <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-100">
+                                                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 mb-0.5">
                                                     <Star size={10} /> 必見ポイント:
                                                 </span>
-                                                <span className="text-[10px] text-slate-600">{spot.must_see}</span>
+                                                <span className="text-[10px] text-amber-900">{spot.must_see}</span>
                                             </div>
                                         )}
                                         {spot.pro_tip && (
-                                            <div className="p-3 rounded-xl" style={{ background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.1)' }}>
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-blue-500 mb-0.5">
+                                            <div className="bg-blue-50 p-2.5 rounded-lg border border-blue-100">
+                                                <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 mb-0.5">
                                                     <Sparkles size={10} /> 旅のヒント:
                                                 </span>
-                                                <span className="text-[10px] text-slate-600">{spot.pro_tip}</span>
+                                                <span className="text-[10px] text-blue-900">{spot.pro_tip}</span>
                                             </div>
                                         )}
                                     </div>
 
                                     {spot.tags.opening_hours && (
-                                        <div className="mt-2 text-[10px] text-emerald-500 font-medium">{spot.tags.opening_hours}</div>
+                                        <div className="mt-2 text-[10px] text-green-600 font-medium">{spot.tags.opening_hours}</div>
                                     )}
 
                                     <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`}
                                         target="_blank" rel="noopener noreferrer"
-                                        className="flex items-center justify-center gap-2 w-full text-[11px] font-bold py-2.5 rounded-xl transition-all active:scale-95 mt-3"
-                                        style={{ background: 'rgba(0,0,0,0.03)', color: '#64748b', border: '1px solid rgba(0,0,0,0.04)' }}>
+                                        className="flex items-center justify-center gap-1.5 w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow active:scale-95 mt-3">
                                         <span className="text-blue-500 font-extrabold">G</span> Googleマップで見る
                                     </a>
                                 </div>
@@ -498,7 +476,7 @@ function App() {
     );
 
     return (
-        <div className="relative w-full h-[100dvh] overflow-hidden flex flex-col" style={{ background: '#f5f0e8' }}>
+        <div className="relative w-full h-[100dvh] bg-white overflow-hidden flex flex-col">
             <div className="flex-1 overflow-hidden">
                 {activeTab === 'search' && (
                     <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{searchView}</div>

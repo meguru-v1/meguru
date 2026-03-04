@@ -62,9 +62,40 @@ export const fetchNearbySpots = async (lat: number, lon: number, radius: number)
             elements: OverpassElement[];
         }
 
-        const response = await axios.get<OverpassResponse>(OVERPASS_BASE, {
-            params: { data: query }
-        });
+        // 複数のOverpassサーバーを利用して負荷分散とフォールバック
+        const endpoints = [
+            'https://overpass-api.de/api/interpreter',
+            'https://lz4.overpass-api.de/api/interpreter',
+            'https://z.overpass-api.de/api/interpreter',
+            'https://overpass.kumi.systems/api/interpreter'
+        ];
+
+        let response = null;
+        let lastError = null;
+
+        // ランダムなエンドポイントから開始して順番に試す
+        const startIndex = Math.floor(Math.random() * endpoints.length);
+        for (let i = 0; i < endpoints.length; i++) {
+            const endpoint = endpoints[(startIndex + i) % endpoints.length];
+            try {
+                response = await axios.post<OverpassResponse>(endpoint, `data=${encodeURIComponent(query)}`, {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    timeout: 25000 // 25秒タイムアウト
+                });
+                break; // 成功したらループを抜ける
+            } catch (err: any) {
+                console.warn(`Overpass API timeout/error at ${endpoint}:`, err.message);
+                lastError = err;
+                // 429 Too Many Requests の場合は少し待ってから次のサーバーへ
+                if (err.response && err.response.status === 429) {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+            }
+        }
+
+        if (!response || !response.data || !response.data.elements) {
+            throw lastError || new Error("All Overpass endpoints failed");
+        }
 
         const elements = response.data.elements.filter(el =>
             el.tags &&

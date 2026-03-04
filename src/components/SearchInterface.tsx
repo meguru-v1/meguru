@@ -1,27 +1,28 @@
 import React, { useState } from 'react';
 import { Search, MapPin, Clock, Compass, Navigation } from 'lucide-react';
+import type { SearchParams } from '../types';
 
+interface SearchInterfaceProps {
+    onSearch: (params: SearchParams) => void;
+}
 
-const SearchInterface = ({ onSearch }) => {
+const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
     const [query, setQuery] = useState('');
     const [radius, setRadius] = useState(1); // km
     const [duration, setDuration] = useState(180); // minutes (default 3h)
     const [isSearching, setIsSearching] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!query.trim()) return;
 
         setIsSearching(true);
-        // Simulate API call delay for UX or just pass up
-        onSearch({ query, radius: radius * 1000, duration }); // radius in meters
+        onSearch({ query, radius: radius * 1000, duration });
         setTimeout(() => setIsSearching(false), 1000);
     };
 
     return (
-        <div
-            className="glass-panel p-3 md:p-8 max-w-md w-full mx-auto relative z-10"
-        >
+        <div className="glass-panel p-3 md:p-8 max-w-md w-full mx-auto relative z-10">
             <div className="text-center mb-2 md:mb-8">
                 <h1 className="text-lg md:text-3xl font-serif font-bold text-slate-800 mb-0 md:mb-2">Meguru</h1>
                 <p className="text-slate-500 text-[10px] md:text-sm hidden md:block">あなたのための、特別なよりみち。</p>

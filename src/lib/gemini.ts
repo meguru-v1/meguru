@@ -1,21 +1,16 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { Spot, Course } from '../types';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-/**
- * Generates 3 model courses using Gemini API based on available spots.
- * 
- * @param {Array} candidates - List of spots with {name, lat, lon, category, tags}
- * @param {Object} center - Start location {lat, lon}
- * @param {number} durationMinutes - Total duration
- * @returns {Promise<Array>} - List of 3 course objects
- */
-export const generateSmartCourses = async (candidates, center, durationMinutes) => {
-    // Models to try in order (2.5-flash-lite works in hinowa on same project)
+export const generateSmartCourses = async (
+    candidates: Spot[],
+    center: { lat: number; lon: number },
+    durationMinutes: number
+): Promise<Course[]> => {
     const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
 
-    // Build prompt (same for all models)
     const candidateList = candidates.map((s, i) =>
         `${i}: ${s.name} (${s.category}, ※${s.estimatedStayTime || 30}分)`
     ).join('\n');
@@ -92,26 +87,17 @@ ${themeInstructions}
                 "recommendation_reason": "Specific reason...",
                 "must_see": "Specific highlight...",
                 "pro_tip": "Specific tip..."
-            },
-            {
-                "id": 5,
-                "stayTime": 25,
-                "travel_time_minutes": 8,
-                "recommendation_reason": "...",
-                "must_see": "...",
-                "pro_tip": "..."
             }
         ]
     }
 ]
     `;
 
-    // Try each model in order until one succeeds
-    let text;
+    let text: string | undefined;
     console.log("Attempting Gemini generation...");
     console.log("API Key present:", !!API_KEY, "Key prefix:", API_KEY ? API_KEY.substring(0, 10) + '...' : 'MISSING');
 
-    let lastError;
+    let lastError: unknown;
     for (const modelName of MODELS) {
         try {
             console.log(`Trying model: ${modelName}...`);
@@ -120,35 +106,51 @@ ${themeInstructions}
             const response = await result.response;
             text = response.text();
             console.log(`✅ Model ${modelName} succeeded!`);
-            break; // Success, exit the loop
+            break;
         } catch (err) {
-            console.warn(`❌ Model ${modelName} failed:`, err.message || err);
+            console.warn(`❌ Model ${modelName} failed:`, err instanceof Error ? err.message : err);
             lastError = err;
         }
     }
 
     if (!text) {
-        console.error("All Gemini models failed. Last error:", lastError?.message);
+        console.error("All Gemini models failed. Last error:", lastError instanceof Error ? lastError.message : lastError);
         return [];
     }
 
     console.log("Gemini Raw Response:", text);
 
-    // Robust parsing: Find the first '[' and the last ']' to extract JSON array
     const jsonMatch = text.match(/\[[\s\S]*\]/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : text.replace(/```json | ```/g, '').trim();
+    const jsonStr = jsonMatch ? jsonMatch[0] : text.replace(/```json |```/g, '').trim();
 
-    let coursesData;
+    interface GeminiSpot {
+        id: number;
+        stayTime: number;
+        travel_time_minutes: number;
+        recommendation_reason?: string;
+        description?: string;
+        must_see?: string;
+        pro_tip?: string;
+    }
+    interface GeminiCourse {
+        id: string;
+        title: string;
+        theme: string;
+        description: string;
+        totalTime: number;
+        spots: GeminiSpot[];
+    }
+
+    let coursesData: GeminiCourse[];
     try {
-        coursesData = JSON.parse(jsonStr);
+        coursesData = JSON.parse(jsonStr) as GeminiCourse[];
     } catch (e) {
         console.error("JSON Parse Error:", e, text);
         return [];
     }
 
-    // Hydrate the spots with original data
     return coursesData.map(course => {
-        const hydratedSpots = course.spots.map(s => {
+        const hydratedSpots: Spot[] = course.spots.map(s => {
             const original = candidates[s.id];
             if (!original) {
                 console.warn(`Gemini returned invalid ID: ${s.id}`);
@@ -160,12 +162,11 @@ ${themeInstructions}
                 aiDescription: s.recommendation_reason || s.description,
                 must_see: s.must_see || null,
                 pro_tip: s.pro_tip || null
-            };
-        }).filter(Boolean);
+            } as Spot;
+        }).filter((s): s is Spot => s !== null);
 
-        // Sort spots by nearest-neighbor for proper walking order
         if (hydratedSpots.length > 1) {
-            const sorted = [hydratedSpots[0]];
+            const sorted: Spot[] = [hydratedSpots[0]];
             const remaining = hydratedSpots.slice(1);
             while (remaining.length > 0) {
                 const current = sorted[sorted.length - 1];
@@ -183,7 +184,6 @@ ${themeInstructions}
                 sorted.push(remaining.splice(nearestIdx, 1)[0]);
             }
 
-            // Calculate travel_time_minutes between consecutive spots
             for (let i = 0; i < sorted.length; i++) {
                 if (i === 0) {
                     sorted[i].travel_time_minutes = 0;
@@ -192,13 +192,13 @@ ${themeInstructions}
                     const dx = (sorted[i].lat - prev.lat) * 111000;
                     const dy = (sorted[i].lon - prev.lon) * 111000 * Math.cos(prev.lat * Math.PI / 180);
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    sorted[i].travel_time_minutes = Math.round(dist / 80); // 80m/min walking
+                    sorted[i].travel_time_minutes = Math.round(dist / 80);
                 }
             }
 
-            return { ...course, spots: sorted };
+            return { ...course, spots: sorted } as Course;
         }
 
-        return { ...course, spots: hydratedSpots };
+        return { ...course, spots: hydratedSpots } as Course;
     });
 };

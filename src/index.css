@@ -12,6 +12,7 @@
   --animate-fade-in: fadeIn 0.5s ease-out;
   --animate-slide-up: slideUp 0.5s ease-out;
   --animate-slide-up-sheet: slideUpSheet 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-down-indicator: slideDownIndicator 0.2s ease-out;
 
   @keyframes fadeIn {
     0% {
@@ -42,6 +43,18 @@
 
     100% {
       transform: translateY(0);
+    }
+  }
+
+  @keyframes slideDownIndicator {
+    0% {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+
+    100% {
+      transform: scaleX(1);
+      opacity: 1;
     }
   }
 }

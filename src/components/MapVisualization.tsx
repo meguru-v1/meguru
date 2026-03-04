@@ -2,8 +2,10 @@ import React, { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import type { Spot } from '../types';
 
 // Fix Leaflet marker icons in React
+// @ts-expect-error Leaflet internal
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -11,8 +13,7 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Create a numbered circle marker icon
-const createNumberedIcon = (number, isStart, isEnd, isFocused) => {
+const createNumberedIcon = (number: number, isStart: boolean, isEnd: boolean, isFocused: boolean) => {
     const bgColor = isStart ? '#F59E0B' : isEnd ? '#EF4444' : '#0F172A';
     const size = isFocused ? 32 : 26;
     const fontSize = isFocused ? 14 : 11;
@@ -38,7 +39,6 @@ const createNumberedIcon = (number, isStart, isEnd, isFocused) => {
     });
 };
 
-// Start location marker
 const startIcon = L.divIcon({
     className: 'custom-start-marker',
     html: `<div style="
@@ -54,16 +54,19 @@ const startIcon = L.divIcon({
     popupAnchor: [0, -14],
 });
 
-// Component to control map movement
-const MapController = ({ center, zoom, focusedSpot }) => {
+interface MapControllerProps {
+    center: [number, number];
+    zoom: number;
+    focusedSpot: Spot | null;
+}
+
+const MapController: React.FC<MapControllerProps> = ({ center, zoom, focusedSpot }) => {
     const map = useMap();
 
-    // Recenter on search
     useEffect(() => {
         if (center) map.flyTo(center, zoom, { duration: 1.5 });
     }, [center, zoom, map]);
 
-    // Fly to focused spot
     useEffect(() => {
         if (focusedSpot) {
             map.flyTo([focusedSpot.lat, focusedSpot.lon], 17, { duration: 1.5 });
@@ -73,35 +76,37 @@ const MapController = ({ center, zoom, focusedSpot }) => {
     return null;
 };
 
-const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
+interface MapVisualizationProps {
+    center: { lat: number; lon: number } | null;
+    radius: number;
+    spots: Spot[];
+    focusedSpot: Spot | null;
+}
+
+const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spots, focusedSpot }) => {
     const mapCenter = center || { lat: 34.9858, lon: 135.7588 };
     const zoomLevel = 14;
 
-    // Refs for markers to control popup
-    const markerRefs = React.useRef({});
+    const markerRefs = React.useRef<Record<string | number, L.Marker>>({});
 
-    // Effect to open popup when focusedSpot changes
     useEffect(() => {
         if (focusedSpot && markerRefs.current[focusedSpot.id]) {
-            const marker = markerRefs.current[focusedSpot.id];
-            marker.openPopup();
+            markerRefs.current[focusedSpot.id].openPopup();
         }
     }, [focusedSpot]);
 
-    // Create polyline logic
-    const routePositions = spots.map(s => [s.lat, s.lon]);
+    const routePositions = spots.map(s => [s.lat, s.lon] as [number, number]);
+    const fullRoute: [number, number][] = center
+        ? [[center.lat, center.lon], ...routePositions]
+        : routePositions;
 
-    // Add start point to route for visualization if available
-    const fullRoute = center ? [[center.lat, center.lon], ...routePositions] : routePositions;
-
-    // Memoize icons to avoid re-creating on every render
     const spotIcons = useMemo(() => {
         return spots.map((spot, index) =>
             createNumberedIcon(
                 index + 1,
                 index === 0,
                 index === spots.length - 1,
-                focusedSpot && focusedSpot.id === spot.id
+                !!(focusedSpot && focusedSpot.id === spot.id)
             )
         );
     }, [spots, focusedSpot]);
@@ -120,7 +125,6 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
                     url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                 />
 
-                {/* User Location & Radius */}
                 {center && (
                     <>
                         <Circle
@@ -135,7 +139,6 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
                     </>
                 )}
 
-                {/* Route Line */}
                 {fullRoute.length > 1 && (
                     <Polyline
                         positions={fullRoute}
@@ -143,13 +146,14 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
                     />
                 )}
 
-                {/* Spots with numbered markers */}
                 {spots.map((spot, index) => (
                     <Marker
                         key={spot.id}
                         position={[spot.lat, spot.lon]}
                         icon={spotIcons[index]}
-                        ref={el => markerRefs.current[spot.id] = el}
+                        ref={el => {
+                            if (el) markerRefs.current[spot.id] = el;
+                        }}
                         zIndexOffset={focusedSpot && focusedSpot.id === spot.id ? 1000 : index * 10}
                     >
                         <Popup>
@@ -168,7 +172,7 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
                                             <span>★</span> {spot.rating}
                                         </span>
                                     )}
-                                    {spot.user_ratings_total > 0 && (
+                                    {spot.user_ratings_total != null && spot.user_ratings_total > 0 && (
                                         <span className="text-[10px] text-slate-400">({spot.user_ratings_total})</span>
                                     )}
                                 </div>
@@ -207,4 +211,3 @@ const MapVisualization = ({ center, radius, spots, focusedSpot }) => {
 };
 
 export default MapVisualization;
-

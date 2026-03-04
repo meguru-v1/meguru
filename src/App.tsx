@@ -8,7 +8,7 @@ import { generateSmartCourses } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
-    Navigation, AlertCircle, Map
+    Navigation, AlertCircle, Map, ArrowLeft
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId } from './types';
 
@@ -287,8 +287,9 @@ function App() {
                 <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-5 pb-20">
                     {/* 戻るボタン */}
                     <button onClick={() => { setSelectedCourse(null); setFocusedSpot(null); }}
-                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-primary transition-colors mb-4 py-1 font-medium">
-                        ← コース一覧に戻る
+                        className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all active:scale-90 mb-3"
+                        aria-label="コース一覧に戻る">
+                        <ArrowLeft size={20} />
                     </button>
 
                     {/* コースヘッダー */}

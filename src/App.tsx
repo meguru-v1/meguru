@@ -25,8 +25,29 @@ function App() {
 
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
+    // ===== ジオコード関数 =====
+    const geocode = async (q: string): Promise<{ lat: number; lon: number; name: string } | null> => {
+        try {
+            const photonRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=3`);
+            const photonData = await photonRes.json();
+            if (photonData.features && photonData.features.length > 0) {
+                const f = photonData.features[0];
+                return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || q };
+            }
+        } catch { /* fallback below */ }
+
+        try {
+            const geoData = await searchLocation(q);
+            if (geoData && geoData.length > 0) {
+                return { lat: parseFloat(geoData[0].lat), lon: parseFloat(geoData[0].lon), name: geoData[0].display_name || q };
+            }
+        } catch { /* ignore */ }
+
+        return null;
+    };
+
     // ===== 検索ハンドラ =====
-    const handleSearch = async ({ query, radius: r, duration }: SearchParams) => {
+    const handleSearch = async ({ searchMode, query, radius: r, duration, destination, travelMode }: SearchParams) => {
         setLoading(true);
         setError(null);
         setCourses([]);
@@ -34,56 +55,95 @@ function App() {
         setStatus('場所を検索中...');
 
         try {
-            let geoData;
-            try {
-                const photonRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`);
-                const photonData = await photonRes.json();
-                if (photonData.features && photonData.features.length > 0) {
-                    geoData = photonData.features.map((f: { geometry: { coordinates: number[] }; properties: { name?: string } }) => ({
-                        lat: f.geometry.coordinates[1].toString(),
-                        lon: f.geometry.coordinates[0].toString(),
-                        display_name: f.properties.name || query
-                    }));
+            if (searchMode === 'route' && destination) {
+                // ===== ルート検索 =====
+                const [startGeo, endGeo] = await Promise.all([geocode(query), geocode(destination)]);
+                if (!startGeo) throw new Error(`「${query}」が見つかりませんでした。`);
+                if (!endGeo) throw new Error(`「${destination}」が見つかりませんでした。`);
+
+                // 2点間の中心と距離を算出
+                const midLat = (startGeo.lat + endGeo.lat) / 2;
+                const midLon = (startGeo.lon + endGeo.lon) / 2;
+                const dx = (startGeo.lat - endGeo.lat) * 111000;
+                const dy = (startGeo.lon - endGeo.lon) * 111000 * Math.cos(midLat * Math.PI / 180);
+                const directDist = Math.sqrt(dx * dx + dy * dy);
+                const searchRadius = Math.max(directDist * 0.6, 500); // ルートの幅方向の検索範囲
+
+                setCenter({ lat: midLat, lon: midLon });
+                setRadius(searchRadius);
+
+                setStatus(`ルート周辺のスポットを探しています...`);
+                // ルート沿いのスポットを複数ポイントで収集
+                const numPoints = Math.max(3, Math.ceil(directDist / 1500));
+                const spotPromises = [];
+                for (let i = 0; i <= numPoints; i++) {
+                    const t = i / numPoints;
+                    const lat = startGeo.lat + (endGeo.lat - startGeo.lat) * t;
+                    const lon = startGeo.lon + (endGeo.lon - startGeo.lon) * t;
+                    spotPromises.push(fetchNearbySpots(lat, lon, Math.min(searchRadius, 2000)));
                 }
-            } catch (photonError) {
-                console.warn("Photon failed, trying Nominatim fallback:", photonError);
+                const allSpotsArrays = await Promise.all(spotPromises);
+                const seen = new Set<string | number>();
+                const allSpots: Spot[] = [];
+                for (const spots of allSpotsArrays) {
+                    for (const spot of spots) {
+                        if (!seen.has(spot.id)) {
+                            seen.add(spot.id);
+                            allSpots.push(spot);
+                        }
+                    }
+                }
+
+                if (allSpots.length < 3) throw new Error("ルート周辺にスポットがあまり見つかりませんでした。");
+
+                setStatus('AIが最適なルートコースを生成中...');
+                const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
+                const candidates = shuffled.slice(0, 150);
+
+                let generatedCourses: Course[] = [];
+                try { generatedCourses = await generateSmartCourses(candidates, { lat: midLat, lon: midLon }, duration); }
+                catch { /* fallback below */ }
+
+                if (generatedCourses.length === 0) {
+                    setStatus('標準アルゴリズムでコース生成中...');
+                    generatedCourses = generateHeuristicCourses({ lat: midLat, lon: midLon }, allSpots, duration);
+                }
+
+                if (generatedCourses.length === 0) throw new Error("条件に合うルートコースが作成できませんでした。");
+
+                setCourses(generatedCourses);
+                setActiveTab('courses');
+
+            } else {
+                // ===== エリア検索 (従来) =====
+                const startGeo = await geocode(query);
+                if (!startGeo) throw new Error("場所が見つかりませんでした。");
+
+                setCenter({ lat: startGeo.lat, lon: startGeo.lon });
+                setRadius(r);
+
+                setStatus(`周辺スポットを探しています... (${r / 1000}km圏内)`);
+                const allSpots = await fetchNearbySpots(startGeo.lat, startGeo.lon, r);
+                if (allSpots.length < 5) throw new Error("周辺にスポットがあまり見つかりませんでした。");
+
+                setStatus('AIが最適なコースを生成中...');
+                const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
+                const candidates = shuffled.slice(0, 150);
+
+                let generatedCourses: Course[] = [];
+                try { generatedCourses = await generateSmartCourses(candidates, { lat: startGeo.lat, lon: startGeo.lon }, duration); }
+                catch { /* fallback below */ }
+
+                if (generatedCourses.length === 0) {
+                    setStatus('標準アルゴリズムでコース生成中...');
+                    generatedCourses = generateHeuristicCourses({ lat: startGeo.lat, lon: startGeo.lon }, allSpots, duration);
+                }
+
+                if (generatedCourses.length === 0) throw new Error("条件に合うコースが作成できませんでした。");
+
+                setCourses(generatedCourses);
+                setActiveTab('courses');
             }
-
-            if (!geoData || geoData.length === 0) {
-                try { geoData = await searchLocation(query); } catch (nomError) { console.warn("Nominatim also failed:", nomError); }
-            }
-
-            if (!geoData || geoData.length === 0) throw new Error("場所が見つかりませんでした。");
-
-            const newCenter = { lat: parseFloat(geoData[0].lat), lon: parseFloat(geoData[0].lon) };
-            setCenter(newCenter);
-            setRadius(r);
-
-            setStatus(`周辺スポットを探しています... (${r / 1000}km圏内)`);
-            const allSpots = await fetchNearbySpots(newCenter.lat, newCenter.lon, r);
-            if (allSpots.length < 5) throw new Error("周辺にスポットがあまり見つかりませんでした。");
-
-            setStatus('AIが最適なコースを生成中...');
-            const shuffled = [...allSpots];
-            for (let i = shuffled.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-            }
-            const candidates = shuffled.slice(0, 150);
-
-            let generatedCourses: Course[] = [];
-            try { generatedCourses = await generateSmartCourses(candidates, newCenter, duration); }
-            catch (aiError) { console.warn("AI Generation failed, falling back to heuristic:", aiError); }
-
-            if (generatedCourses.length === 0) {
-                setStatus('標準アルゴリズムでコース生成中...');
-                generatedCourses = generateHeuristicCourses(newCenter, allSpots, duration);
-            }
-
-            if (generatedCourses.length === 0) throw new Error("条件に合うコースが作成できませんでした。");
-
-            setCourses(generatedCourses);
-            setActiveTab('courses'); // 検索完了後→モデルコースタブへ
         } catch (err) {
             console.error(err);
             setError(err instanceof Error ? err.message : "検索中にエラーが発生しました。");

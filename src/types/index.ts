@@ -37,10 +37,16 @@ export interface Course {
     savedAt?: string; // お気に入り保存日時 (ISO 8601)
 }
 
+export type SearchMode = 'area' | 'route';
+export type TravelMode = 'walk' | 'bicycle' | 'car' | 'transit';
+
 export interface SearchParams {
+    searchMode: SearchMode;
     query: string;
     radius: number; // meters
     duration: number; // minutes
+    destination?: string; // ルート検索時の目的地
+    travelMode?: TravelMode; // 移動方法
 }
 
 export interface GeoResult {

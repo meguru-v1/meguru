@@ -24,7 +24,7 @@ const TABS: TabConfig[] = [
 
 const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabChange, coursesCount, favoritesCount }) => {
     return (
-        <nav className="fixed bottom-0 left-0 right-0 z-[600] safe-bottom" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <nav className="shrink-0 z-[600]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             {/* frosted glass background */}
             <div className="mx-2 mb-2 rounded-2xl overflow-hidden bg-white/80 backdrop-blur-xl border border-white/60 shadow-2xl shadow-slate-900/20">
                 <div className="flex items-stretch">

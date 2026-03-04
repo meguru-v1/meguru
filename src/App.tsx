@@ -161,7 +161,7 @@ function App() {
     //  検索タブ (全画面)
     // ==========================
     const searchView = (
-        <div className="flex flex-col items-center justify-center min-h-full px-4 py-8">
+        <div className="w-full h-full flex flex-col">
             <SearchInterface onSearch={handleSearch} />
             {statusPanel}
         </div>

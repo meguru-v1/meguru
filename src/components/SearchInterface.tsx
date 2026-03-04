@@ -77,8 +77,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                                 </label>
                                 <div className="relative">
                                     <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-                                        placeholder="例: 京都駅、浅草寺..." className="input-premium pl-11 text-base" />
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                        placeholder="例: 京都駅、浅草寺..." className="input-premium text-base" />
                                 </div>
                             </div>
                             <div className="space-y-2 animate-slide-up stagger-1">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, MapPin, Clock, Compass, Navigation, ArrowRight, Car, Footprints, Bike, Train } from 'lucide-react';
+import { Search, MapPin, Clock, Compass, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown } from 'lucide-react';
 import type { SearchParams, SearchMode, TravelMode } from '../types';
 
 interface SearchInterfaceProps {
@@ -90,6 +90,24 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                                 <div className="flex justify-between text-[10px] text-slate-300 font-medium"><span>0.5km</span><span>7.0km</span></div>
                             </div>
                         </>
+                    )}
+
+                    {searchMode === 'route' && (
+                        <div className="space-y-3 animate-slide-up">
+                            <div className="relative">
+                                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">出発地</label>
+                                <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                                    placeholder="例: 京都駅" className="input-premium text-sm py-3" />
+                            </div>
+                            <div className="flex flex-col items-center justify-center gap-0 pointer-events-none z-10">
+                                <ArrowDown size={16} className="text-slate-300 -my-2 bg-white rounded-full" />
+                            </div>
+                            <div className="relative">
+                                <label className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1 block">目的地</label>
+                                <input type="text" value={destination} onChange={(e) => setDestination(e.target.value)}
+                                    placeholder="例: 嵐山" className="input-premium text-sm py-3" />
+                            </div>
+                        </div>
                     )}
 
                     {/* 共通のオプション（移動方法） */}

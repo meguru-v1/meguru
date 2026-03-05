@@ -404,7 +404,7 @@ function App() {
                                         <div className="mt-2 text-[10px] text-green-600 font-medium">{spot.tags.opening_hours}</div>
                                     )}
 
-                                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`}
+                                    <a href={`https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lon}`}
                                         target="_blank" rel="noopener noreferrer"
                                         className="flex items-center justify-center gap-1.5 w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow active:scale-95 mt-3">
                                         <span className="text-blue-500 font-extrabold">G</span> Googleマップで見る
@@ -415,7 +415,7 @@ function App() {
                     </div>
 
                     {/* Googleマップ 全ルート一括転送ボタン */}
-                    <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedCourse.spots[0].name)}&destination=${encodeURIComponent(selectedCourse.spots[selectedCourse.spots.length - 1].name)}&waypoints=${encodeURIComponent(selectedCourse.spots.slice(1, -1).map(s => s.name).join('|'))}&travelmode=${selectedCourse.travelMode === 'walk' ? 'walking' : selectedCourse.travelMode === 'bicycle' ? 'bicycling' : selectedCourse.travelMode === 'car' ? 'driving' : 'transit'}`}
+                    <a href={`https://www.google.com/maps/dir/?api=1&origin=${selectedCourse.spots[0].lat},${selectedCourse.spots[0].lon}&destination=${selectedCourse.spots[selectedCourse.spots.length - 1].lat},${selectedCourse.spots[selectedCourse.spots.length - 1].lon}&waypoints=${selectedCourse.spots.slice(1, -1).map(s => `${s.lat},${s.lon}`).join('|')}&travelmode=${selectedCourse.travelMode === 'walk' ? 'walking' : selectedCourse.travelMode === 'bicycle' ? 'bicycling' : selectedCourse.travelMode === 'car' ? 'driving' : 'transit'}`}
                         target="_blank" rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 w-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white text-sm font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 mt-6 mb-2">
                         <Navigation size={18} className="text-amber-400" />

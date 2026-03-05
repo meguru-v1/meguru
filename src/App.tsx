@@ -6,11 +6,12 @@ import { useFavorites } from './hooks/useFavorites';
 import { fetchNearbySpots, searchLocation } from './lib/osm';
 import { generateSmartCourses } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
+import { getDistance } from 'geolib';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
-    Navigation, AlertCircle, Map, ArrowLeft
+    Navigation, AlertCircle, Map, ArrowLeft, Bike, Train, Car
 } from 'lucide-react';
-import type { Course, Spot, SearchParams, TabId } from './types';
+import type { Course, Spot, SearchParams, TabId, TravelMode } from './types';
 
 function App() {
     const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
@@ -75,14 +76,14 @@ function App() {
                     transit: { limit: 200, label: '公共交通' },
                     car: { limit: 200, label: '車' },
                 };
-                const mode = travelMode || 'walk';
+                const routeMode = travelMode || 'walk';
                 const distKm = directDist / 1000;
                 const timeHours = duration / 60;
                 const requiredSpeed = distKm / timeHours;
 
-                if (requiredSpeed > maxSpeeds[mode].limit) {
+                if (requiredSpeed > maxSpeeds[routeMode].limit) {
                     throw new Error(
-                        `${maxSpeeds[mode].label}では無理な距離です（直線${distKm.toFixed(1)}km、必要速度 ${requiredSpeed.toFixed(0)}km/h）。時間を増やすか、移動方法を変更してください。`
+                        `${maxSpeeds[routeMode].label}では無理な距離です（直線${distKm.toFixed(1)}km、必要速度 ${requiredSpeed.toFixed(0)}km/h）。時間を増やすか、移動方法を変更してください。`
                     );
                 }
 
@@ -125,14 +126,24 @@ function App() {
                 try { generatedCourses = await generateSmartCourses(candidates, { lat: midLat, lon: midLon }, duration); }
                 catch { /* fallback below */ }
 
-                if (generatedCourses.length === 0) {
-                    setStatus('標準アルゴリズムでコース生成中...');
-                    generatedCourses = generateHeuristicCourses({ lat: midLat, lon: midLon }, allSpots, duration);
-                }
+                const routeTravelMode = travelMode || 'walk';
+                const enhancedCourses = generatedCourses.map(course => ({
+                    ...course,
+                    travelMode: routeTravelMode,
+                    spots: course.spots.map((spot, index, arr) => {
+                        if (index === 0) return { ...spot, travel_time_minutes: 0 };
+                        const prev = arr[index - 1];
+                        const dist = getDistance(
+                            { latitude: prev.lat, longitude: prev.lon },
+                            { latitude: spot.lat, longitude: spot.lon }
+                        );
+                        // speed: walk 80m/min, bike 200m/min, transit 400m/min, car 400m/min
+                        const speed = routeTravelMode === 'walk' ? 80 : (routeTravelMode === 'bicycle' ? 200 : 400);
+                        return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
+                    })
+                }));
 
-                if (generatedCourses.length === 0) throw new Error("条件に合うルートコースが作成できませんでした。");
-
-                setCourses(generatedCourses);
+                setCourses(enhancedCourses);
                 setActiveTab('courses');
 
             } else {
@@ -155,14 +166,24 @@ function App() {
                 try { generatedCourses = await generateSmartCourses(candidates, { lat: startGeo.lat, lon: startGeo.lon }, duration); }
                 catch { /* fallback below */ }
 
-                if (generatedCourses.length === 0) {
-                    setStatus('標準アルゴリズムでコース生成中...');
-                    generatedCourses = generateHeuristicCourses({ lat: startGeo.lat, lon: startGeo.lon }, allSpots, duration);
-                }
+                const areaTravelMode = travelMode || 'walk';
+                const enhancedCourses = generatedCourses.map(course => ({
+                    ...course,
+                    travelMode: areaTravelMode,
+                    spots: course.spots.map((spot, index, arr) => {
+                        if (index === 0) return { ...spot, travel_time_minutes: 0 };
+                        const prev = arr[index - 1];
+                        const dist = getDistance(
+                            { latitude: prev.lat, longitude: prev.lon },
+                            { latitude: spot.lat, longitude: spot.lon }
+                        );
+                        // speed: walk 80m/min, bike 200m/min, transit 400m/min, car 400m/min
+                        const speed = areaTravelMode === 'walk' ? 80 : (areaTravelMode === 'bicycle' ? 200 : 400);
+                        return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
+                    })
+                }));
 
-                if (generatedCourses.length === 0) throw new Error("条件に合うコースが作成できませんでした。");
-
-                setCourses(generatedCourses);
+                setCourses(enhancedCourses);
                 setActiveTab('courses');
             }
         } catch (err) {
@@ -353,7 +374,11 @@ function App() {
                                     <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2">
                                         {(spot.travel_time_minutes ?? 0) > 0 && (
                                             <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold border-b border-slate-100 pb-2 mb-2">
-                                                <Footprints size={12} /> 前のスポットから徒歩約{spot.travel_time_minutes}分
+                                                {selectedCourse.travelMode === 'car' ? <Car size={12} /> :
+                                                    selectedCourse.travelMode === 'transit' ? <Train size={12} /> :
+                                                        selectedCourse.travelMode === 'bicycle' ? <Bike size={12} /> :
+                                                            <Footprints size={12} />}
+                                                前のスポットから{selectedCourse.travelMode === 'car' ? '車' : selectedCourse.travelMode === 'transit' ? '公共交通' : selectedCourse.travelMode === 'bicycle' ? '自転車' : '徒歩'}約{spot.travel_time_minutes}分
                                             </div>
                                         )}
                                         <p className="mb-2">{spot.aiDescription || spot.tags.description || "詳細情報なし"}</p>
@@ -388,6 +413,14 @@ function App() {
                             </div>
                         ))}
                     </div>
+
+                    {/* Googleマップ 全ルート一括転送ボタン */}
+                    <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedCourse.spots[0].name)}&destination=${encodeURIComponent(selectedCourse.spots[selectedCourse.spots.length - 1].name)}&waypoints=${encodeURIComponent(selectedCourse.spots.slice(1, -1).map(s => s.name).join('|'))}&travelmode=${selectedCourse.travelMode === 'walk' ? 'walking' : selectedCourse.travelMode === 'bicycle' ? 'bicycling' : selectedCourse.travelMode === 'car' ? 'driving' : 'transit'}`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white text-sm font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 mt-6 mb-2">
+                        <Navigation size={18} className="text-amber-400" />
+                        全ルートをGoogleマップでナビ
+                    </a>
                 </div>
             )}
         </div>

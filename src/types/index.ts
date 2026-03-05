@@ -34,6 +34,7 @@ export interface Course {
     totalTime: number;
     totalDistance?: number;
     spots: Spot[];
+    travelMode?: TravelMode; // 追加: 移動手段
     savedAt?: string; // お気に入り保存日時 (ISO 8601)
 }
 

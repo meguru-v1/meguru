@@ -432,7 +432,7 @@ function App() {
                     </div>
 
                     {/* Googleマップ 全ルート一括転送ボタン */}
-                    <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedCourse.spots[0].name)}&destination=${encodeURIComponent(selectedCourse.spots[selectedCourse.spots.length - 1].name)}&waypoints=${encodeURIComponent(selectedCourse.spots.slice(1, -1).map(s => s.name).join('|'))}&travelmode=${selectedCourse.travelMode === 'walk' ? 'walking' : selectedCourse.travelMode === 'bicycle' ? 'bicycling' : selectedCourse.travelMode === 'car' ? 'driving' : 'transit'}`}
+                    <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedCourse.spots[0].name.split(/[\(（]/)[0])}&destination=${encodeURIComponent(selectedCourse.spots[selectedCourse.spots.length - 1].name.split(/[\(（]/)[0])}&waypoints=${encodeURIComponent(selectedCourse.spots.slice(1, -1).map(s => s.name.split(/[\(（]/)[0]).join('|'))}&travelmode=${selectedCourse.travelMode === 'walk' ? 'walking' : selectedCourse.travelMode === 'bicycle' ? 'bicycling' : selectedCourse.travelMode === 'car' ? 'driving' : 'transit'}`}
                         target="_blank" rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 w-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white text-sm font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 mt-6 mb-2">
                         <Navigation size={18} className="text-amber-400" />

@@ -69,8 +69,10 @@ ${themeInstructions}
 - Current Weather: ${weatherContext}
 * If it is raining/snowing, prioritize indoor activities or covered arcades.
 * If it is evening/night, prioritize night views, dinner spots, or places open late.
+* You MUST adapt your tone and course titles to match this context (e.g., if it's evening, focus on dinner, night views, or evening walks).
 
 **NEGATIVE CONSTRAINTS (MUST FOLLOW):**
+- **NO RAW CODE / FUNCTIONS**: DO NOT include any function names, code snippets, or system variables (like \`strftime\`, \`time.now()\`, etc.) in your generated text. Write completely natural Japanese as a human concierge.
 - **DINING LIMIT**: For ${durationMinutes} min, you must have **MAX ${maxDining}** food/drink spots.
   - (If ${maxDining} is 1, do NOT include a Cafe AND a Restaurant. Choose only one.)
 - **NO DUPLICATE SPOTS**: A spot used in Course 1 CANNOT be used in Course 2, 3, 4, or 5.

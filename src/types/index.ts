@@ -23,6 +23,7 @@ export interface Spot {
     aiDescription?: string;
     must_see?: string | null;
     pro_tip?: string | null;
+    trivia?: string; // Phase 11: うんちく・小ネタ
     tags: SpotTags;
 }
 

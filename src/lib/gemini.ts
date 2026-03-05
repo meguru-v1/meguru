@@ -7,7 +7,9 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 export const generateSmartCourses = async (
     candidates: Spot[],
     center: { lat: number; lon: number },
-    durationMinutes: number
+    durationMinutes: number,
+    timeContext: string = "不明",
+    weatherContext: string = "不明"
 ): Promise<Course[]> => {
     const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
 
@@ -62,6 +64,12 @@ Create 5 distinct, **exciting** model courses.
 **EACH COURSE MUST FOLLOW A SPECIFIC THEME SELECTED BELOW:**
 ${themeInstructions}
 
+**CURRENT CONTEXT (CRITICAL FOR SPOT SELECTION):**
+- Current Time: ${timeContext}
+- Current Weather: ${weatherContext}
+* If it is raining/snowing, prioritize indoor activities or covered arcades.
+* If it is evening/night, prioritize night views, dinner spots, or places open late.
+
 **NEGATIVE CONSTRAINTS (MUST FOLLOW):**
 - **DINING LIMIT**: For ${durationMinutes} min, you must have **MAX ${maxDining}** food/drink spots.
   - (If ${maxDining} is 1, do NOT include a Cafe AND a Restaurant. Choose only one.)
@@ -81,6 +89,7 @@ ${themeInstructions}
    - **travel_time_minutes**: Estimate walking time from previous spot.
    - **must_see**: ONE specific thing to look for/do.
    - **pro_tip**: A savvy traveler tip.
+   - **trivia**: A fascinating, lesser-known fact, history, or trivia about the spot (2-3 lines in Japanese).
 
 **JSON SCHEMA:**
 [
@@ -97,7 +106,8 @@ ${themeInstructions}
                 "travel_time_minutes": 10,
                 "recommendation_reason": "Specific reason...",
                 "must_see": "Specific highlight...",
-                "pro_tip": "Specific tip..."
+                "pro_tip": "Specific tip...",
+                "trivia": "Fascinating trivia..."
             }
         ]
     }
@@ -142,6 +152,7 @@ ${themeInstructions}
         description?: string;
         must_see?: string;
         pro_tip?: string;
+        trivia?: string;
     }
     interface GeminiCourse {
         id: string;
@@ -172,7 +183,8 @@ ${themeInstructions}
                 stayTime: s.stayTime,
                 aiDescription: s.recommendation_reason || s.description,
                 must_see: s.must_see || null,
-                pro_tip: s.pro_tip || null
+                pro_tip: s.pro_tip || null,
+                trivia: s.trivia || undefined
             } as Spot;
         }).filter((s): s is Spot => s !== null);
 

@@ -83,8 +83,8 @@ ${themeInstructions}
 **CRITICAL RULES:**
 1. **Output MUST be valid JSON**.
 2. **LANGUAGE**: Natural, Polite Japanese (Desu/Masu tone).
-3. **ID MATCHING**: Use the exact integer IDs provided (0, 1, 2...).
-4. **VARIETY & BALANCE**: Ensure a good mix. AVOID GENERIC SPOTS.
+3. **NAMING**: Create highly poetic, stylish, and magazine-like titles in Japanese for 'title'. Avoid generic names. (e.g. "月明かりに染まる古都の夜", "路地裏に隠れた純喫茶を巡る午睡")
+4. **ID MATCHING**: Use the exact integer IDs provided (0, 1, 2...).
 5. **DESCRIPTIONS (The Hook)**: Focus on Story, Legend, Atmosphere, Secret Tips.
 6. **RICHER DETAILS (Required)**:
    - **stayTime**: Use the ※推定分数 shown next to each spot as a baseline. You may adjust ±10 min based on the spot's significance, but NEVER use the same stayTime for all spots.
@@ -124,7 +124,10 @@ ${themeInstructions}
     for (const modelName of MODELS) {
         try {
             console.log(`Trying model: ${modelName}...`);
-            const model = genAI.getGenerativeModel({ model: modelName });
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: { responseMimeType: "application/json" }
+            });
             const result = await model.generateContent(prompt);
             const response = await result.response;
             text = response.text();
@@ -143,8 +146,15 @@ ${themeInstructions}
 
     console.log("Gemini Raw Response:", text);
 
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : text.replace(/```json |```/g, '').trim();
+    let jsonStr = text;
+    // Extract JSON array carefully avoiding trailing text
+    const firstBracket = jsonStr.indexOf('[');
+    const lastBracket = jsonStr.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket !== -1) {
+        jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
+    } else {
+        jsonStr = jsonStr.replace("```json", "").replace("```", "").trim();
+    }
 
     interface GeminiSpot {
         id: number;

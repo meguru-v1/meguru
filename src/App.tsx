@@ -265,6 +265,21 @@ function App() {
         );
     };
 
+    const getGoogleMapsUrl = (course: Course) => {
+        if (!course.spots || course.spots.length === 0) return '#';
+        const cleanName = (name: string) => name.split('(')[0].split('（')[0];
+        const origin = encodeURIComponent(cleanName(course.spots[0].name));
+        const dest = encodeURIComponent(cleanName(course.spots[course.spots.length - 1].name));
+        const waypoints = course.spots.slice(1, -1).map(s => encodeURIComponent(cleanName(s.name))).join('|');
+
+        let tmap = 'walking';
+        if (course.travelMode === 'bicycle') tmap = 'bicycling';
+        if (course.travelMode === 'car') tmap = 'driving';
+        if (course.travelMode === 'transit') tmap = 'transit';
+
+        return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&waypoints=${waypoints}&travelmode=${tmap}`;
+    };
+
     // ==========================
     //  検索タブ
     // ==========================
@@ -432,7 +447,7 @@ function App() {
                     </div>
 
                     {/* Googleマップ 全ルート一括転送ボタン */}
-                    <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedCourse.spots[0].name.split(/[\(（]/)[0])}&destination=${encodeURIComponent(selectedCourse.spots[selectedCourse.spots.length - 1].name.split(/[\(（]/)[0])}&waypoints=${encodeURIComponent(selectedCourse.spots.slice(1, -1).map(s => s.name.split(/[\(（]/)[0]).join('|'))}&travelmode=${selectedCourse.travelMode === 'walk' ? 'walking' : selectedCourse.travelMode === 'bicycle' ? 'bicycling' : selectedCourse.travelMode === 'car' ? 'driving' : 'transit'}`}
+                    <a href={getGoogleMapsUrl(selectedCourse)}
                         target="_blank" rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 w-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white text-sm font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 mt-6 mb-2">
                         <Navigation size={18} className="text-amber-400" />

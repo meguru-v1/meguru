@@ -13,26 +13,68 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-const createNumberedIcon = (number: number, isStart: boolean, isEnd: boolean, isFocused: boolean) => {
-    const bgColor = isStart ? '#F59E0B' : isEnd ? '#EF4444' : '#0F172A';
-    const size = isFocused ? 32 : 26;
-    const fontSize = isFocused ? 14 : 11;
+const CATEGORY_STYLES: Record<string, { icon: string, color: string }> = {
+    'グルメ': { icon: '🍽️', color: '#F59E0B' }, // amber-500
+    'カフェ': { icon: '☕', color: '#D97706' }, // amber-600
+    'スイーツ': { icon: '🍰', color: '#D97706' }, // amber-600
+    '寺社仏閣': { icon: '⛩️', color: '#10B981' }, // emerald-500
+    '神社': { icon: '⛩️', color: '#10B981' }, // emerald-500
+    '歴史': { icon: '🏯', color: '#8B5CF6' }, // violet-500
+    '文化': { icon: '🏺', color: '#8B5CF6' }, // violet-500
+    '自然': { icon: '🌳', color: '#84CC16' }, // lime-500
+    '公園': { icon: '⛲', color: '#84CC16' }, // lime-500
+    'ショッピング': { icon: '🛍️', color: '#EC4899' }, // pink-500
+    'エンタメ': { icon: '🎢', color: '#F43F5E' }, // rose-500
+    'レジャー': { icon: '🎡', color: '#F43F5E' }, // rose-500
+    '観光': { icon: '📸', color: '#0EA5E9' }, // sky-500
+    '温泉': { icon: '♨️', color: '#06B6D4' }, // cyan-500
+    '宿泊': { icon: '🏨', color: '#6366F1' }, // indigo-500
+    'default': { icon: '📍', color: '#64748B' } // slate-500
+};
+
+const createCategoryIcon = (number: number, category: string, isFocused: boolean) => {
+    let style = CATEGORY_STYLES['default'];
+    for (const [key, value] of Object.entries(CATEGORY_STYLES)) {
+        if (category && category.includes(key)) {
+            style = value;
+            break;
+        }
+    }
+
+    const { icon, color } = style;
+    const size = isFocused ? 38 : 30;
+    const fontSize = isFocused ? 20 : 16;
     const border = isFocused ? '3px solid white' : '2px solid white';
     const shadow = isFocused ? '0 0 12px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.3)';
 
     return L.divIcon({
-        className: 'custom-numbered-marker',
+        className: 'custom-category-marker',
         html: `<div style="
             width:${size}px;height:${size}px;
-            background:${bgColor};
+            background:${color};
             border-radius:50%;
             display:flex;align-items:center;justify-content:center;
-            color:white;font-weight:800;font-size:${fontSize}px;
             border:${border};
             box-shadow:${shadow};
-            transition:transform 0.2s;
-            font-family:'Noto Sans JP',sans-serif;
-        ">${number}</div>`,
+            transition:all 0.2s;
+            position:relative;
+        ">
+            <span style="font-size:${fontSize}px; line-height:1; transform: translateY(-1px);">${icon}</span>
+            <div style="
+                position:absolute;
+                top:-6px; right:-6px;
+                background:#0F172A;
+                color:white;
+                font-family:'Noto Sans JP',sans-serif;
+                font-weight:900;
+                font-size:10px;
+                width:18px; height:18px;
+                border-radius:50%;
+                display:flex;align-items:center;justify-content:center;
+                border:2px solid white;
+                box-shadow:0 1px 3px rgba(0,0,0,0.3);
+            ">${number}</div>
+        </div>`,
         iconSize: [size, size],
         iconAnchor: [size / 2, size / 2],
         popupAnchor: [0, -size / 2 - 4],
@@ -102,10 +144,9 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
 
     const spotIcons = useMemo(() => {
         return spots.map((spot, index) =>
-            createNumberedIcon(
+            createCategoryIcon(
                 index + 1,
-                index === 0,
-                index === spots.length - 1,
+                spot.category,
                 !!(focusedSpot && focusedSpot.id === spot.id)
             )
         );

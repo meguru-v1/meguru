@@ -6,10 +6,11 @@ import { useFavorites } from './hooks/useFavorites';
 import { fetchNearbySpots, searchLocation } from './lib/osm';
 import { generateSmartCourses } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
+import { getCurrentWeather } from './lib/weather';
 import { getDistance } from 'geolib';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
-    Navigation, AlertCircle, Map, ArrowLeft, Bike, Train, Car
+    Navigation, AlertCircle, Map, ArrowLeft, Bike, Train, Car, Lightbulb
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId, TravelMode } from './types';
 
@@ -122,8 +123,12 @@ function App() {
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
                 const candidates = shuffled.slice(0, 150);
 
+                const now = new Date();
+                const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
+                const weatherContext = await getCurrentWeather(midLat, midLon);
+
                 let generatedCourses: Course[] = [];
-                try { generatedCourses = await generateSmartCourses(candidates, { lat: midLat, lon: midLon }, duration); }
+                try { generatedCourses = await generateSmartCourses(candidates, { lat: midLat, lon: midLon }, duration, timeContext, weatherContext); }
                 catch { /* fallback below */ }
 
                 const routeTravelMode = travelMode || 'walk';
@@ -162,8 +167,12 @@ function App() {
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
                 const candidates = shuffled.slice(0, 150);
 
+                const now = new Date();
+                const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
+                const weatherContext = await getCurrentWeather(startGeo.lat, startGeo.lon);
+
                 let generatedCourses: Course[] = [];
-                try { generatedCourses = await generateSmartCourses(candidates, { lat: startGeo.lat, lon: startGeo.lon }, duration); }
+                try { generatedCourses = await generateSmartCourses(candidates, { lat: startGeo.lat, lon: startGeo.lon }, duration, timeContext, weatherContext); }
                 catch { /* fallback below */ }
 
                 const areaTravelMode = travelMode || 'walk';
@@ -396,6 +405,14 @@ function App() {
                                                     <Sparkles size={10} /> 旅のヒント:
                                                 </span>
                                                 <span className="text-[10px] text-blue-900">{spot.pro_tip}</span>
+                                            </div>
+                                        )}
+                                        {spot.trivia && (
+                                            <div className="bg-fuchsia-50 p-2.5 rounded-lg border border-fuchsia-100">
+                                                <span className="flex items-center gap-1 text-[10px] font-bold text-fuchsia-600 mb-0.5">
+                                                    <Lightbulb size={10} /> 賢者の小ネタ:
+                                                </span>
+                                                <span className="text-[10px] text-fuchsia-900">{spot.trivia}</span>
                                             </div>
                                         )}
                                     </div>

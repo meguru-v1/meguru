@@ -67,8 +67,8 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
             </div>
 
             {/* フォーム */}
-            <form onSubmit={handleSubmit} className="flex-1 flex flex-col px-6 pb-4">
-                <div className="flex-1 flex flex-col justify-center space-y-5">
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col px-6 pb-4 overflow-y-auto scrollbar-hide">
+                <div className="flex-1 flex flex-col justify-start space-y-5 pt-2 pb-10">
                     {searchMode === 'area' && (
                         <>
                             <div className="space-y-2 animate-slide-up">

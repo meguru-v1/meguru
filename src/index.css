@@ -1,19 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-  /* ===== カラーパレット: クリーンホワイト ===== */
   --color-primary: #1e293b;
   --color-accent: #f59e0b;
   --color-accent-soft: #fcd34d;
   --color-paper: #ffffff;
   --color-surface: rgba(255, 255, 255, 0.9);
 
-  /* ===== フォント ===== */
   --font-sans: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
   --font-serif: 'Playfair Display', serif;
   --font-display: 'Playfair Display', serif;
 
-  /* ===== アニメーション ===== */
   --animate-fade-in: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slide-up: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slide-up-sheet: slideUpSheet 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -22,56 +19,56 @@
   --animate-float: float 6s ease-in-out infinite;
 
   @keyframes fadeIn {
-    0% {
+    from {
       opacity: 0;
     }
 
-    100% {
+    to {
       opacity: 1;
     }
   }
 
   @keyframes slideUp {
-    0% {
+    from {
       transform: translateY(20px);
       opacity: 0;
     }
 
-    100% {
+    to {
       transform: translateY(0);
       opacity: 1;
     }
   }
 
   @keyframes slideUpSheet {
-    0% {
+    from {
       transform: translateY(100%);
     }
 
-    100% {
+    to {
       transform: translateY(0);
     }
   }
 
   @keyframes slideDownIndicator {
-    0% {
+    from {
       transform: scaleX(0);
       opacity: 0;
     }
 
-    100% {
+    to {
       transform: scaleX(1);
       opacity: 1;
     }
   }
 
   @keyframes scaleIn {
-    0% {
+    from {
       transform: scale(0.9);
       opacity: 0;
     }
 
-    100% {
+    to {
       transform: scale(1);
       opacity: 1;
     }

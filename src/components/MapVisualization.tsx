@@ -1,3 +1,4 @@
+/// <reference types="@types/google.maps" />
 import React, { useEffect, useState, useRef } from 'react';
 import { Map, AdvancedMarker, Pin, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import type { Spot } from '../types';
@@ -76,10 +77,10 @@ const DirectionsComponent = ({ spots, travelMode }: { spots: Spot[], travelMode:
             destination,
             waypoints,
             travelMode: googleTravelMode,
-        }).then(response => {
+        }).then((response: google.maps.DirectionsResult) => {
             directionsRenderer.setDirections(response);
             setRoutes(response.routes);
-        }).catch(e => {
+        }).catch((e: Error) => {
             console.error('Directions routing failed:', e);
             // Fallback clear
             directionsRenderer.setDirections({ routes: [] } as any);

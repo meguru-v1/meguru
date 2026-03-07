@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Search, MapPin, Clock, Compass, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown } from 'lucide-react';
+import {
+    Search, MapPin, Clock, Compass, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown
+} from 'lucide-react';
 import type { SearchParams, SearchMode, TravelMode } from '../types';
 
 interface SearchInterfaceProps {

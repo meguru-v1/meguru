@@ -14,7 +14,7 @@ export const generateSmartCourses = async (
     const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
 
     const candidateList = candidates.map((s, i) =>
-        `${i}: ${s.name} (${s.category}, ※${s.estimatedStayTime || 30}分)`
+        `${i}: ${s.name} (${s.category}, ★${s.rating || '-'}, ※${s.estimatedStayTime || 30}分)`
     ).join('\n');
 
     const maxDining = durationMinutes <= 90 ? 1 : (durationMinutes <= 300 ? 2 : (durationMinutes <= 480 ? 3 : 4));

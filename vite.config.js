@@ -9,4 +9,15 @@ export default defineConfig({
     react()
   ],
   base: '/meguru/',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          maps: ['@vis.gl/react-google-maps'],
+          ui: ['lucide-react', 'framer-motion']
+        }
+      }
+    }
+  }
 })

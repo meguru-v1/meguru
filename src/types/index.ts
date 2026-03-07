@@ -25,6 +25,23 @@ export interface Spot {
     pro_tip?: string | null;
     trivia?: string; // Phase 11: うんちく・小ネタ
     tags: SpotTags;
+    // Google Places API Specific
+    place_id?: string;
+    photos?: string[];
+    price_level?: number;
+    formatted_address?: string;
+}
+
+export interface PlaceDetails {
+    place_id: string;
+    name: string;
+    lat: number;
+    lng: number;
+    rating?: number;
+    user_ratings_total?: number;
+    types?: string[];
+    formatted_address?: string;
+    photo_reference?: string;
 }
 
 export interface Course {

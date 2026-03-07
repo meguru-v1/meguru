@@ -3,7 +3,7 @@ import SearchInterface from './components/SearchInterface';
 import MapVisualization from './components/MapVisualization';
 import TabBar from './components/TabBar';
 import { useFavorites } from './hooks/useFavorites';
-import { fetchNearbySpots, searchLocation } from './lib/osm';
+import { searchAreaCenter, searchNearbySpots, searchRouteSpots } from './lib/places';
 import { generateSmartCourses } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
 import { getCurrentWeather } from './lib/weather';
@@ -30,21 +30,9 @@ function App() {
     // ===== ジオコード関数 =====
     const geocode = async (q: string): Promise<{ lat: number; lon: number; name: string } | null> => {
         try {
-            const photonRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=3`);
-            const photonData = await photonRes.json();
-            if (photonData.features && photonData.features.length > 0) {
-                const f = photonData.features[0];
-                return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], name: f.properties.name || q };
-            }
-        } catch { /* fallback below */ }
-
-        try {
-            const geoData = await searchLocation(q);
-            if (geoData && geoData.length > 0) {
-                return { lat: parseFloat(geoData[0].lat), lon: parseFloat(geoData[0].lon), name: geoData[0].display_name || q };
-            }
+            const res = await searchAreaCenter(q);
+            if (res) return { lat: res.lat, lon: res.lng, name: res.name };
         } catch { /* ignore */ }
-
         return null;
     };
 
@@ -93,31 +81,38 @@ function App() {
                 setRadius(searchRadius);
 
                 setStatus(`ルート周辺のスポットを探しています...`);
-                // リクエスト数を最大3に制限し、順次実行でAPI制限を回避
-                const numPoints = Math.min(3, Math.max(2, Math.ceil(directDist / 3000)));
-                const seen = new Set<string | number>();
-                const allSpots: Spot[] = [];
+                let allSpotsRaw = await searchRouteSpots(
+                    { lat: startGeo.lat, lng: startGeo.lon },
+                    { lat: endGeo.lat, lng: endGeo.lon },
+                    Math.min(searchRadius, 1500)
+                );
 
-                for (let i = 0; i < numPoints; i++) {
-                    const t = numPoints === 1 ? 0.5 : i / (numPoints - 1);
-                    const lat = startGeo.lat + (endGeo.lat - startGeo.lat) * t;
-                    const lon = startGeo.lon + (endGeo.lon - startGeo.lon) * t;
-                    try {
-                        const spots = await fetchNearbySpots(lat, lon, Math.min(searchRadius, 1500));
-                        for (const spot of spots) {
-                            if (!seen.has(spot.id)) {
-                                seen.add(spot.id);
-                                allSpots.push(spot);
-                            }
-                        }
-                    } catch (e) {
-                        console.warn(`スポット取得エラー (point ${i}):`, e);
-                    }
-                    // Overpass API レート制限を回避するためディレイ
-                    if (i < numPoints - 1) await new Promise(r => setTimeout(r, 1200));
+                // スポットが少なすぎる場合は少し拡大して再検索
+                if (allSpotsRaw.length < 3) {
+                    console.log(`Route spots too few (${allSpotsRaw.length}), expanding search radius...`);
+                    setStatus(`範囲を広げて再検索しています...`);
+                    allSpotsRaw = await searchRouteSpots(
+                        { lat: startGeo.lat, lng: startGeo.lon },
+                        { lat: endGeo.lat, lng: endGeo.lon },
+                        Math.min(searchRadius * 1.5, 3000)
+                    );
                 }
 
-                if (allSpots.length < 3) throw new Error("ルート周辺にスポットがあまり見つかりませんでした。検索範囲を短くしてみてください。");
+                // Spot型にマッピング
+                const allSpots: Spot[] = allSpotsRaw.map(p => ({
+                    id: p.place_id,
+                    place_id: p.place_id,
+                    lat: p.lat,
+                    lon: p.lng,
+                    name: p.name,
+                    category: p.types?.[0] || 'point_of_interest',
+                    rating: p.rating,
+                    user_ratings_total: p.user_ratings_total,
+                    tags: { types: p.types, formatted_address: p.formatted_address },
+                    photos: p.photo_reference ? [p.photo_reference] : []
+                }));
+
+                if (allSpots.length < 3) throw new Error("ルート周辺に見どころとなるスポットがあまり見つかりませんでした。検索範囲や時間を大きくしてみてください。");
 
                 setStatus('AIが最適なルートコースを生成中...');
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
@@ -160,8 +155,34 @@ function App() {
                 setRadius(r);
 
                 setStatus(`周辺スポットを探しています... (${r / 1000}km圏内)`);
-                const allSpots = await fetchNearbySpots(startGeo.lat, startGeo.lon, r);
-                if (allSpots.length < 5) throw new Error("周辺にスポットがあまり見つかりませんでした。");
+                let allSpotsRaw = await searchNearbySpots(startGeo.lat, startGeo.lon, r);
+
+                // もしスポットが少なければ半径を2倍にして再検索
+                if (allSpotsRaw.length < 5) {
+                    console.log(`Spots too few (${allSpotsRaw.length}), expanding search radius to ${r * 2}m...`);
+                    setStatus(`範囲を広げて再検索しています... (${(r * 2) / 1000}km圏内)`);
+                    const widerSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, r * 2);
+                    // マージして一意にする
+                    const spotMap = new globalThis.Map<string, any>();
+                    [...allSpotsRaw, ...widerSpots].forEach(s => spotMap.set(s.place_id, s));
+                    allSpotsRaw = Array.from(spotMap.values());
+                }
+
+                // Spot型にマッピング
+                const allSpots: Spot[] = allSpotsRaw.map(p => ({
+                    id: p.place_id,
+                    place_id: p.place_id,
+                    lat: p.lat,
+                    lon: p.lng,
+                    name: p.name,
+                    category: p.types?.[0] || 'point_of_interest',
+                    rating: p.rating,
+                    user_ratings_total: p.user_ratings_total,
+                    tags: { types: p.types, formatted_address: p.formatted_address },
+                    photos: p.photo_reference ? [p.photo_reference] : []
+                }));
+
+                if (allSpots.length < 5) throw new Error("周辺に見どころとなるスポットがあまり見つかりませんでした。別の大きな駅やエリア名で試してみてください。");
 
                 setStatus('AIが最適なコースを生成中...');
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
@@ -463,7 +484,7 @@ function App() {
     // ==========================
     const mapView = (
         <div className="w-full h-full">
-            <MapVisualization center={center} radius={radius} spots={selectedCourse ? selectedCourse.spots : []} focusedSpot={focusedSpot} />
+            <MapVisualization center={center} radius={radius} spots={selectedCourse ? selectedCourse.spots : []} focusedSpot={focusedSpot} travelMode={selectedCourse?.travelMode} />
         </div>
     );
 

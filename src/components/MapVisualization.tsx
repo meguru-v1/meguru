@@ -112,15 +112,28 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
         if (focusedSpot) setOpenPopupId(focusedSpot.id);
     }, [focusedSpot]);
 
+    const map = useMap();
+
+    // Pan to focused spot or center when relevant
+    useEffect(() => {
+        if (!map) return;
+        if (focusedSpot) {
+            map.panTo({ lat: focusedSpot.lat, lng: focusedSpot.lon });
+            map.setZoom(16);
+        } else if (center) {
+            map.panTo({ lat: center.lat, lng: center.lon });
+            map.setZoom(14);
+        }
+    }, [map, focusedSpot, center]);
+
     return (
         <div className="w-full h-full relative rounded-2xl overflow-hidden shadow-inner border border-slate-200">
             <Map
                 defaultZoom={14}
                 defaultCenter={mapCenter}
-                center={focusedSpot ? { lat: focusedSpot.lat, lng: focusedSpot.lon } : mapCenter}
                 mapId="DEMO_MAP_ID" // Must have Map ID for AdvancedMarker!
                 gestureHandling={'greedy'}
-                disableDefaultUI={true}
+                disableDefaultUI={false}
                 className="w-full h-full z-0 bg-slate-50"
             >
                 {/* AdvancedMarkers for each Spot */}

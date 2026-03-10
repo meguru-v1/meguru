@@ -4,6 +4,18 @@ import type { Spot, Course } from '../types';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
+const getDiningRule = (durationMinutes: number) => {
+    if (durationMinutes <= 150) {
+        return `- **MIN 0, MAX 1 Restaurant AND MAX 1 Cafe**. (Total max 2 spots).\n  - **STRICT**: Distribute food spots evenly. NEVER consecutive restaurants.`;
+    } else if (durationMinutes <= 300) {
+        return `- **MIN 1, MAX 2 food/drink spots** in total.\n  - **MAX 1 Cafe**. (e.g., 1 Rest + 1 Cafe, OR 2 Rest + 0 Cafe).\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
+    } else if (durationMinutes <= 450) {
+        return `- **MIN 2, MAX 3 food/drink spots** in total.\n  - **MAX 1 Cafe**.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
+    } else {
+        return `- **MIN 3, MAX 4 food/drink spots** in total.\n  - **MUST include 1-2 Cafes** (MIN 1, MAX 2).\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
+    }
+};
+
 export const generateSmartCourses = async (
     candidates: Spot[],
     center: { lat: number; lon: number },
@@ -20,26 +32,7 @@ export const generateSmartCourses = async (
         `${i}: ${s.name} (${s.category}, ★${s.rating || '-'}, ※${s.estimatedStayTime || 30}分)`
     ).join('\n');
 
-    let maxDining = 2;
-    let maxCafes = 1;
-    let diningRule = "";
-
-    if (durationMinutes <= 150) {
-        maxDining = 2; // Total (1 meal + 1 cafe)
-        diningRule = `- **MIN 0, MAX 1 meal spot** (Restaurant) and **1 cafe spot**. (Total max 2 spots).\n  - **STRICT**: Distribute food spots evenly. NEVER consecutive restaurants.`;
-    } else if (durationMinutes <= 300) {
-        maxDining = 2;
-        maxCafes = 1;
-        diningRule = `- **MIN 1, MAX 2 food/drink spots** in total.\n  - **MAX 1 Cafe**. If 2 spots, one MUST be a Restaurant and one MUST be a Cafe.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
-    } else if (durationMinutes <= 450) {
-        maxDining = 3;
-        maxCafes = 1;
-        diningRule = `- **MIN 2, MAX 3 food/drink spots** in total.\n  - **MAX 1 Cafe**.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
-    } else {
-        maxDining = 4;
-        maxCafes = 2;
-        diningRule = `- **MIN 3, MAX 4 food/drink spots** in total.\n  - **MUST include 1-2 Cafes** (MIN 1, MAX 2).\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
-    }
+    const diningRule = getDiningRule(durationMinutes);
 
     const targetSpots = Math.min(Math.ceil(durationMinutes / 50), 15);
 
@@ -87,6 +80,11 @@ Create 5 distinct, **exciting** model courses.
 **EACH COURSE MUST FOLLOW A SPECIFIC THEME SELECTED BELOW:**
 ${themeInstructions}
 
+**CRITICAL: MANDATORY DINING CONSTRAINTS (HARD RULES)**
+For a ${durationMinutes} min itinerary, YOU MUST strictly follow these counts:
+${diningRule}
+* **PENALTY**: Any course violating these MIN/MAX counts or having consecutive restaurants will be REJECTED. Count carefully!
+
 **PERSONALIZATION CONTEXT:**
 - Mood: ${mood}
 - Budget: ${budget}
@@ -101,9 +99,7 @@ ${themeInstructions}
 * You MUST adapt your tone and course titles to match this context (e.g., if it's evening, focus on dinner, night views, or evening walks).
 
 **NEGATIVE CONSTRAINTS (MUST FOLLOW):**
-- **NO RAW CODE / FUNCTIONS**: DO NOT include any function names, code snippets, or system variables (like \`strftime\`, \`time.now()\`, etc.) in your generated text. Write completely natural Japanese as a human concierge.
-- **DINING LIMIT**: For ${durationMinutes} min, you must strictly follow this rule:
-  - ${diningRule}
+- **NO RAW CODE / FUNCTIONS**: Write completely natural Japanese.
 - **NO DUPLICATE SPOTS**: A spot used in Course 1 CANNOT be used in Course 2, 3, 4, or 5.
 - **SPOT COUNT**: Each course should have approximately **${targetSpots} spots** to fill ${durationMinutes} minutes. NEVER make a course shorter than requested.
 
@@ -288,6 +284,8 @@ export const remixCourse = async (
         spots: originalCourse.spots.map(s => s.name)
     });
 
+    const diningRule = getDiningRule(originalCourse.totalTime);
+
     const prompt = `
 You are an expert, high-end travel concierge.
 Your client currently has this course:
@@ -296,6 +294,11 @@ ${originalCourseInfo}
 **YOUR MISSION:**
 Remix this course based on the following new instruction:
 **"${remixInstruction}"**
+
+**CRITICAL: MANDATORY DINING CONSTRAINTS (HARD RULES)**
+For a ${originalCourse.totalTime} min itinerary, YOU MUST strictly follow these counts:
+${diningRule}
+* **PENALTY**: Any remixed course violating these MIN/MAX counts or having consecutive restaurants will be REJECTED. Count carefully!
 
 **HOW to REMIX:**
 1. **Keep the Flow**: Maintain the general route and duration (${originalCourse.totalTime} min).
@@ -306,7 +309,7 @@ Remix this course based on the following new instruction:
 Candidates List:
 ${candidateList}
 
-**CONTRANTS**:
+**CONSTRAINTS**:
 - Output ONE course in JSON format.
 - Language: Natural, Polite Japanese.
 - Same rules as before: No code, unique trivia, stayTime/travel_time_minutes estimation.

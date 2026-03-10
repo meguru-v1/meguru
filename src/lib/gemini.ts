@@ -267,3 +267,124 @@ ${themeInstructions}
         return { ...course, id: uniqueId, spots: hydratedSpots } as Course;
     });
 };
+
+export const remixCourse = async (
+    originalCourse: Course,
+    candidates: Spot[],
+    remixInstruction: string,
+    center: { lat: number; lon: number },
+    timeContext: string = "不明",
+    weatherContext: string = "不明"
+): Promise<Course | null> => {
+    const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
+
+    const candidateList = candidates.map((s, i) =>
+        `${i}: ${s.name} (${s.category}, ★${s.rating || '-'}, ※${s.estimatedStayTime || 30}分)`
+    ).join('\n');
+
+    const originalCourseInfo = JSON.stringify({
+        title: originalCourse.title,
+        description: originalCourse.description,
+        spots: originalCourse.spots.map(s => s.name)
+    });
+
+    const prompt = `
+You are an expert, high-end travel concierge.
+Your client currently has this course:
+${originalCourseInfo}
+
+**YOUR MISSION:**
+Remix this course based on the following new instruction:
+**"${remixInstruction}"**
+
+**HOW to REMIX:**
+1. **Keep the Flow**: Maintain the general route and duration (${originalCourse.totalTime} min).
+2. **Swap if needed**: If a spot doesn't fit the new instruction, swap it with a better one from the candidates list below.
+3. **Rewrite Descriptions**: Update the 'description' and each spot's 'recommendation_reason' to explain WHY it now fits the theme "${remixInstruction}".
+4. **Magazine-like Title**: Update the 'title' to be even more stylish and reflect the new vibe.
+
+Candidates List:
+${candidateList}
+
+**CONTRANTS**:
+- Output ONE course in JSON format.
+- Language: Natural, Polite Japanese.
+- Same rules as before: No code, unique trivia, stayTime/travel_time_minutes estimation.
+- Context: Time ${timeContext}, Weather ${weatherContext}.
+
+**JSON SCHEMA:**
+{
+    "title": "New Stylish Title",
+    "description": "Why this remix is special...",
+    "spots": [
+        {
+            "id": 12,
+            "stayTime": 60,
+            "travel_time_minutes": 10,
+            "recommendation_reason": "Specific reason for the remix...",
+            "must_see": "Highlight...",
+            "pro_tip": "Savvy tip...",
+            "trivia": "A fascinating fact..."
+        }
+    ]
+}
+`;
+
+    let text: string | undefined;
+    for (const modelName of MODELS) {
+        try {
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: { responseMimeType: "application/json" }
+            });
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            text = response.text();
+            break;
+        } catch (err) {
+            console.warn(`Remix attempt with ${modelName} failed:`, err);
+        }
+    }
+
+    if (!text) return null;
+
+    try {
+        const data = JSON.parse(text);
+        const uniqueId = crypto.randomUUID();
+        const hydratedSpots = data.spots.map((s: any) => {
+            const original = candidates[s.id];
+            if (!original) return null;
+            return {
+                ...original,
+                stayTime: s.stayTime,
+                aiDescription: s.recommendation_reason,
+                must_see: s.must_see || null,
+                pro_tip: s.pro_tip || null,
+                trivia: s.trivia || undefined
+            } as Spot;
+        }).filter((s: any): s is Spot => s !== null);
+
+        // Calculate travel times (simple walking 80m/min)
+        for (let i = 1; i < hydratedSpots.length; i++) {
+            const prev = hydratedSpots[i - 1];
+            const curr = hydratedSpots[i];
+            const dx = (curr.lat - prev.lat) * 111000;
+            const dy = (curr.lon - prev.lon) * 111000 * Math.cos(prev.lat * Math.PI / 180);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            curr.travel_time_minutes = Math.round(dist / 80);
+        }
+        if (hydratedSpots.length > 0) hydratedSpots[0].travel_time_minutes = 0;
+
+        return {
+            id: uniqueId,
+            title: data.title,
+            description: data.description,
+            totalTime: originalCourse.totalTime,
+            spots: hydratedSpots,
+            theme: remixInstruction
+        } as Course;
+    } catch (e) {
+        console.error("Remix Parse Error:", e);
+        return null;
+    }
+};

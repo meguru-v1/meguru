@@ -4,13 +4,13 @@ import MapVisualization from './components/MapVisualization';
 import TabBar from './components/TabBar';
 import { useFavorites } from './hooks/useFavorites';
 import { searchAreaCenter, searchNearbySpots, searchRouteSpots } from './lib/places';
-import { generateSmartCourses } from './lib/gemini';
+import { generateSmartCourses, remixCourse } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
 import { getCurrentWeather } from './lib/weather';
 import { getDistance } from 'geolib';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
-    Navigation, AlertCircle, Map, ArrowLeft, Bike, Train, Car, Lightbulb
+    Navigation, AlertCircle, Map, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId, TravelMode } from './types';
 
@@ -24,6 +24,8 @@ function App() {
     const [status, setStatus] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabId>('search');
+    const [searchCandidates, setSearchCandidates] = useState<Spot[]>([]);
+    const [isRemixing, setIsRemixing] = useState(false);
 
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
@@ -118,6 +120,7 @@ function App() {
                 setStatus('AIが最適なルートコースを生成中...');
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
                 const candidates = shuffled.slice(0, 150);
+                setSearchCandidates(candidates);
 
                 const now = new Date();
                 const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
@@ -199,6 +202,7 @@ function App() {
                 setStatus('AIが最適なコースを生成中...');
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
                 const candidates = shuffled.slice(0, 150);
+                setSearchCandidates(candidates);
 
                 const now = new Date();
                 const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
@@ -250,6 +254,36 @@ function App() {
 
     const handleTabChange = (tab: TabId) => {
         setActiveTab(tab);
+    };
+
+    const handleRemix = async (instruction: string) => {
+        if (!selectedCourse || searchCandidates.length === 0) return;
+        setIsRemixing(true);
+        try {
+            const now = new Date();
+            const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
+            // 天気は元の位置を使って再取得（簡易化のため center を使用）
+            const weatherContext = center ? await getCurrentWeather(center.lat, center.lon) : "不明";
+
+            const remixed = await remixCourse(
+                selectedCourse,
+                searchCandidates,
+                instruction,
+                center || { lat: 0, lon: 0 },
+                timeContext,
+                weatherContext
+            );
+
+            if (remixed) {
+                setSelectedCourse(remixed);
+                // courses 配列内も更新する
+                setCourses(prev => prev.map(c => c.id === selectedCourse.id ? remixed : c));
+            }
+        } catch (err) {
+            console.error("Remix failed:", err);
+        } finally {
+            setIsRemixing(false);
+        }
     };
 
     const handleSelectCourse = (course: Course, fromFavorites = false) => {
@@ -408,6 +442,31 @@ function App() {
                             className="flex items-center justify-center gap-2 w-full mt-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold transition-all active:scale-95">
                             <Map size={16} /> 地図で全体を見る
                         </button>
+                    </div>
+
+                    {/* リミックスセクション */}
+                    <div className="mb-6 animate-fade-in stagger-1">
+                        <div className="flex items-center gap-2 mb-3">
+                            <RefreshCw size={14} className={`text-indigo-500 ${isRemixing ? 'animate-spin' : ''}`} />
+                            <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">リミックス案</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                { id: 'quiet', label: '🤫 もっと静かに', color: 'bg-slate-100 hover:bg-slate-200 text-slate-700' },
+                                { id: 'active', label: '🏃 もっとアクティブに', color: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' },
+                                { id: 'cafe', label: '☕ カフェ多めで休憩', color: 'bg-amber-50 hover:bg-amber-100 text-amber-700' },
+                                { id: 'rich', label: '✨ ちょっぴりリッチに', color: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700' }
+                            ].map(btn => (
+                                <button key={btn.id} onClick={() => handleRemix(btn.label)} disabled={isRemixing}
+                                    className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all active:scale-95 flex items-center gap-1.5 ${btn.color} ${isRemixing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    {isRemixing && btn.label.includes(btn.label) ? <Loader2 size={10} className="animate-spin" /> : null}
+                                    {btn.label}
+                                </button>
+                            ))}
+                        </div>
+                        {isRemixing && (
+                            <p className="text-[10px] text-indigo-400 mt-2 font-medium animate-pulse">AIがコースを再構成しています...</p>
+                        )}
                     </div>
 
                     {/* タイムライン */}

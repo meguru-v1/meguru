@@ -37,7 +37,7 @@ function App() {
     };
 
     // ===== 検索ハンドラ =====
-    const handleSearch = async ({ searchMode, query, radius: r, duration, destination, travelMode }: SearchParams) => {
+    const handleSearch = async (params: SearchParams) => {
         setLoading(true);
         setError(null);
         setCourses([]);
@@ -45,6 +45,7 @@ function App() {
         setStatus('場所を検索中...');
 
         try {
+            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize } = params;
             if (searchMode === 'route' && destination) {
                 // ===== ルート検索 =====
                 const [startGeo, endGeo] = await Promise.all([geocode(query), geocode(destination)]);
@@ -123,7 +124,18 @@ function App() {
                 const weatherContext = await getCurrentWeather(midLat, midLon);
 
                 let generatedCourses: Course[] = [];
-                try { generatedCourses = await generateSmartCourses(candidates, { lat: midLat, lon: midLon }, duration, timeContext, weatherContext); }
+                try {
+                    generatedCourses = await generateSmartCourses(
+                        candidates,
+                        { lat: midLat, lon: midLon },
+                        duration,
+                        timeContext,
+                        weatherContext,
+                        mood,
+                        budget,
+                        groupSize
+                    );
+                }
                 catch { /* fallback below */ }
 
                 const routeTravelMode = travelMode || 'walk';
@@ -193,7 +205,18 @@ function App() {
                 const weatherContext = await getCurrentWeather(startGeo.lat, startGeo.lon);
 
                 let generatedCourses: Course[] = [];
-                try { generatedCourses = await generateSmartCourses(candidates, { lat: startGeo.lat, lon: startGeo.lon }, duration, timeContext, weatherContext); }
+                try {
+                    generatedCourses = await generateSmartCourses(
+                        candidates,
+                        { lat: startGeo.lat, lon: startGeo.lon },
+                        duration,
+                        timeContext,
+                        weatherContext,
+                        mood,
+                        budget,
+                        groupSize
+                    );
+                }
                 catch { /* fallback below */ }
 
                 const areaTravelMode = travelMode || 'walk';

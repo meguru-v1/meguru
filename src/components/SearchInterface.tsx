@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
-    Search, MapPin, Clock, Compass, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown
+    Search, MapPin, Clock, Compass, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown,
+    Smile, Banknote, Users, Sparkles
 } from 'lucide-react';
 import type { SearchParams, SearchMode, TravelMode } from '../types';
 
@@ -22,6 +23,9 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
     const [radius, setRadius] = useState(1);
     const [duration, setDuration] = useState(180);
     const [travelMode, setTravelMode] = useState<TravelMode>('walk');
+    const [mood, setMood] = useState('');
+    const [budget, setBudget] = useState('');
+    const [groupSize, setGroupSize] = useState('');
     const [isSearching, setIsSearching] = useState(false);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -33,13 +37,16 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
             searchMode, query, radius: radius * 1000, duration,
             destination: searchMode === 'route' ? destination : undefined,
             travelMode,
+            mood: mood || undefined,
+            budget: budget || undefined,
+            groupSize: groupSize || undefined,
         });
         setTimeout(() => setIsSearching(false), 1000);
     };
 
     return (
         <div className="w-full flex flex-col bg-white">
-            {/* ヘッダー */}
+            {/* ヘッダー部分は省略 */}
             <div className="text-center pt-14 pb-2 px-6 animate-fade-in">
                 <div className="inline-block mb-3 animate-float">
                     <div className="w-12 h-12 mx-auto bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg">
@@ -70,7 +77,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
 
             {/* フォーム */}
             <form onSubmit={handleSubmit} className="flex flex-col px-6 pb-4">
-                <div className="flex-1 flex flex-col justify-start space-y-5 pt-2 pb-10">
+                <div className="flex-1 flex flex-col justify-start space-y-5 pt-2 pb-6">
                     {searchMode === 'area' && (
                         <>
                             <div className="space-y-2 animate-slide-up">
@@ -140,9 +147,60 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                             onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full" />
                         <div className="flex justify-between text-[10px] text-slate-300 font-medium pb-1"><span>30分</span><span>12時間</span></div>
                     </div>
+
+                    {/* パーソナライズ設定 */}
+                    <div className="space-y-4 pt-2">
+                        {/* 気分 */}
+                        <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <Smile size={12} /> 今日の気分
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {['のんびり', 'アクティブ', 'ロマンチック', '知的探究'].map(m => (
+                                    <button key={m} type="button" onClick={() => setMood(mood === m ? '' : m)}
+                                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all
+                                            ${mood === m ? 'bg-slate-900 text-white shadow-md scale-105' : 'bg-white text-slate-500 border border-slate-100'}`}>
+                                        {m}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 予算 */}
+                        <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <Banknote size={12} /> 予算感
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {['節約', '標準', 'リッチ'].map(b => (
+                                    <button key={b} type="button" onClick={() => setBudget(budget === b ? '' : b)}
+                                        className={`px-4 py-1.5 rounded-full text-[10px] font-bold transition-all
+                                            ${budget === b ? 'bg-amber-500 text-white shadow-md scale-105' : 'bg-white text-slate-500 border border-slate-100'}`}>
+                                        {b}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 人数/連れ */}
+                        <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <Users size={12} /> 誰と行く？
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {['一人旅', 'デート', '友達', '家族'].map(g => (
+                                    <button key={g} type="button" onClick={() => setGroupSize(groupSize === g ? '' : g)}
+                                        className={`px-4 py-1.5 rounded-full text-[10px] font-bold transition-all
+                                            ${groupSize === g ? 'bg-indigo-500 text-white shadow-md scale-105' : 'bg-white text-slate-500 border border-slate-100'}`}>
+                                        {g}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <button type="submit" disabled={isSearching}
-                    className="w-full btn-primary flex items-center justify-center gap-2.5 py-4 text-base font-bold rounded-xl mt-5">
+                    className="w-full btn-primary flex items-center justify-center gap-2.5 py-4 text-base font-bold rounded-xl mt-2 mb-8">
                     {isSearching ? (<span className="animate-pulse">コース作成中...</span>) : (
                         <><span>{searchMode === 'area' ? '旅を始める' : 'ルートを作成'}</span><Navigation size={18} /></>
                     )}

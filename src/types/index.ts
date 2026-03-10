@@ -66,6 +66,9 @@ export interface SearchParams {
     duration: number; // minutes
     destination?: string; // ルート検索時の目的地
     travelMode?: TravelMode; // 移動方法
+    mood?: string;
+    budget?: string;
+    groupSize?: string;
 }
 
 export interface GeoResult {

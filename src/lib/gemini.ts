@@ -9,7 +9,10 @@ export const generateSmartCourses = async (
     center: { lat: number; lon: number },
     durationMinutes: number,
     timeContext: string = "不明",
-    weatherContext: string = "不明"
+    weatherContext: string = "不明",
+    mood: string = "不明",
+    budget: string = "不明",
+    groupSize: string = "不明"
 ): Promise<Course[]> => {
     const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
 
@@ -23,7 +26,7 @@ export const generateSmartCourses = async (
 
     if (durationMinutes <= 150) {
         maxDining = 2; // Total (1 meal + 1 cafe)
-        diningRule = `- **MIN 0, MAX 1 meal spot** (Restaurant) and **MAX 1 cafe spot**. (Total max 2 spots).\n  - **STRICT**: Distribute food spots evenly. NEVER consecutive restaurants.`;
+        diningRule = `- **MIN 0, MAX 1 meal spot** (Restaurant) and **1 cafe spot**. (Total max 2 spots).\n  - **STRICT**: Distribute food spots evenly. NEVER consecutive restaurants.`;
     } else if (durationMinutes <= 300) {
         maxDining = 2;
         maxCafes = 1;
@@ -83,6 +86,12 @@ ${candidateList}
 Create 5 distinct, **exciting** model courses.
 **EACH COURSE MUST FOLLOW A SPECIFIC THEME SELECTED BELOW:**
 ${themeInstructions}
+
+**PERSONALIZATION CONTEXT:**
+- Mood: ${mood}
+- Budget: ${budget}
+- Group Size/Type: ${groupSize}
+* Adjust your selection and descriptions based on this. (e.g., if 'Rich', prioritize higher-rated or sophisticated spots. If 'Family', add child-friendly pro-tips).
 
 **CURRENT CONTEXT (CRITICAL FOR SPOT SELECTION):**
 - Current Time: ${timeContext}

@@ -24,19 +24,19 @@ export const generateSmartCourses = async (
     if (durationMinutes <= 150) {
         maxDining = 1;
         maxCafes = 1;
-        diningRule = "- **MAX 1 meal spot** (Restaurant/Food) and **1 cafe spot**. (Total 2 food spots allowed).\n  - **NEVER** place two food/cafe spots consecutively.\n  - Place at least 100 minutes of other activities between any food/drink spots if possible.";
+        diningRule = `- **MIN 0, MAX 1 meal** and **MAX 1 cafe**. (0 food spots is acceptable for short trips).\n  - **STRICT**: Distribute food spots evenly throughout the course.\n  - **NEVER** place food/cafe spots consecutively.`;
     } else if (durationMinutes <= 300) {
         maxDining = 2;
         maxCafes = 1;
-        diningRule = `- MAX **2 food/drink spots** in total (at most ${maxCafes} Cafe).\n  - **STRICT RULE**: NEVER suggest two 'Restaurant' category spots in a row. Must have a non-food spot in between.\n  - Aim for an **interval of approx 100 minutes** between dining spots.`;
+        diningRule = `- **MIN 1, MAX 2 food/drink spots** in total.\n  - At most ${maxCafes} should be a Cafe.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.\n  - Keep approx 100 min intervals between them.`;
     } else if (durationMinutes <= 450) {
         maxDining = 3;
         maxCafes = 1;
-        diningRule = `- MAX **3 food/drink spots** in total (at most ${maxCafes} Cafe).\n  - **STRICT RULE**: NEVER suggest two 'Restaurant' category spots in a row.\n  - Maintain at least **100 minutes of gap** between food spots.`;
+        diningRule = `- **MIN 2, MAX 3 food/drink spots** in total.\n  - At most ${maxCafes} should be a Cafe.\n  - **STRICT**: Distribute dining spots evenly across the ${durationMinutes} min period.\n  - NEVER consecutive restaurants.`;
     } else {
         maxDining = 4;
         maxCafes = 2;
-        diningRule = `- MAX **4 food/drink spots** in total (at most ${maxCafes} Cafes).\n  - **STRICT RULE**: NEVER suggest two 'Restaurant' category spots in a row.\n  - Ensure a **100+ minute interval** between any dining activities.`;
+        diningRule = `- **MIN 3, MAX 4 food/drink spots** in total.\n  - **MUST include at least 1 Cafe**.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.\n  - Maintain a 100+ min interval between dining activities.`;
     }
 
     const targetSpots = Math.min(Math.ceil(durationMinutes / 50), 15);

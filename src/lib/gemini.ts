@@ -17,7 +17,28 @@ export const generateSmartCourses = async (
         `${i}: ${s.name} (${s.category}, ★${s.rating || '-'}, ※${s.estimatedStayTime || 30}分)`
     ).join('\n');
 
-    const maxDining = durationMinutes <= 90 ? 1 : (durationMinutes <= 300 ? 2 : (durationMinutes <= 480 ? 3 : 4));
+    let maxDining = 2;
+    let maxCafes = 1;
+    let diningRule = "";
+
+    if (durationMinutes <= 150) {
+        maxDining = 1; // 1 meal
+        maxCafes = 1;  // Separate cafe (total 2)
+        diningRule = "MAX 1 meal spot AND MAX 1 cafe spot (Total 2 food/drink spots allowed).";
+    } else if (durationMinutes <= 300) {
+        maxDining = 2;
+        maxCafes = 1;
+        diningRule = `MAX 2 food/drink spots in total, but AT MOST ${maxCafes} should be a Cafe.`;
+    } else if (durationMinutes <= 450) {
+        maxDining = 3;
+        maxCafes = 1;
+        diningRule = `MAX 3 food/drink spots in total, but AT MOST ${maxCafes} should be a Cafe.`;
+    } else {
+        maxDining = 4;
+        maxCafes = 2;
+        diningRule = `MAX 4 food/drink spots in total, but AT MOST ${maxCafes} should be Cafes.`;
+    }
+
     const targetSpots = Math.min(Math.ceil(durationMinutes / 50), 15);
 
     const allThemes = [
@@ -73,8 +94,8 @@ ${themeInstructions}
 
 **NEGATIVE CONSTRAINTS (MUST FOLLOW):**
 - **NO RAW CODE / FUNCTIONS**: DO NOT include any function names, code snippets, or system variables (like \`strftime\`, \`time.now()\`, etc.) in your generated text. Write completely natural Japanese as a human concierge.
-- **DINING LIMIT**: For ${durationMinutes} min, you must have **MAX ${maxDining}** food/drink spots.
-  - (If ${maxDining} is 1, do NOT include a Cafe AND a Restaurant. Choose only one.)
+- **DINING LIMIT**: For ${durationMinutes} min, you must strictly follow this rule:
+  - ${diningRule}
 - **NO DUPLICATE SPOTS**: A spot used in Course 1 CANNOT be used in Course 2, 3, 4, or 5.
 - **SPOT COUNT**: Each course should have approximately **${targetSpots} spots** to fill ${durationMinutes} minutes. NEVER make a course shorter than requested.
 

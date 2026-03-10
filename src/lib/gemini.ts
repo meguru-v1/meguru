@@ -22,21 +22,20 @@ export const generateSmartCourses = async (
     let diningRule = "";
 
     if (durationMinutes <= 150) {
-        maxDining = 1;
-        maxCafes = 1;
-        diningRule = `- **MIN 0, MAX 1 meal** and **MAX 1 cafe**. (0 food spots is acceptable for short trips).\n  - **STRICT**: Distribute food spots evenly throughout the course.\n  - **NEVER** place food/cafe spots consecutively.`;
+        maxDining = 2; // Total (1 meal + 1 cafe)
+        diningRule = `- **MIN 0, MAX 1 meal spot** (Restaurant) and **MAX 1 cafe spot**. (Total max 2 spots).\n  - **STRICT**: Distribute food spots evenly. NEVER consecutive restaurants.`;
     } else if (durationMinutes <= 300) {
         maxDining = 2;
         maxCafes = 1;
-        diningRule = `- **MIN 1, MAX 2 food/drink spots** in total.\n  - At most ${maxCafes} should be a Cafe.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.\n  - Keep approx 100 min intervals between them.`;
+        diningRule = `- **MIN 1, MAX 2 food/drink spots** in total.\n  - **MAX 1 Cafe**. If 2 spots, one MUST be a Restaurant and one MUST be a Cafe.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
     } else if (durationMinutes <= 450) {
         maxDining = 3;
         maxCafes = 1;
-        diningRule = `- **MIN 2, MAX 3 food/drink spots** in total.\n  - At most ${maxCafes} should be a Cafe.\n  - **STRICT**: Distribute dining spots evenly across the ${durationMinutes} min period.\n  - NEVER consecutive restaurants.`;
+        diningRule = `- **MIN 2, MAX 3 food/drink spots** in total.\n  - **MAX 1 Cafe**.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
     } else {
         maxDining = 4;
         maxCafes = 2;
-        diningRule = `- **MIN 3, MAX 4 food/drink spots** in total.\n  - **MUST include at least 1 Cafe**.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.\n  - Maintain a 100+ min interval between dining activities.`;
+        diningRule = `- **MIN 3, MAX 4 food/drink spots** in total.\n  - **MUST include 1-2 Cafes** (MIN 1, MAX 2).\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
     }
 
     const targetSpots = Math.min(Math.ceil(durationMinutes / 50), 15);

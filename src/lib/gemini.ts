@@ -22,21 +22,21 @@ export const generateSmartCourses = async (
     let diningRule = "";
 
     if (durationMinutes <= 150) {
-        maxDining = 1; // 1 meal
-        maxCafes = 1;  // Separate cafe (total 2)
-        diningRule = "MAX 1 meal spot AND MAX 1 cafe spot (Total 2 food/drink spots allowed).";
+        maxDining = 1;
+        maxCafes = 1;
+        diningRule = "- **MAX 1 meal spot** (Restaurant/Food) and **1 cafe spot**. (Total 2 food spots allowed).\n  - **NEVER** place two food/cafe spots consecutively.\n  - Place at least 100 minutes of other activities between any food/drink spots if possible.";
     } else if (durationMinutes <= 300) {
         maxDining = 2;
         maxCafes = 1;
-        diningRule = `MAX 2 food/drink spots in total, but AT MOST ${maxCafes} should be a Cafe.`;
+        diningRule = `- MAX **2 food/drink spots** in total (at most ${maxCafes} Cafe).\n  - **STRICT RULE**: NEVER suggest two 'Restaurant' category spots in a row. Must have a non-food spot in between.\n  - Aim for an **interval of approx 100 minutes** between dining spots.`;
     } else if (durationMinutes <= 450) {
         maxDining = 3;
         maxCafes = 1;
-        diningRule = `MAX 3 food/drink spots in total, but AT MOST ${maxCafes} should be a Cafe.`;
+        diningRule = `- MAX **3 food/drink spots** in total (at most ${maxCafes} Cafe).\n  - **STRICT RULE**: NEVER suggest two 'Restaurant' category spots in a row.\n  - Maintain at least **100 minutes of gap** between food spots.`;
     } else {
         maxDining = 4;
         maxCafes = 2;
-        diningRule = `MAX 4 food/drink spots in total, but AT MOST ${maxCafes} should be Cafes.`;
+        diningRule = `- MAX **4 food/drink spots** in total (at most ${maxCafes} Cafes).\n  - **STRICT RULE**: NEVER suggest two 'Restaurant' category spots in a row.\n  - Ensure a **100+ minute interval** between any dining activities.`;
     }
 
     const targetSpots = Math.min(Math.ceil(durationMinutes / 50), 15);

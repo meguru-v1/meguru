@@ -184,6 +184,7 @@ ${themeInstructions}
     }
 
     return coursesData.map(course => {
+        const uniqueId = crypto.randomUUID();
         const hydratedSpots: Spot[] = course.spots.map(s => {
             const original = candidates[s.id];
             if (!original) {
@@ -231,9 +232,9 @@ ${themeInstructions}
                 }
             }
 
-            return { ...course, spots: sorted } as Course;
+            return { ...course, id: uniqueId, spots: sorted } as Course;
         }
 
-        return { ...course, spots: hydratedSpots } as Course;
+        return { ...course, id: uniqueId, spots: hydratedSpots } as Course;
     });
 };

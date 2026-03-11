@@ -54,7 +54,7 @@ const FALLBACK_SURVEYS = [
     }
 ];
 
-const SLIDESHOW_IMAGES = [
+const FALLBACK_IMAGES = [
     "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80",
     "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80",
     "https://images.unsplash.com/photo-1528164344705-47542687000d?w=800&q=80",
@@ -63,6 +63,13 @@ const SLIDESHOW_IMAGES = [
     "https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80",
 ];
 
+const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
+
+function buildPhotoUrl(photoReference: string): string {
+    // Google Places Photos (New API) Media URL
+    return `https://places.googleapis.com/v1/${photoReference}/media?maxWidthPx=800&key=${API_KEY}`;
+}
+
 // ===== Props =====
 interface GenerationScreenProps {
     statusText: string;
@@ -70,7 +77,8 @@ interface GenerationScreenProps {
     onAnswer?: (questionIndex: number, answer: string) => void;
     locationName?: string;
     onTransitionComplete?: () => void;
-    subAiContent?: WaitingScreenContent | null; // サブAIからの動的データ
+    subAiContent?: WaitingScreenContent | null;
+    spotPhotos?: string[]; // photo_reference の配列
 }
 
 export default function GenerationScreen({
@@ -79,8 +87,18 @@ export default function GenerationScreen({
     onAnswer,
     locationName = "この街",
     onTransitionComplete,
-    subAiContent
+    subAiContent,
+    spotPhotos
 }: GenerationScreenProps) {
+    // スポット写真からスライドショー画像を生成
+    const slideshowImages = React.useMemo(() => {
+        if (spotPhotos && spotPhotos.length > 0) {
+            // シャッフルして最大8枚選ぶ
+            const shuffled = [...spotPhotos].sort(() => Math.random() - 0.5);
+            return shuffled.slice(0, 8).map(ref => buildPhotoUrl(ref));
+        }
+        return FALLBACK_IMAGES;
+    }, [spotPhotos]);
     // サブAIデータがあればそちらを使い、なければフォールバック
     const statusMessages = subAiContent?.status_texts?.length ? subAiContent.status_texts : FALLBACK_STATUS;
     const forecastCopies = subAiContent?.forecast_copies?.length ? subAiContent.forecast_copies : FALLBACK_FORECASTS;
@@ -138,7 +156,7 @@ export default function GenerationScreen({
         const imageTimer = setInterval(() => {
             setFadeImage(false);
             setTimeout(() => {
-                setCurrentImageIdx(prev => (prev + 1) % SLIDESHOW_IMAGES.length);
+                setCurrentImageIdx(prev => (prev + 1) % slideshowImages.length);
                 setFadeImage(true);
             }, 600);
         }, 5000);
@@ -248,7 +266,7 @@ export default function GenerationScreen({
             <div className="flex-1 relative overflow-hidden">
                 <div className="absolute inset-0">
                     <img
-                        src={SLIDESHOW_IMAGES[currentImageIdx]}
+                        src={slideshowImages[currentImageIdx % slideshowImages.length]}
                         alt="destination"
                         className={`w-full h-full object-cover transition-all duration-[1500ms] ease-out
                             ${fadeImage ? 'opacity-100 scale-110' : 'opacity-0 scale-100'}`}

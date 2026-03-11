@@ -682,6 +682,7 @@ function App() {
                     onAnswer={(qIdx, answer) => { console.log(`Survey Q${qIdx}: ${answer}`); }}
                     onTransitionComplete={() => setShowGenScreen(false)}
                     subAiContent={subAiContent}
+                    spotPhotos={searchCandidates.flatMap(s => s.photos || []).filter(Boolean)}
                 />
             )}
 

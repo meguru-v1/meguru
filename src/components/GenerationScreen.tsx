@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, MapPin, Coffee, Compass, ChevronRight } from 'lucide-react';
+import { Sparkles, MapPin, Compass, ChevronRight } from 'lucide-react';
+import type { WaitingScreenContent } from '../lib/gemini';
 
-// ===== ハードコードデータ =====
-
-const STATUS_MESSAGES = [
+// ===== フォールバック用の静的データ =====
+const FALLBACK_STATUS = [
     "周辺のスポットを分析しています…",
     "あなたにぴったりのテーマを選定中…",
     "コースの流れを最適化しています…",
@@ -16,7 +16,7 @@ const STATUS_MESSAGES = [
     "もうすぐ完成します…あと少し！"
 ];
 
-const FORECAST_COPIES = [
+const FALLBACK_FORECASTS = [
     "きっと素敵な発見がある旅になります",
     "あなただけの物語が、もうすぐ始まります",
     "いつもの街が、特別に見える一日を",
@@ -26,7 +26,7 @@ const FORECAST_COPIES = [
     "歩くたびに、新しい世界が広がる"
 ];
 
-const TRAVEL_TIPS = [
+const FALLBACK_TIPS = [
     "💡 神社では、二礼二拍手一礼が基本のマナーです",
     "📸 写真映えスポットは午前中の柔らかい光がベスト",
     "🍵 抹茶は「薄茶(うすちゃ)」が初心者におすすめ",
@@ -34,21 +34,10 @@ const TRAVEL_TIPS = [
     "⛩️ 鳥居をくぐるときは、中央を避けて端を通るのが礼儀",
     "🎋 竹林は早朝が最も美しく、人も少なめです",
     "🏯 お城の石垣の「刻印」探しは隠れた楽しみ方",
-    "🍜 ラーメン店は11時台に並ぶと待ち時間が短め",
-    "🌸 桜の名所は夜桜ライトアップも見逃せません",
-    "🗺️ 商店街は地元の生活が見える、旅の穴場です"
+    "🍜 ラーメン店は11時台に並ぶと待ち時間が短め"
 ];
 
-const SLIDESHOW_IMAGES = [
-    "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80", // 京都 鳥居
-    "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80", // 日本の寺
-    "https://images.unsplash.com/photo-1528164344705-47542687000d?w=800&q=80", // 日本の街
-    "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=800&q=80", // 東京タワー
-    "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?w=800&q=80", // 竹林
-    "https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80", // 富士山
-];
-
-const SURVEY_QUESTIONS = [
+const FALLBACK_SURVEYS = [
     {
         question: "今日は何を重視したい？",
         options: [
@@ -65,6 +54,15 @@ const SURVEY_QUESTIONS = [
     }
 ];
 
+const SLIDESHOW_IMAGES = [
+    "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80",
+    "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80",
+    "https://images.unsplash.com/photo-1528164344705-47542687000d?w=800&q=80",
+    "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=800&q=80",
+    "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?w=800&q=80",
+    "https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80",
+];
+
 // ===== Props =====
 interface GenerationScreenProps {
     statusText: string;
@@ -72,6 +70,7 @@ interface GenerationScreenProps {
     onAnswer?: (questionIndex: number, answer: string) => void;
     locationName?: string;
     onTransitionComplete?: () => void;
+    subAiContent?: WaitingScreenContent | null; // サブAIからの動的データ
 }
 
 export default function GenerationScreen({
@@ -79,8 +78,15 @@ export default function GenerationScreen({
     isFinished,
     onAnswer,
     locationName = "この街",
-    onTransitionComplete
+    onTransitionComplete,
+    subAiContent
 }: GenerationScreenProps) {
+    // サブAIデータがあればそちらを使い、なければフォールバック
+    const statusMessages = subAiContent?.status_texts?.length ? subAiContent.status_texts : FALLBACK_STATUS;
+    const forecastCopies = subAiContent?.forecast_copies?.length ? subAiContent.forecast_copies : FALLBACK_FORECASTS;
+    const travelTips = subAiContent?.travel_tips?.length ? subAiContent.travel_tips : FALLBACK_TIPS;
+    const surveyQuestions = subAiContent?.interaction?.length ? subAiContent.interaction : FALLBACK_SURVEYS;
+
     // ===== State =====
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [currentStatusIdx, setCurrentStatusIdx] = useState(0);
@@ -94,8 +100,20 @@ export default function GenerationScreen({
     const [fadeImage, setFadeImage] = useState(true);
     const [fadeForecast, setFadeForecast] = useState(true);
     const [fadeTip, setFadeTip] = useState(true);
+    const [hasSubAiArrived, setHasSubAiArrived] = useState(false);
 
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // サブAIのコンテンツが途中で届いたことを検知
+    useEffect(() => {
+        if (subAiContent && !hasSubAiArrived) {
+            setHasSubAiArrived(true);
+            // リセットして新しいデータからフレッシュに表示
+            setCurrentStatusIdx(0);
+            setCurrentForecastIdx(0);
+            setCurrentTipIdx(0);
+        }
+    }, [subAiContent, hasSubAiArrived]);
 
     // ===== 非線形プログレスバー =====
     const progress = isFinished ? 100 : (1 - Math.exp(-0.03 * elapsedSeconds)) * 95;
@@ -111,9 +129,9 @@ export default function GenerationScreen({
     // ===== ステータステキスト切替（10秒ごと）=====
     useEffect(() => {
         if (elapsedSeconds > 0 && elapsedSeconds % 10 === 0) {
-            setCurrentStatusIdx(prev => (prev + 1) % STATUS_MESSAGES.length);
+            setCurrentStatusIdx(prev => (prev + 1) % statusMessages.length);
         }
-    }, [elapsedSeconds]);
+    }, [elapsedSeconds, statusMessages.length]);
 
     // ===== 画像切替（5秒ごと、フェード）=====
     useEffect(() => {
@@ -132,44 +150,43 @@ export default function GenerationScreen({
         const forecastTimer = setInterval(() => {
             setFadeForecast(false);
             setTimeout(() => {
-                setCurrentForecastIdx(prev => (prev + 1) % FORECAST_COPIES.length);
+                setCurrentForecastIdx(prev => (prev + 1) % forecastCopies.length);
                 setFadeForecast(true);
             }, 500);
         }, 7000);
         return () => clearInterval(forecastTimer);
-    }, []);
+    }, [forecastCopies.length]);
 
     // ===== 豆知識切替（8秒ごと）=====
     useEffect(() => {
         const tipTimer = setInterval(() => {
             setFadeTip(false);
             setTimeout(() => {
-                setCurrentTipIdx(prev => (prev + 1) % TRAVEL_TIPS.length);
+                setCurrentTipIdx(prev => (prev + 1) % travelTips.length);
                 setFadeTip(true);
             }, 400);
         }, 8000);
         return () => clearInterval(tipTimer);
-    }, []);
+    }, [travelTips.length]);
 
     // ===== アンケート表示（30秒後 / 60秒後）=====
     useEffect(() => {
-        if (elapsedSeconds === 30 && !shownSurveys.has(0)) {
+        if (elapsedSeconds === 30 && !shownSurveys.has(0) && surveyQuestions.length > 0) {
             setActiveSurvey(0);
             setSurveyAutoCloseTimer(15);
             setShownSurveys(prev => new Set(prev).add(0));
         }
-        if (elapsedSeconds === 60 && !shownSurveys.has(1)) {
+        if (elapsedSeconds === 60 && !shownSurveys.has(1) && surveyQuestions.length > 1) {
             setActiveSurvey(1);
             setSurveyAutoCloseTimer(15);
             setShownSurveys(prev => new Set(prev).add(1));
         }
-    }, [elapsedSeconds, shownSurveys]);
+    }, [elapsedSeconds, shownSurveys, surveyQuestions.length]);
 
     // ===== アンケート自動閉じ（15秒）=====
     useEffect(() => {
         if (activeSurvey === null) return;
         if (surveyAutoCloseTimer <= 0) {
-            // 自動で「AIにおまかせ」
             if (onAnswer) onAnswer(activeSurvey, "omakase");
             setActiveSurvey(null);
             return;
@@ -195,7 +212,7 @@ export default function GenerationScreen({
         setActiveSurvey(null);
     }, [activeSurvey, onAnswer]);
 
-    const displayStatus = statusText || STATUS_MESSAGES[currentStatusIdx];
+    const displayStatus = statusText || statusMessages[currentStatusIdx];
 
     return (
         <div className={`fixed inset-0 z-[9999] bg-white flex flex-col transition-all duration-700
@@ -203,7 +220,6 @@ export default function GenerationScreen({
 
             {/* ① 進捗ヘッダー */}
             <div className="shrink-0">
-                {/* プログレスバー */}
                 <div className="h-1 bg-slate-100 w-full overflow-hidden">
                     <div
                         className="h-full transition-all duration-1000 ease-out rounded-r-full"
@@ -215,8 +231,6 @@ export default function GenerationScreen({
                         }}
                     />
                 </div>
-
-                {/* ステータステキスト */}
                 <div className="px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -232,7 +246,6 @@ export default function GenerationScreen({
 
             {/* ② メインビジュアル */}
             <div className="flex-1 relative overflow-hidden">
-                {/* ケン・バーンズ エフェクト画像 */}
                 <div className="absolute inset-0">
                     <img
                         src={SLIDESHOW_IMAGES[currentImageIdx]}
@@ -241,13 +254,11 @@ export default function GenerationScreen({
                             ${fadeImage ? 'opacity-100 scale-110' : 'opacity-0 scale-100'}`}
                         style={{ animation: fadeImage ? 'kenBurns 5s ease-out forwards' : 'none' }}
                     />
-                    {/* グラデーションオーバーレイ */}
                     <div className="absolute inset-0" style={{
                         background: 'linear-gradient(to bottom, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.1) 30%, rgba(0,0,0,0.2) 70%, rgba(0,0,0,0.6) 100%)'
                     }} />
                 </div>
 
-                {/* 予報コピー */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center px-8">
                     <div className="glass-gen-panel p-6 rounded-3xl max-w-sm w-full text-center">
                         <Compass className="w-8 h-8 text-amber-500 mx-auto mb-3 animate-pulse" />
@@ -256,19 +267,26 @@ export default function GenerationScreen({
                         </p>
                         <p className={`text-lg font-bold text-slate-800 leading-relaxed font-serif transition-all duration-500
                             ${fadeForecast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
-                            {FORECAST_COPIES[currentForecastIdx]}
+                            {forecastCopies[currentForecastIdx]}
                         </p>
+                        {/* サブAI到着インジケーター */}
                         <div className="mt-4 flex items-center justify-center gap-1.5">
-                            {[0, 1, 2].map(i => (
-                                <div key={i} className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"
-                                    style={{ animationDelay: `${i * 0.15}s` }} />
-                            ))}
+                            {hasSubAiArrived ? (
+                                <span className="text-[9px] font-bold text-emerald-500 tracking-wider flex items-center gap-1">
+                                    <Sparkles size={10} /> AI がコンテンツをお届け中
+                                </span>
+                            ) : (
+                                [0, 1, 2].map(i => (
+                                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"
+                                        style={{ animationDelay: `${i * 0.15}s` }} />
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {/* ③ アンケートオーバーレイ */}
-                {activeSurvey !== null && (
+                {activeSurvey !== null && activeSurvey < surveyQuestions.length && (
                     <div className="absolute inset-0 flex items-center justify-center z-50"
                         style={{ backdropFilter: 'blur(12px)', background: 'rgba(255,255,255,0.5)' }}>
                         <div className="max-w-xs w-full mx-6 animate-scale-in">
@@ -280,10 +298,10 @@ export default function GenerationScreen({
                                     </span>
                                 </div>
                                 <p className="text-base font-bold text-slate-800 mb-5">
-                                    {SURVEY_QUESTIONS[activeSurvey]?.question}
+                                    {surveyQuestions[activeSurvey]?.question}
                                 </p>
                                 <div className="space-y-2.5">
-                                    {SURVEY_QUESTIONS[activeSurvey]?.options.map(opt => (
+                                    {surveyQuestions[activeSurvey]?.options.map(opt => (
                                         <button key={opt.id} onClick={() => handleSurveyAnswer(opt.id)}
                                             className="w-full py-3.5 px-4 rounded-2xl text-sm font-bold text-left
                                                 bg-slate-50 hover:bg-amber-50 hover:border-amber-200
@@ -301,7 +319,6 @@ export default function GenerationScreen({
                                         AIにおまかせ
                                     </button>
                                 </div>
-                                {/* タイマー */}
                                 <div className="mt-4 flex items-center justify-center gap-2">
                                     <div className="h-1 flex-1 bg-slate-100 rounded-full overflow-hidden">
                                         <div className="h-full bg-amber-400 rounded-full transition-all duration-1000"
@@ -327,7 +344,7 @@ export default function GenerationScreen({
                 </div>
                 <p className={`text-xs text-slate-500 font-medium leading-relaxed transition-all duration-500
                     ${fadeTip ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'}`}>
-                    {TRAVEL_TIPS[currentTipIdx]}
+                    {travelTips[currentTipIdx]}
                 </p>
             </div>
         </div>

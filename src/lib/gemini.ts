@@ -391,3 +391,85 @@ ${candidateList}
         return null;
     }
 };
+
+// ===== サブAI: 待ち画面コンテンツ生成 =====
+export interface WaitingScreenContent {
+    status_texts: string[];
+    forecast_copies: string[];
+    travel_tips: string[];
+    interaction: {
+        question: string;
+        options: { id: string; label: string }[];
+    }[];
+}
+
+export const generateWaitingScreenContent = async (
+    locationName: string,
+    weatherContext: string = "不明"
+): Promise<WaitingScreenContent | null> => {
+    const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite"];
+
+    const prompt = `
+あなたは旅行アプリの「生成待ち画面」のコンテンツを作成するAIです。
+ユーザーが「${locationName}」周辺の旅行プランを生成中です。天気は ${weatherContext} です。
+
+以下のJSON形式で、**その土地ならではの**コンテンツを生成してください。
+
+**ルール:**
+- すべて自然な日本語で、丁寧語（です・ます調）で書く。
+- 「${locationName}」に関連する具体的な地名・名所・文化・食べ物を盛り込む。
+- 汎用的すぎるコメントは避け、その土地を知っている人が「おっ」と思う内容にする。
+
+**JSON SCHEMA:**
+{
+  "status_texts": [
+    "(10個) AIが作業しているようなステータスメッセージ。例: '${locationName}の隠れた名所をリストアップ中…', '地元の人しか知らないカフェを探しています…'"
+  ],
+  "forecast_copies": [
+    "(7個) 旅の期待感を煽るポエティックな一文。例: '${locationName}の路地裏に、まだ見ぬ物語が待っている'"
+  ],
+  "travel_tips": [
+    "(8個) その土地の豆知識。絵文字を先頭に付けて。例: '⛩️ ${locationName}の〇〇神社は…'"
+  ],
+  "interaction": [
+    {
+      "question": "(2個) ユーザーへの2択アンケート質問",
+      "options": [
+        {"id": "A", "label": "絵文字+選択肢A"},
+        {"id": "B", "label": "絵文字+選択肢B"}
+      ]
+    }
+  ]
+}
+
+Output MUST be valid JSON only. No markdown, no explanation.
+`;
+
+    for (const modelName of MODELS) {
+        try {
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: { responseMimeType: "application/json" }
+            });
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const text = response.text();
+
+            let jsonStr = text;
+            const firstBrace = jsonStr.indexOf('{');
+            const lastBrace = jsonStr.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1) {
+                jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+            }
+
+            const data = JSON.parse(jsonStr) as WaitingScreenContent;
+            console.log("✅ Sub-AI waiting screen content generated!");
+            return data;
+        } catch (err) {
+            console.warn(`Sub-AI (${modelName}) failed:`, err);
+        }
+    }
+
+    console.warn("Sub-AI failed, falling back to static content.");
+    return null;
+};

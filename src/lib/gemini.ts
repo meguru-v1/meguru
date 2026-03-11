@@ -99,7 +99,8 @@ ${diningRule}
 * You MUST adapt your tone and course titles to match this context (e.g., if it's evening, focus on dinner, night views, or evening walks).
 
 **CRITICAL LANGUAGE REQUIREMENT:**
-- ALL generated text (theme, titles, descriptions, must_see, pro_tip, trivia, etc.) MUST be strictly in Japanese (日本語). DO NOT USE ENGLISH.
+- ALL generated text VALUES inside the JSON (theme, titles, descriptions, must_see, pro_tip, trivia, etc.) MUST be strictly in Japanese (日本語). DO NOT USE ENGLISH.
+- CRITICAL: DO NOT translate the JSON keys. Keep JSON keys exactly as English (e.g. "id", "title", "description", "spots", "must_see", etc).
 
 **NEGATIVE CONSTRAINTS (MUST FOLLOW):**
 - **NO RAW CODE / FUNCTIONS**: Write completely natural Japanese.

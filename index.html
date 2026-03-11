@@ -85,17 +85,25 @@
     }
   </style>
   <script>
-    // React マウント後にスプラッシュをフェードアウト
+    // スプラッシュを消す共通関数
+    function dismissSplash() {
+      const splash = document.getElementById('splash-screen');
+      if (splash && !splash.dataset.dismissed) {
+        splash.dataset.dismissed = 'true';
+        splash.style.opacity = '0';
+        splash.style.transform = 'scale(1.05)';
+        setTimeout(function() { splash.remove(); }, 600);
+      }
+    }
+
+    // React マウント検知 or 最大2秒で必ず消す
+    setTimeout(dismissSplash, 2000);
+
     const observer = new MutationObserver(function() {
       const root = document.getElementById('root');
       if (root && root.children.length > 0) {
         observer.disconnect();
-        const splash = document.getElementById('splash-screen');
-        if (splash) {
-          splash.style.opacity = '0';
-          splash.style.transform = 'scale(1.05)';
-          setTimeout(function() { splash.remove(); }, 700);
-        }
+        dismissSplash();
       }
     });
     observer.observe(document.getElementById('root'), { childList: true });

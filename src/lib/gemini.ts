@@ -6,13 +6,13 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 
 const getDiningRule = (durationMinutes: number) => {
     if (durationMinutes <= 150) {
-        return `- **MIN 0, MAX 1 Restaurant AND MAX 1 Cafe**. (Total max 2 spots).\n  - **STRICT**: Distribute food spots evenly. NEVER consecutive restaurants.`;
+        return `- **Dining/Cafe limits**: MIN 0, MAX 2 total spots for food/drink.\n  - Of those MAX 2, there can be AT MOST 1 Restaurant and AT MOST 1 Cafe.\n  - STRICT: NEVER consecutive restaurants.`;
     } else if (durationMinutes <= 300) {
-        return `- **MIN 1, MAX 2 food/drink spots** in total.\n  - **MAX 1 Cafe**. (e.g., 1 Rest + 1 Cafe, OR 2 Rest + 0 Cafe).\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
+        return `- **Dining/Cafe limits**: MIN 1, MAX 2 total spots for food/drink.\n  - Of those spots, there can be AT MOST 1 Cafe.\n  - STRICT: NEVER consecutive restaurants.`;
     } else if (durationMinutes <= 450) {
-        return `- **MIN 2, MAX 3 food/drink spots** in total.\n  - **MAX 1 Cafe**.\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
+        return `- **Dining/Cafe limits**: MIN 2, MAX 3 total spots for food/drink.\n  - Of those spots, there can be AT MOST 1 Cafe.\n  - STRICT: NEVER consecutive restaurants.`;
     } else {
-        return `- **MIN 3, MAX 4 food/drink spots** in total.\n  - **MUST include 1-2 Cafes** (MIN 1, MAX 2).\n  - **STRICT**: Distribute dining spots evenly. NEVER consecutive restaurants.`;
+        return `- **Dining/Cafe limits**: MIN 3, MAX 4 total spots for food/drink.\n  - Of those spots, MUST include 1 or 2 Cafes.\n  - STRICT: NEVER consecutive restaurants.`;
     }
 };
 

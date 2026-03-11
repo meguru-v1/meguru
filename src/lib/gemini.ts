@@ -174,17 +174,21 @@ ${diningRule}
         return [];
     }
 
-    console.log("Gemini Raw Response:", text);
+    console.log("Gemini Raw Response (First 500 chars):", text.substring(0, 500));
 
     let jsonStr = text;
-    // Extract JSON array carefully avoiding trailing text
+    // Extract JSON array carefully: find first '[' and last ']'
     const firstBracket = jsonStr.indexOf('[');
     const lastBracket = jsonStr.lastIndexOf(']');
-    if (firstBracket !== -1 && lastBracket !== -1) {
+    
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
         jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
     } else {
-        jsonStr = jsonStr.replace("```json", "").replace("```", "").trim();
+        // Fallback: cleaning Markdown blocks if brackets are not found or messed up
+        jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
     }
+
+    console.log("Extracted JSON String (First 200 chars):", jsonStr.substring(0, 200));
 
     interface GeminiSpot {
         id: number;
@@ -208,8 +212,14 @@ ${diningRule}
     let coursesData: GeminiCourse[];
     try {
         coursesData = JSON.parse(jsonStr) as GeminiCourse[];
+        if (!Array.isArray(coursesData) || coursesData.length === 0) {
+            throw new Error("Parsed result is not a non-empty array");
+        }
+        console.log(`✅ Successfully parsed ${coursesData.length} courses.`);
     } catch (e) {
-        console.error("JSON Parse Error:", e, text);
+        console.error("CRITICAL: JSON Parse Error or Invalid Format.");
+        console.error("Error Detail:", e);
+        console.error("Problematic String:", jsonStr);
         return [];
     }
 
@@ -361,7 +371,19 @@ ${candidateList}
     if (!text) return null;
 
     try {
-        const data = JSON.parse(text);
+        console.log("Remix Raw Response (First 300 chars):", text.substring(0, 300));
+        
+        let jsonStr = text;
+        const firstBrace = jsonStr.indexOf('{');
+        const lastBrace = jsonStr.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+        } else {
+            jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+        }
+
+        const data = JSON.parse(jsonStr);
+        console.log("✅ Remix JSON parsed successfully.");
         const uniqueId = crypto.randomUUID();
         const hydratedSpots = data.spots.map((s: any) => {
             const original = candidates[s.id];

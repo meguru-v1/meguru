@@ -5,7 +5,8 @@ import TabBar from './components/TabBar';
 import GenerationScreen from './components/GenerationScreen';
 import { useFavorites } from './hooks/useFavorites';
 import { searchAreaCenter, searchNearbySpots, searchRouteSpots } from './lib/places';
-import { generateSmartCourses, remixCourse } from './lib/gemini';
+import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
+import type { WaitingScreenContent } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
 import { getCurrentWeather } from './lib/weather';
 import { getDistance } from 'geolib';
@@ -29,6 +30,7 @@ function App() {
     const [isRemixing, setIsRemixing] = useState(false);
     const [showGenScreen, setShowGenScreen] = useState(false);
     const [searchLocationName, setSearchLocationName] = useState('');
+    const [subAiContent, setSubAiContent] = useState<WaitingScreenContent | null>(null);
 
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
@@ -131,18 +133,26 @@ function App() {
                 const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
                 const weatherContext = await getCurrentWeather(midLat, midLon);
 
+                // メインAIとサブAIを並列で呼び出し
+                const mainPromise = generateSmartCourses(
+                    candidates,
+                    { lat: midLat, lon: midLon },
+                    duration,
+                    timeContext,
+                    weatherContext,
+                    mood,
+                    budget,
+                    groupSize
+                );
+
+                // サブAI: 待ち画面コンテンツを並列生成
+                generateWaitingScreenContent(query, weatherContext)
+                    .then(content => { if (content) setSubAiContent(content); })
+                    .catch(() => { /* フォールバックで対応 */ });
+
                 let generatedCourses: Course[] = [];
                 try {
-                    generatedCourses = await generateSmartCourses(
-                        candidates,
-                        { lat: midLat, lon: midLon },
-                        duration,
-                        timeContext,
-                        weatherContext,
-                        mood,
-                        budget,
-                        groupSize
-                    );
+                    generatedCourses = await mainPromise;
                 }
                 catch { /* fallback below */ }
 
@@ -215,18 +225,26 @@ function App() {
                 const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
                 const weatherContext = await getCurrentWeather(startGeo.lat, startGeo.lon);
 
+                // メインAIとサブAIを並列で呼び出し
+                const mainPromise = generateSmartCourses(
+                    candidates,
+                    { lat: startGeo.lat, lon: startGeo.lon },
+                    duration,
+                    timeContext,
+                    weatherContext,
+                    mood,
+                    budget,
+                    groupSize
+                );
+
+                // サブAI: 待ち画面コンテンツを並列生成
+                generateWaitingScreenContent(query, weatherContext)
+                    .then(content => { if (content) setSubAiContent(content); })
+                    .catch(() => { /* フォールバックで対応 */ });
+
                 let generatedCourses: Course[] = [];
                 try {
-                    generatedCourses = await generateSmartCourses(
-                        candidates,
-                        { lat: startGeo.lat, lon: startGeo.lon },
-                        duration,
-                        timeContext,
-                        weatherContext,
-                        mood,
-                        budget,
-                        groupSize
-                    );
+                    generatedCourses = await mainPromise;
                 }
                 catch { /* fallback below */ }
 
@@ -256,6 +274,7 @@ function App() {
         } finally {
             setLoading(false);
             setShowGenScreen(false);
+            setSubAiContent(null);
             setStatus('');
         }
     };
@@ -662,6 +681,7 @@ function App() {
                     locationName={searchLocationName}
                     onAnswer={(qIdx, answer) => { console.log(`Survey Q${qIdx}: ${answer}`); }}
                     onTransitionComplete={() => setShowGenScreen(false)}
+                    subAiContent={subAiContent}
                 />
             )}
 

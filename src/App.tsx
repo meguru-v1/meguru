@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import SearchInterface from './components/SearchInterface';
 import MapVisualization from './components/MapVisualization';
 import TabBar from './components/TabBar';
+import GenerationScreen from './components/GenerationScreen';
 import { useFavorites } from './hooks/useFavorites';
 import { searchAreaCenter, searchNearbySpots, searchRouteSpots } from './lib/places';
 import { generateSmartCourses, remixCourse } from './lib/gemini';
@@ -26,6 +27,8 @@ function App() {
     const [activeTab, setActiveTab] = useState<TabId>('search');
     const [searchCandidates, setSearchCandidates] = useState<Spot[]>([]);
     const [isRemixing, setIsRemixing] = useState(false);
+    const [showGenScreen, setShowGenScreen] = useState(false);
+    const [searchLocationName, setSearchLocationName] = useState('');
 
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
@@ -118,6 +121,8 @@ function App() {
                 if (allSpots.length < 3) throw new Error("ルート周辺に見どころとなるスポットがあまり見つかりませんでした。検索範囲や時間を大きくしてみてください。");
 
                 setStatus('AIが最適なルートコースを生成中...');
+                setShowGenScreen(true);
+                setSearchLocationName(query);
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
                 const candidates = shuffled.slice(0, 150);
                 setSearchCandidates(candidates);
@@ -200,6 +205,8 @@ function App() {
                 if (allSpots.length < 5) throw new Error("周辺に見どころとなるスポットがあまり見つかりませんでした。別の大きな駅やエリア名で試してみてください。");
 
                 setStatus('AIが最適なコースを生成中...');
+                setShowGenScreen(true);
+                setSearchLocationName(query);
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
                 const candidates = shuffled.slice(0, 150);
                 setSearchCandidates(candidates);
@@ -248,6 +255,7 @@ function App() {
             setError(err instanceof Error ? err.message : "検索中にエラーが発生しました。");
         } finally {
             setLoading(false);
+            setShowGenScreen(false);
             setStatus('');
         }
     };
@@ -646,6 +654,17 @@ function App() {
 
     return (
         <div className="relative w-full h-[100dvh] bg-white overflow-hidden flex flex-col">
+            {/* 生成待ち画面（全画面オーバーレイ）*/}
+            {showGenScreen && (
+                <GenerationScreen
+                    statusText={status}
+                    isFinished={!loading && !showGenScreen}
+                    locationName={searchLocationName}
+                    onAnswer={(qIdx, answer) => { console.log(`Survey Q${qIdx}: ${answer}`); }}
+                    onTransitionComplete={() => setShowGenScreen(false)}
+                />
+            )}
+
             <div className="flex-1 overflow-hidden">
                 {activeTab === 'search' && (
                     <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{searchView}</div>
@@ -660,7 +679,9 @@ function App() {
                     <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{favoritesView}</div>
                 )}
             </div>
-            <TabBar activeTab={activeTab} onTabChange={handleTabChange} coursesCount={courses.length} favoritesCount={favorites.length} />
+            {!showGenScreen && (
+                <TabBar activeTab={activeTab} onTabChange={handleTabChange} coursesCount={courses.length} favoritesCount={favorites.length} />
+            )}
         </div>
     );
 }

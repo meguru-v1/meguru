@@ -5,11 +5,13 @@
   <meta charset="UTF-8" />
   <link rel="icon" href="/meguru/favicon.ico" />
   <link rel="apple-touch-icon" href="/meguru/apple-touch-icon.png" />
+  <link rel="manifest" href="/meguru/manifest.json" />
+  <meta name="description" content="AIがあなた好みの散策コースを提案する旅行プランニングアプリ。周辺の隠れた名所やカフェを組み合わせた、あなただけの特別なよりみちを見つけましょう。" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta name="version" content="1.0.3" />
+  <meta name="version" content="1.0.4" />
   <script>
     // 1. Service Worker の解除
     if ('serviceWorker' in navigator) {
@@ -28,7 +30,7 @@
     }
 
     // 3. バージョンチェックによる強制リロード
-    const LATEST_V = '1.0.3';
+    const LATEST_V = '1.0.4';
     if (localStorage.getItem('meguru_app_version') !== LATEST_V) {
       localStorage.setItem('meguru_app_version', LATEST_V);
       // クエリパラメータを付けて強制的にサーバーから取得させる
@@ -49,6 +51,55 @@
 </head>
 
 <body>
+  <!-- スプラッシュスクリーン（React マウント前に表示） -->
+  <div id="splash-screen" style="
+    position: fixed; inset: 0; z-index: 99999;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  ">
+    <div style="text-align: center;">
+      <div style="
+        font-family: 'Playfair Display', serif;
+        font-size: 36px; font-weight: 700; color: white;
+        letter-spacing: 0.1em; margin-bottom: 8px;
+      ">Meguru</div>
+      <div style="
+        font-family: 'Noto Sans JP', sans-serif;
+        font-size: 11px; color: rgba(255,255,255,0.5);
+        letter-spacing: 0.15em; font-weight: 500;
+      ">あなたのための、特別なよりみち</div>
+      <div style="
+        margin-top: 32px; width: 32px; height: 32px;
+        border: 2px solid rgba(255,255,255,0.15);
+        border-top-color: #f59e0b;
+        border-radius: 50%;
+        animation: splash-spin 0.8s linear infinite;
+        margin-left: auto; margin-right: auto;
+      "></div>
+    </div>
+  </div>
+  <style>
+    @keyframes splash-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  <script>
+    // React マウント後にスプラッシュをフェードアウト
+    const observer = new MutationObserver(function() {
+      const root = document.getElementById('root');
+      if (root && root.children.length > 0) {
+        observer.disconnect();
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+          splash.style.opacity = '0';
+          splash.style.transform = 'scale(1.05)';
+          setTimeout(function() { splash.remove(); }, 700);
+        }
+      }
+    });
+    observer.observe(document.getElementById('root'), { childList: true });
+  </script>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

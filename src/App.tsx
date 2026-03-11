@@ -496,84 +496,141 @@ function App() {
                         )}
                     </div>
 
-                    {/* タイムライン */}
-                    <div className="relative pl-4 space-y-4 before:content-[''] before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                        {selectedCourse.spots.map((spot, index) => (
-                            <div key={spot.id} className="relative pl-6 group">
-                                <div className="absolute left-0 top-1.5 w-3.5 h-3.5 bg-slate-900 rounded-full border-2 border-white shadow-sm group-hover:scale-125 transition-transform z-10"></div>
+                    {/* 雑誌風タイムライン */}
+                    <div className="space-y-6">
+                        {selectedCourse.spots.map((spot, index) => {
+                            const photoRef = spot.photos?.[0];
+                            const photoUrl = photoRef
+                                ? `https://places.googleapis.com/v1/${photoRef}/media?maxWidthPx=600&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+                                : null;
+                            const isFirst = index === 0;
+                            const isLast = index === selectedCourse.spots.length - 1;
+                            const label = isFirst ? 'START' : isLast ? 'GOAL' : `SPOT ${index + 1}`;
 
-                                <div className="p-3 rounded-xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 transition-all">
-                                    <div className="flex justify-between items-start">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                                            {index === 0 ? 'START' : index === selectedCourse.spots.length - 1 ? 'GOAL' : `SPOT ${index + 1}`}
-                                        </span>
-                                        <span className="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded ml-2 shrink-0">{spot.category}</span>
-                                    </div>
-
-                                    <h4 className="font-bold text-base text-slate-800 mb-1 group-hover:text-amber-600 transition-colors">{spot.name}</h4>
-
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="flex items-center text-[10px] text-amber-500 font-bold">
-                                            <Star size={10} className="fill-current mr-0.5" /> {spot.rating || '-'}
-                                        </span>
-                                        <span className="text-[10px] text-slate-400">({spot.user_ratings_total || 0})</span>
-                                    </div>
-
-                                    {spot.tags.photo && (
-                                        <div className="w-full h-28 mb-3 rounded-lg overflow-hidden bg-slate-100">
-                                            <img src={spot.tags.photo} alt={spot.name} className="w-full h-full object-cover" />
-                                        </div>
-                                    )}
-
-                                    <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2">
-                                        {(spot.travel_time_minutes ?? 0) > 0 && (
-                                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold border-b border-slate-100 pb-2 mb-2">
+                            return (
+                                <div key={spot.id} className="animate-slide-up" style={{ animationDelay: `${index * 0.08}s`, animationFillMode: 'backwards' }}>
+                                    {/* 移動情報（2番目以降に表示）*/}
+                                    {(spot.travel_time_minutes ?? 0) > 0 && (
+                                        <div className="flex items-center gap-2 py-2 px-3 mb-2">
+                                            <div className="flex-1 h-px bg-slate-200" />
+                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400">
                                                 {selectedCourse.travelMode === 'car' ? <Car size={12} /> :
                                                     selectedCourse.travelMode === 'transit' ? <Train size={12} /> :
                                                         selectedCourse.travelMode === 'bicycle' ? <Bike size={12} /> :
                                                             <Footprints size={12} />}
-                                                前のスポットから{selectedCourse.travelMode === 'car' ? '車' : selectedCourse.travelMode === 'transit' ? '公共交通' : selectedCourse.travelMode === 'bicycle' ? '自転車' : '徒歩'}約{spot.travel_time_minutes}分
+                                                {selectedCourse.travelMode === 'car' ? '車' : selectedCourse.travelMode === 'transit' ? '公共交通' : selectedCourse.travelMode === 'bicycle' ? '自転車' : '徒歩'}約{spot.travel_time_minutes}分
                                             </div>
-                                        )}
-                                        <p className="mb-2">{spot.aiDescription || spot.tags.description || "詳細情報なし"}</p>
-                                        {spot.must_see && (
-                                            <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-100">
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 mb-0.5">
-                                                    <Star size={10} /> 必見ポイント:
-                                                </span>
-                                                <span className="text-[10px] text-amber-900">{spot.must_see}</span>
-                                            </div>
-                                        )}
-                                        {spot.pro_tip && (
-                                            <div className="bg-blue-50 p-2.5 rounded-lg border border-blue-100">
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 mb-0.5">
-                                                    <Sparkles size={10} /> 旅のヒント:
-                                                </span>
-                                                <span className="text-[10px] text-blue-900">{spot.pro_tip}</span>
-                                            </div>
-                                        )}
-                                        {spot.trivia && (
-                                            <div className="bg-fuchsia-50 p-2.5 rounded-lg border border-fuchsia-100">
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-fuchsia-600 mb-0.5">
-                                                    <Lightbulb size={10} /> 賢者の小ネタ:
-                                                </span>
-                                                <span className="text-[10px] text-fuchsia-900">{spot.trivia}</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {spot.tags.opening_hours && (
-                                        <div className="mt-2 text-[10px] text-green-600 font-medium">{spot.tags.opening_hours}</div>
+                                            <div className="flex-1 h-px bg-slate-200" />
+                                        </div>
                                     )}
 
-                                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`}
-                                        target="_blank" rel="noopener noreferrer"
-                                        className="flex items-center justify-center gap-1.5 w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold py-2.5 rounded-lg transition-all shadow-sm hover:shadow active:scale-95 mt-3">
-                                        <span className="text-blue-500 font-extrabold">G</span> Googleマップで見る
-                                    </a>
+                                    {/* 雑誌風カード */}
+                                    <div className="rounded-2xl overflow-hidden border border-slate-100 bg-white shadow-sm hover:shadow-lg transition-all duration-300 group">
+                                        {/* ヒーロー写真 */}
+                                        {photoUrl && (
+                                            <div className="relative w-full h-44 overflow-hidden bg-slate-100">
+                                                <img
+                                                    src={photoUrl}
+                                                    alt={spot.name}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                                                    loading="lazy"
+                                                />
+                                                {/* グラデーションオーバーレイ */}
+                                                <div className="absolute inset-0" style={{
+                                                    background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.5) 100%)'
+                                                }} />
+                                                {/* ラベルバッジ */}
+                                                <div className="absolute top-3 left-3">
+                                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold tracking-wider ${isFirst ? 'bg-amber-400 text-white' : isLast ? 'bg-slate-900 text-white' : 'bg-white/90 text-slate-700'}`}>
+                                                        {label}
+                                                    </span>
+                                                </div>
+                                                {/* カテゴリバッジ */}
+                                                <div className="absolute top-3 right-3">
+                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/80 backdrop-blur-sm text-slate-600">{spot.category}</span>
+                                                </div>
+                                                {/* 写真上のスポット名 */}
+                                                <div className="absolute bottom-3 left-4 right-4">
+                                                    <h4 className="text-lg font-extrabold text-white leading-tight drop-shadow-md">{spot.name}</h4>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="flex items-center text-[11px] text-amber-300 font-bold">
+                                                            <Star size={11} className="fill-current mr-0.5" /> {spot.rating || '-'}
+                                                        </span>
+                                                        <span className="text-[10px] text-white/60">({spot.user_ratings_total || 0}件)</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* テキストコンテンツ */}
+                                        <div className="p-4">
+                                            {/* 写真がない場合のヘッダー */}
+                                            {!photoUrl && (
+                                                <div className="mb-3">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider ${isFirst ? 'bg-amber-100 text-amber-700' : isLast ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                                            {label}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold text-slate-300 bg-slate-50 px-2 py-0.5 rounded-full">{spot.category}</span>
+                                                    </div>
+                                                    <h4 className="font-extrabold text-lg text-slate-800 mt-1">{spot.name}</h4>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="flex items-center text-[11px] text-amber-500 font-bold">
+                                                            <Star size={11} className="fill-current mr-0.5" /> {spot.rating || '-'}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400">({spot.user_ratings_total || 0}件)</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* AI説明文 */}
+                                            <p className="text-[13px] text-slate-600 leading-relaxed mb-3">
+                                                {spot.aiDescription || spot.tags.description || "詳細情報なし"}
+                                            </p>
+
+                                            {/* 情報カード群 */}
+                                            <div className="space-y-2">
+                                                {spot.must_see && (
+                                                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
+                                                        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 mb-0.5">
+                                                            <Star size={10} /> 必見ポイント
+                                                        </span>
+                                                        <span className="text-[11px] text-amber-900 leading-relaxed">{spot.must_see}</span>
+                                                    </div>
+                                                )}
+                                                {spot.pro_tip && (
+                                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                                        <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 mb-0.5">
+                                                            <Sparkles size={10} /> 旅のヒント
+                                                        </span>
+                                                        <span className="text-[11px] text-blue-900 leading-relaxed">{spot.pro_tip}</span>
+                                                    </div>
+                                                )}
+                                                {spot.trivia && (
+                                                    <div className="bg-fuchsia-50 p-3 rounded-xl border border-fuchsia-100">
+                                                        <span className="flex items-center gap-1 text-[10px] font-bold text-fuchsia-600 mb-0.5">
+                                                            <Lightbulb size={10} /> 賢者の小ネタ
+                                                        </span>
+                                                        <span className="text-[11px] text-fuchsia-900 leading-relaxed">{spot.trivia}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {spot.tags.opening_hours && (
+                                                <div className="mt-2 text-[10px] text-green-600 font-medium">{spot.tags.opening_hours}</div>
+                                            )}
+
+                                            {/* Googleマップボタン */}
+                                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`}
+                                                target="_blank" rel="noopener noreferrer"
+                                                className="flex items-center justify-center gap-1.5 w-full bg-slate-50 hover:bg-slate-100 text-slate-600 text-[11px] font-bold py-2.5 rounded-xl transition-all active:scale-95 mt-3 border border-slate-100">
+                                                <span className="text-blue-500 font-extrabold">G</span> Googleマップで見る
+                                            </a>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {/* Googleマップ 全ルート一括転送ボタン */}

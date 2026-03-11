@@ -7,7 +7,6 @@ import SpotHeroImage from './components/SpotHeroImage';
 import { useFavorites } from './hooks/useFavorites';
 import { searchAreaCenter, searchNearbySpots, searchRouteSpots } from './lib/places';
 import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
-import { fetchWikipediaImage } from './lib/wikipedia';
 import type { WaitingScreenContent } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
 import { getCurrentWeather } from './lib/weather';
@@ -132,21 +131,13 @@ function App() {
                 const candidates = shuffled.slice(0, 150);
                 setSearchCandidates(candidates);
 
-                // --- 待ち画面（GenerationScreen）用画像の非同期取得 ---
-                setGenerationImages([]); // リセット
-                Promise.all(
-                    candidates.slice(0, 10).map(c => fetchWikipediaImage(c.name, 1600))
-                ).then(wikiUrls => {
-                    const validWikiUrls = wikiUrls.filter(Boolean) as string[];
-                    // 不足分をGoogle Placesの写真で補う
-                    const googleUrls = candidates
-                        .map(c => c.photos?.[0])
-                        .filter(Boolean)
-                        .map(ref => `https://places.googleapis.com/v1/${ref}/media?maxWidthPx=1600&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
-                    
-                    const combined = [...validWikiUrls, ...googleUrls].slice(0, 10);
-                    setGenerationImages(combined);
-                });
+                // --- 待ち画面（GenerationScreen）用画像の取得 ---
+                const googleUrls = candidates
+                    .map(c => c.photos?.[0])
+                    .filter(Boolean)
+                    .map(ref => `https://places.googleapis.com/v1/${ref}/media?maxWidthPx=1600&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
+                
+                setGenerationImages(googleUrls.slice(0, 10));
 
                 const now = new Date();
                 const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;

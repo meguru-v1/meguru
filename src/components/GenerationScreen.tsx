@@ -63,13 +63,6 @@ const FALLBACK_IMAGES = [
     "https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80",
 ];
 
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
-
-function buildPhotoUrl(photoReference: string): string {
-    // Google Places Photos (New API) Media URL (1600px for full screen high quality)
-    return `https://places.googleapis.com/v1/${photoReference}/media?maxWidthPx=1600&key=${API_KEY}`;
-}
-
 // ===== Props =====
 interface GenerationScreenProps {
     statusText: string;
@@ -78,7 +71,7 @@ interface GenerationScreenProps {
     locationName?: string;
     onTransitionComplete?: () => void;
     subAiContent?: WaitingScreenContent | null;
-    spotPhotos?: string[]; // photo_reference の配列
+    imageUrls?: string[]; // フルURLの配列
 }
 
 export default function GenerationScreen({
@@ -88,17 +81,17 @@ export default function GenerationScreen({
     locationName = "この街",
     onTransitionComplete,
     subAiContent,
-    spotPhotos
+    imageUrls
 }: GenerationScreenProps) {
-    // スポット写真からスライドショー画像を生成
+    // 取得済みのURL群からスライドショー画像を生成
     const slideshowImages = React.useMemo(() => {
-        if (spotPhotos && spotPhotos.length > 0) {
+        if (imageUrls && imageUrls.length > 0) {
             // シャッフルして最大8枚選ぶ
-            const shuffled = [...spotPhotos].sort(() => Math.random() - 0.5);
-            return shuffled.slice(0, 8).map(ref => buildPhotoUrl(ref));
+            const shuffled = [...imageUrls].sort(() => Math.random() - 0.5);
+            return shuffled.slice(0, 8);
         }
         return FALLBACK_IMAGES;
-    }, [spotPhotos]);
+    }, [imageUrls]);
     // サブAIデータがあればそちらを使い、なければフォールバック
     const statusMessages = subAiContent?.status_texts?.length ? subAiContent.status_texts : FALLBACK_STATUS;
     const forecastCopies = subAiContent?.forecast_copies?.length ? subAiContent.forecast_copies : FALLBACK_FORECASTS;

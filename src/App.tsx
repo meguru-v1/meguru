@@ -3,9 +3,11 @@ import SearchInterface from './components/SearchInterface';
 import MapVisualization from './components/MapVisualization';
 import TabBar from './components/TabBar';
 import GenerationScreen from './components/GenerationScreen';
+import SpotHeroImage from './components/SpotHeroImage';
 import { useFavorites } from './hooks/useFavorites';
 import { searchAreaCenter, searchNearbySpots, searchRouteSpots } from './lib/places';
 import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
+import { fetchWikipediaImage } from './lib/wikipedia';
 import type { WaitingScreenContent } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
 import { getCurrentWeather } from './lib/weather';
@@ -31,6 +33,7 @@ function App() {
     const [showGenScreen, setShowGenScreen] = useState(false);
     const [searchLocationName, setSearchLocationName] = useState('');
     const [subAiContent, setSubAiContent] = useState<WaitingScreenContent | null>(null);
+    const [generationImages, setGenerationImages] = useState<string[]>([]);
 
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
@@ -128,6 +131,22 @@ function App() {
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
                 const candidates = shuffled.slice(0, 150);
                 setSearchCandidates(candidates);
+
+                // --- 待ち画面（GenerationScreen）用画像の非同期取得 ---
+                setGenerationImages([]); // リセット
+                Promise.all(
+                    candidates.slice(0, 10).map(c => fetchWikipediaImage(c.name, 1600))
+                ).then(wikiUrls => {
+                    const validWikiUrls = wikiUrls.filter(Boolean) as string[];
+                    // 不足分をGoogle Placesの写真で補う
+                    const googleUrls = candidates
+                        .map(c => c.photos?.[0])
+                        .filter(Boolean)
+                        .map(ref => `https://places.googleapis.com/v1/${ref}/media?maxWidthPx=1600&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
+                    
+                    const combined = [...validWikiUrls, ...googleUrls].slice(0, 10);
+                    setGenerationImages(combined);
+                });
 
                 const now = new Date();
                 const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
@@ -499,10 +518,6 @@ function App() {
                     {/* 雑誌風タイムライン */}
                     <div className="space-y-6">
                         {selectedCourse.spots.map((spot, index) => {
-                            const photoRef = spot.photos?.[0];
-                            const photoUrl = photoRef
-                                ? `https://places.googleapis.com/v1/${photoRef}/media?maxWidthPx=1200&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
-                                : null;
                             const isFirst = index === 0;
                             const isLast = index === selectedCourse.spots.length - 1;
                             const label = isFirst ? 'START' : isLast ? 'GOAL' : `SPOT ${index + 1}`;
@@ -526,63 +541,19 @@ function App() {
 
                                     {/* 雑誌風カード */}
                                     <div className="rounded-2xl overflow-hidden border border-slate-100 bg-white shadow-sm hover:shadow-lg transition-all duration-300 group">
-                                        {/* ヒーロー写真 */}
-                                        {photoUrl && (
-                                            <div className="relative w-full h-44 overflow-hidden bg-slate-100">
-                                                <img
-                                                    src={photoUrl}
-                                                    alt={spot.name}
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                                                    loading="lazy"
-                                                />
-                                                {/* グラデーションオーバーレイ */}
-                                                <div className="absolute inset-0" style={{
-                                                    background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.5) 100%)'
-                                                }} />
-                                                {/* ラベルバッジ */}
-                                                <div className="absolute top-3 left-3">
-                                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold tracking-wider ${isFirst ? 'bg-amber-400 text-white' : isLast ? 'bg-slate-900 text-white' : 'bg-white/90 text-slate-700'}`}>
-                                                        {label}
-                                                    </span>
-                                                </div>
-                                                {/* カテゴリバッジ */}
-                                                <div className="absolute top-3 right-3">
-                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/80 backdrop-blur-sm text-slate-600">{spot.category}</span>
-                                                </div>
-                                                {/* 写真上のスポット名 */}
-                                                <div className="absolute bottom-3 left-4 right-4">
-                                                    <h4 className="text-lg font-extrabold text-white leading-tight drop-shadow-md">{spot.name}</h4>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <span className="flex items-center text-[11px] text-amber-300 font-bold">
-                                                            <Star size={11} className="fill-current mr-0.5" /> {spot.rating || '-'}
-                                                        </span>
-                                                        <span className="text-[10px] text-white/60">({spot.user_ratings_total || 0}件)</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                                        <SpotHeroImage
+                                            spotName={spot.name}
+                                            googlePhotoRef={spot.photos?.[0]}
+                                            label={label}
+                                            category={spot.category}
+                                            rating={spot.rating}
+                                            userRatings={spot.user_ratings_total}
+                                            isFirst={isFirst}
+                                            isLast={isLast}
+                                        />
 
                                         {/* テキストコンテンツ */}
-                                        <div className="p-4">
-                                            {/* 写真がない場合のヘッダー */}
-                                            {!photoUrl && (
-                                                <div className="mb-3">
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider ${isFirst ? 'bg-amber-100 text-amber-700' : isLast ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                                            {label}
-                                                        </span>
-                                                        <span className="text-[9px] font-bold text-slate-300 bg-slate-50 px-2 py-0.5 rounded-full">{spot.category}</span>
-                                                    </div>
-                                                    <h4 className="font-extrabold text-lg text-slate-800 mt-1">{spot.name}</h4>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <span className="flex items-center text-[11px] text-amber-500 font-bold">
-                                                            <Star size={11} className="fill-current mr-0.5" /> {spot.rating || '-'}
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-400">({spot.user_ratings_total || 0}件)</span>
-                                                    </div>
-                                                </div>
-                                            )}
-
+                                        <div className="p-4 pt-2">
                                             {/* AI説明文 */}
                                             <p className="text-[13px] text-slate-600 leading-relaxed mb-3">
                                                 {spot.aiDescription || spot.tags.description || "詳細情報なし"}
@@ -734,12 +705,11 @@ function App() {
             {showGenScreen && (
                 <GenerationScreen
                     statusText={status}
-                    isFinished={!loading && !showGenScreen}
+                    isFinished={courses.length > 0}
                     locationName={searchLocationName}
-                    onAnswer={(qIdx, answer) => { console.log(`Survey Q${qIdx}: ${answer}`); }}
-                    onTransitionComplete={() => setShowGenScreen(false)}
                     subAiContent={subAiContent}
-                    spotPhotos={searchCandidates.flatMap(s => s.photos || []).filter(Boolean)}
+                    imageUrls={generationImages}
+                    onTransitionComplete={() => setShowGenScreen(false)}
                 />
             )}
 

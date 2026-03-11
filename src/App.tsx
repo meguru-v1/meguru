@@ -544,6 +544,8 @@ function App() {
                                         <SpotHeroImage
                                             spotName={spot.name}
                                             googlePhotoRef={spot.photos?.[0]}
+                                            lat={spot.lat}
+                                            lng={spot.lon}
                                             label={label}
                                             category={spot.category}
                                             rating={spot.rating}

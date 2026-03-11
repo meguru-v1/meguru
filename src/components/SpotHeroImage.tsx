@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Star } from 'lucide-react';
-import { fetchWikipediaImage } from '../lib/wikipedia';
+import { Star, Camera, Building } from 'lucide-react';
 
 interface SpotHeroImageProps {
     spotName: string;
     googlePhotoRef?: string;
+    lat: number;
+    lng: number;
     label: string;
     category: string;
     rating?: number;
@@ -16,6 +17,8 @@ interface SpotHeroImageProps {
 export default function SpotHeroImage({
     spotName,
     googlePhotoRef,
+    lat,
+    lng,
     label,
     category,
     rating,
@@ -23,67 +26,28 @@ export default function SpotHeroImage({
     isFirst,
     isLast
 }: SpotHeroImageProps) {
+    // googlePhotoRefがない場合は最初から外観モードにする
+    const [viewMode, setViewMode] = useState<'photo' | 'exterior'>(googlePhotoRef ? 'photo' : 'exterior');
     const [imgUrl, setImgUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        let isMounted = true;
-        
-        async function loadPhoto() {
-            setIsLoading(true);
-            
-            // 1. Wikipedia から高画質・代表的な写真を取得（最も関連性が高く品質が安定している）
-            const wikiUrl = await fetchWikipediaImage(spotName, 1200);
-            
-            if (!isMounted) return;
-
-            if (wikiUrl) {
-                setImgUrl(wikiUrl);
-            } else if (googlePhotoRef) {
-                // 2. Wikipedia になければ Google Places Photos にフォールバック
-                setImgUrl(`https://places.googleapis.com/v1/${googlePhotoRef}/media?maxWidthPx=1200&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
-            } else {
-                // 3. どちらもなければ null
-                setImgUrl(null);
-            }
-            
-            setIsLoading(false);
+        setIsLoading(true);
+        if (viewMode === 'photo' && googlePhotoRef) {
+            setImgUrl(`https://places.googleapis.com/v1/${googlePhotoRef}/media?maxWidthPx=1200&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
+        } else {
+            // 外観モード（ストリートビュー API）
+            setImgUrl(`https://maps.googleapis.com/maps/api/streetview?size=1200x800&location=${lat},${lng}&fov=90&heading=235&pitch=10&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
         }
-
-        loadPhoto();
-
-        return () => {
-            isMounted = false;
-        };
-    }, [spotName, googlePhotoRef]);
-
-    if (!imgUrl && !isLoading) {
-        // 画像がない場合の代替ヘッダー
-        return (
-            <div className="mb-3 px-4 pt-4">
-                <div className="flex items-center justify-between mb-1">
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider ${isFirst ? 'bg-amber-100 text-amber-700' : isLast ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                        {label}
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-300 bg-slate-50 px-2 py-0.5 rounded-full">{category}</span>
-                </div>
-                <h4 className="font-extrabold text-lg text-slate-800 mt-1">{spotName}</h4>
-                <div className="flex items-center gap-2 mt-1">
-                    <span className="flex items-center text-[11px] text-amber-500 font-bold">
-                        <Star size={11} className="fill-current mr-0.5" /> {rating || '-'}
-                    </span>
-                    <span className="text-[10px] text-slate-400">({userRatings || 0}件)</span>
-                </div>
-            </div>
-        );
-    }
+    }, [viewMode, googlePhotoRef, lat, lng]);
 
     return (
         <div className="relative w-full h-44 overflow-hidden bg-slate-100">
             {imgUrl && (
                 <img
+                    key={imgUrl}
                     src={imgUrl}
-                    alt={spotName}
+                    alt={viewMode === 'exterior' ? `${spotName}の外観` : spotName}
                     className={`w-full h-full object-cover transition-all duration-700 ${isLoading ? 'opacity-0 scale-105' : 'opacity-100 group-hover:scale-105'}`}
                     loading="lazy"
                     onLoad={() => setIsLoading(false)}
@@ -103,19 +67,35 @@ export default function SpotHeroImage({
             }} />
             
             {/* ラベルバッジ */}
-            <div className="absolute top-3 left-3">
+            <div className="absolute top-3 left-3 flex gap-2">
                 <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold tracking-wider shadow-sm ${isFirst ? 'bg-amber-400 text-white' : isLast ? 'bg-slate-900 text-white' : 'bg-white/90 text-slate-700'}`}>
                     {label}
                 </span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/80 backdrop-blur-sm shadow-sm text-slate-600">
+                    {category}
+                </span>
             </div>
             
-            {/* カテゴリバッジ */}
-            <div className="absolute top-3 right-3">
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/80 backdrop-blur-sm shadow-sm text-slate-600">{category}</span>
+            {/* モード切替トグル */}
+            <div className="absolute top-2 right-2 flex bg-black/40 backdrop-blur-md rounded-lg p-0.5 z-20">
+                {googlePhotoRef && (
+                    <button
+                        onClick={(e) => { e.preventDefault(); setViewMode('photo'); }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${viewMode === 'photo' ? 'bg-white text-slate-800 shadow-sm' : 'text-white/70 hover:text-white'}`}
+                    >
+                        <Camera size={12} /> 写真
+                    </button>
+                )}
+                <button
+                    onClick={(e) => { e.preventDefault(); setViewMode('exterior'); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${viewMode === 'exterior' ? 'bg-white text-slate-800 shadow-sm' : 'text-white/70 hover:text-white'}`}
+                >
+                    <Building size={12} /> 外観
+                </button>
             </div>
             
             {/* 写真上のスポット名 */}
-            <div className="absolute bottom-3 left-4 right-4 z-10">
+            <div className="absolute bottom-3 left-4 right-4 z-10 pointer-events-none">
                 <h4 className="text-lg font-extrabold text-white leading-tight drop-shadow-md">{spotName}</h4>
                 <div className="flex items-center gap-2 mt-1 drop-shadow">
                     <span className="flex items-center text-[11px] text-amber-300 font-bold">

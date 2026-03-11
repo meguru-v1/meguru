@@ -66,8 +66,8 @@ const FALLBACK_IMAGES = [
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
 
 function buildPhotoUrl(photoReference: string): string {
-    // Google Places Photos (New API) Media URL
-    return `https://places.googleapis.com/v1/${photoReference}/media?maxWidthPx=800&key=${API_KEY}`;
+    // Google Places Photos (New API) Media URL (1600px for full screen high quality)
+    return `https://places.googleapis.com/v1/${photoReference}/media?maxWidthPx=1600&key=${API_KEY}`;
 }
 
 // ===== Props =====

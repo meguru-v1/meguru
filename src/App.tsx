@@ -501,7 +501,7 @@ function App() {
                         {selectedCourse.spots.map((spot, index) => {
                             const photoRef = spot.photos?.[0];
                             const photoUrl = photoRef
-                                ? `https://places.googleapis.com/v1/${photoRef}/media?maxWidthPx=600&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
+                                ? `https://places.googleapis.com/v1/${photoRef}/media?maxWidthPx=1200&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
                                 : null;
                             const isFirst = index === 0;
                             const isLast = index === selectedCourse.spots.length - 1;

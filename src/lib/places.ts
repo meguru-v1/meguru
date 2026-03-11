@@ -81,7 +81,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             headers: {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress',
+                'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos',
             },
             body: JSON.stringify(data),
         });

@@ -4,6 +4,10 @@ import type { Spot, Course } from '../types';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
+// 共通モデルリスト（実在する安定したモデル）
+const MODELS = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"];
+const MODELS_LITE = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
+
 const getDiningRule = (durationMinutes: number) => {
     if (durationMinutes <= 150) {
         return `- **Dining/Cafe limits**: MIN 0, MAX 2 total spots for food/drink.\n  - Of those MAX 2, there can be AT MOST 1 Restaurant and AT MOST 1 Cafe.\n  - STRICT: NEVER consecutive restaurants.`;
@@ -16,37 +20,7 @@ const getDiningRule = (durationMinutes: number) => {
     }
 };
 
-// --- Rescue Logic for translated keys ---
-const rescuedKeysMap: Record<string, string> = {
-    'タイトル': 'title', 'テーマ': 'theme', '説明': 'description', '概要': 'description',
-    'スポット': 'spots', 'スポットリスト': 'spots', '点': 'spots',
-    'id': 'id', 'ＩＤ': 'id',
-    '滞在時間': 'stayTime', '分数': 'stayTime',
-    '移動時間': 'travel_time_minutes', '徒歩': 'travel_time_minutes',
-    'おすすめ理由': 'recommendation_reason', 'おすすめ': 'recommendation_reason',
-    '必見': 'must_see', '見どころ': 'must_see', '必見ポイント': 'must_see',
-    'ヒント': 'pro_tip', 'プロのヒント': 'pro_tip', 'コツ': 'pro_tip',
-    '豆知識': 'trivia', 'トリビア': 'trivia', '歴史': 'trivia'
-};
-
-const rescueObject = (obj: any): any => {
-    if (Array.isArray(obj)) return obj.map(rescueObject);
-    if (obj !== null && typeof obj === 'object') {
-        const newObj: any = {};
-        for (const key of Object.keys(obj)) {
-            let mappedKey = key;
-            if (rescuedKeysMap[key]) {
-                mappedKey = rescuedKeysMap[key];
-            }
-            newObj[mappedKey] = rescueObject(obj[key]);
-        }
-        return newObj;
-    }
-    return obj;
-};
-
 export const generateSmartCourses = async (
-
     candidates: Spot[],
     center: { lat: number; lon: number },
     durationMinutes: number,
@@ -56,8 +30,6 @@ export const generateSmartCourses = async (
     budget: string = "不明",
     groupSize: string = "不明"
 ): Promise<Course[]> => {
-    const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
-
     const candidateList = candidates.map((s, i) =>
         `${i}: ${s.name} (${s.category}, ★${s.rating || '-'}, ※${s.estimatedStayTime || 30}分)`
     ).join('\n');
@@ -129,38 +101,54 @@ ${diningRule}
 * You MUST adapt your tone and course titles to match this context (e.g., if it's evening, focus on dinner, night views, or evening walks).
 
 **CRITICAL LANGUAGE REQUIREMENT:**
-- ALL generated text VALUES inside the JSON (theme, titles, descriptions, must_see, pro_tip, trivia, etc.) MUST be strictly in Japanese (日本語). DO NOT USE ENGLISH for values.
-- CRITICAL: DO NOT translate the JSON keys. Keep JSON keys exactly as English (e.g. "id", "title", "description", "spots", "must_see", etc).
+- ALL generated text VALUES inside the JSON MUST be strictly in Japanese (日本語). DO NOT USE ENGLISH.
+- CRITICAL: DO NOT translate the JSON keys. Keep keys like "id", "title", "description", "spots", "must_see" exactly as English.
 
-**MISSION CONSTRAINTS:**
-- **Dining Rules**: ${diningRule}
-- **Target Spot Count**: Approximately ${targetSpots} spots per course.
-- **Tone**: Natural, Polite (Desu/Masu), magazine-like.
-- **ID Matching**: Use exact integer IDs from the provided list.
+**NEGATIVE CONSTRAINTS (MUST FOLLOW):**
+- **NO RAW CODE / FUNCTIONS**: Write completely natural Japanese.
+- **NO DUPLICATE SPOTS**: A spot used in Course 1 CANNOT be used in Course 2, 3, 4, or 5.
+- **SPOT COUNT**: Each course should have approximately **${targetSpots} spots** to fill ${durationMinutes} minutes. NEVER make a course shorter than requested.
 
-**JSON SCHEMA (FOLLOW THIS EXACTLY):**
+**IMPORTANT**: Dig deep into your knowledge for unique trivia.
+
+**CRITICAL RULES:**
+1. **Output MUST be valid JSON**.
+2. **LANGUAGE**: Natural, Polite Japanese (Desu/Masu tone).
+3. **NAMING**: Create highly poetic, stylish, and magazine-like titles in Japanese for 'title'. Avoid generic names. (e.g. "月明かりに染まる古都の夜", "路地裏に隠れた純喫茶を巡る午睡")
+4. **ID MATCHING**: Use the exact integer IDs provided (0, 1, 2...).
+5. **DESCRIPTIONS (The Hook)**: Focus on Story, Legend, Atmosphere, Secret Tips.
+6. **RICHER DETAILS (Required)**:
+   - **stayTime**: Use the ※推定分数 shown next to each spot as a baseline. You may adjust ±10 min based on the spot's significance, but NEVER use the same stayTime for all spots.
+   - **travel_time_minutes**: Estimate walking time from previous spot.
+   - **must_see**: ONE specific thing to look for/do.
+   - **pro_tip**: A savvy traveler tip.
+   - **trivia**: A fascinating, lesser-known fact, history, or trivia about the spot (2-3 lines in Japanese).
+
+**JSON SCHEMA:**
 [
-  {
-    "title": "Poetic Japanese Title",
-    "theme": "Assigned Theme",
-    "description": "Japanese Description",
-    "spots": [
-      {
-        "id": 0,
-        "stayTime": 45,
-        "travel_time_minutes": 10,
-        "recommendation_reason": "Reason in Japanese",
-        "must_see": "Highlight in Japanese",
-        "pro_tip": "Tip in Japanese",
-        "trivia": "Trivia in Japanese (2-3 lines)"
-      }
-    ]
-  }
+    {
+        "id": "theme_id_1",
+        "title": "Title including Theme Name",
+        "theme": "The assigned theme string",
+        "description": "Course Description (Japanese)",
+        "totalTime": ${durationMinutes},
+        "spots": [
+            {
+                "id": 12,
+                "stayTime": 60,
+                "travel_time_minutes": 10,
+                "recommendation_reason": "Specific reason...",
+                "must_see": "Specific highlight...",
+                "pro_tip": "Specific tip...",
+                "trivia": "Fascinating trivia..."
+            }
+        ]
+    }
 ]
-`;
-
+    `;
     let text: string | undefined;
     console.log("Attempting Gemini generation...");
+    console.log("API Key present:", !!API_KEY, "Key prefix:", API_KEY ? API_KEY.substring(0, 10) + '...' : 'MISSING');
 
     let lastError: unknown;
     for (const modelName of MODELS) {
@@ -168,83 +156,117 @@ ${diningRule}
             console.log(`Trying model: ${modelName}...`);
             const model = genAI.getGenerativeModel({
                 model: modelName,
-                generationConfig: { 
-                    responseMimeType: "application/json",
-                    temperature: 0.8
-                }
+                generationConfig: { responseMimeType: "application/json" }
             });
             const result = await model.generateContent(prompt);
-            text = result.response.text();
-            if (text && text.trim().length > 10) {
-                console.log(`✅ Model ${modelName} succeeded!`);
-                break;
-            }
+            const response = await result.response;
+            text = response.text();
+            console.log(`✅ Model ${modelName} succeeded!`);
+            break;
         } catch (err) {
-            console.warn(`❌ Model ${modelName} failed:`, err);
+            console.warn(`❌ Model ${modelName} failed:`, err instanceof Error ? err.message : err);
             lastError = err;
         }
     }
 
     if (!text) {
-        console.error("All Gemini models failed. Last error:", lastError);
+        console.error("All Gemini models failed. Last error:", lastError instanceof Error ? lastError.message : lastError);
         return [];
     }
 
-    let jsonStr = text.trim();
+    console.log("Gemini Raw Response:", text);
+
+    let jsonStr = text;
+    // Extract JSON array carefully avoiding trailing text
     const firstBracket = jsonStr.indexOf('[');
     const lastBracket = jsonStr.lastIndexOf(']');
     if (firstBracket !== -1 && lastBracket !== -1) {
         jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
+    } else {
+        jsonStr = jsonStr.replace("```json", "").replace("```", "").trim();
     }
 
-    let finalData: any[];
+    interface GeminiSpot {
+        id: number;
+        stayTime: number;
+        travel_time_minutes: number;
+        recommendation_reason?: string;
+        description?: string;
+        must_see?: string;
+        pro_tip?: string;
+        trivia?: string;
+    }
+    interface GeminiCourse {
+        id: string;
+        title: string;
+        theme: string;
+        description: string;
+        totalTime: number;
+        spots: GeminiSpot[];
+    }
+
+    let coursesData: GeminiCourse[];
     try {
-        const parsed = JSON.parse(jsonStr);
-        finalData = rescueObject(parsed);
+        coursesData = JSON.parse(jsonStr) as GeminiCourse[];
     } catch (e) {
-        console.error("JSON Parse/Rescue Error:", e, "Raw Text:", text);
+        console.error("JSON Parse Error:", e, text);
         return [];
     }
 
-    if (!Array.isArray(finalData)) return [];
-
-    return finalData.map(course => {
-        if (!course || typeof course !== 'object') return null;
-        
+    return coursesData.map(course => {
         const uniqueId = crypto.randomUUID();
-        const rawSpots = Array.isArray(course.spots) ? course.spots : [];
-        
-        const hydratedSpots: Spot[] = rawSpots.map((s: any) => {
-            if (!s) return null;
-            // Coerce ID to number
-            const rawId = s.id;
-            const numericId = typeof rawId === 'string' ? parseInt(rawId, 10) : Number(rawId);
-            
-            const original = candidates[numericId];
-            if (!original) return null;
-
+        const hydratedSpots: Spot[] = course.spots.map(s => {
+            const original = candidates[s.id];
+            if (!original) {
+                console.warn(`Gemini returned invalid ID: ${s.id}`);
+                return null;
+            }
             return {
                 ...original,
-                stayTime: Number(s.stayTime) || original.estimatedStayTime || 30,
-                aiDescription: s.recommendation_reason || s.description || '',
+                stayTime: s.stayTime,
+                aiDescription: s.recommendation_reason || s.description,
                 must_see: s.must_see || null,
                 pro_tip: s.pro_tip || null,
                 trivia: s.trivia || undefined
             } as Spot;
-        }).filter((s: any): s is Spot => s !== null);
+        }).filter((s): s is Spot => s !== null);
 
-        if (hydratedSpots.length === 0) return null;
+        if (hydratedSpots.length > 1) {
+            const sorted: Spot[] = [hydratedSpots[0]];
+            const remaining = hydratedSpots.slice(1);
+            while (remaining.length > 0) {
+                const current = sorted[sorted.length - 1];
+                let nearestIdx = 0;
+                let nearestDist = Infinity;
+                for (let i = 0; i < remaining.length; i++) {
+                    const dx = (remaining[i].lat - current.lat) * 111000;
+                    const dy = (remaining[i].lon - current.lon) * 111000 * Math.cos(current.lat * Math.PI / 180);
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestIdx = i;
+                    }
+                }
+                sorted.push(remaining.splice(nearestIdx, 1)[0]);
+            }
 
-        return {
-            id: uniqueId,
-            title: course.title || "無題のコース",
-            theme: course.theme || "",
-            description: course.description || "",
-            totalTime: durationMinutes,
-            spots: hydratedSpots
-        } as Course;
+            for (let i = 0; i < sorted.length; i++) {
+                if (i === 0) {
+                    sorted[i].travel_time_minutes = 0;
+                } else {
+                    const prev = sorted[i - 1];
+                    const dx = (sorted[i].lat - prev.lat) * 111000;
+                    const dy = (sorted[i].lon - prev.lon) * 111000 * Math.cos(prev.lat * Math.PI / 180);
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    sorted[i].travel_time_minutes = Math.round(dist / 80);
+                }
+            }
 
-    }).filter((c): c is Course => c !== null);
+            return { ...course, id: uniqueId, spots: sorted } as Course;
+        }
+
+        return { ...course, id: uniqueId, spots: hydratedSpots } as Course;
+    });
 };
 
 export const remixCourse = async (
@@ -298,6 +320,10 @@ ${candidateList}
 - Same rules as before: No code, unique trivia, stayTime/travel_time_minutes estimation.
 - Context: Time ${timeContext}, Weather ${weatherContext}.
 
+**CRITICAL LANGUAGE REQUIREMENT:**
+1. ALL generated text VALUES (title, description, spots' reason, etc.) MUST be in Japanese (日本語).
+2. **STRICTLY PROHIBITED**: DO NOT translate JSON KEYS (id, title, description, spots, must_see, etc.). Keep them in English.
+
 **JSON SCHEMA:**
 {
     "title": "New Stylish Title",
@@ -335,20 +361,15 @@ ${candidateList}
     if (!text) return null;
 
     try {
-        const parsed = JSON.parse(text);
-        const data = rescueObject(parsed);
+        const data = JSON.parse(text);
         const uniqueId = crypto.randomUUID();
-        const rawSpots = Array.isArray(data.spots) ? data.spots : [];
-        
-        const hydratedSpots = rawSpots.map((s: any) => {
-            const rawId = s.id;
-            const numericId = typeof rawId === 'string' ? parseInt(rawId, 10) : Number(rawId);
-            const original = candidates[numericId];
+        const hydratedSpots = data.spots.map((s: any) => {
+            const original = candidates[s.id];
             if (!original) return null;
             return {
                 ...original,
-                stayTime: Number(s.stayTime) || original.estimatedStayTime || 30,
-                aiDescription: s.recommendation_reason || s.description || '',
+                stayTime: s.stayTime,
+                aiDescription: s.recommendation_reason,
                 must_see: s.must_see || null,
                 pro_tip: s.pro_tip || null,
                 trivia: s.trivia || undefined
@@ -395,7 +416,6 @@ export const generateWaitingScreenContent = async (
     locationName: string,
     weatherContext: string = "不明"
 ): Promise<WaitingScreenContent | null> => {
-    const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite"];
 
     const prompt = `
 あなたは旅行アプリの「生成待ち画面」のコンテンツを作成するAIです。

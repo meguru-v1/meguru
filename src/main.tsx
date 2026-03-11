@@ -8,7 +8,7 @@ import { APIProvider } from '@vis.gl/react-google-maps'
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
 
 // キャッシュ破りのためのバージョン管理
-const APP_VERSION = '1.0.4'; // 修正ごとにカウントアップ
+const APP_VERSION = '1.0.5'; // 修正ごとにカウントアップ
 const storedVersion = localStorage.getItem('meguru_app_version');
 
 if (storedVersion !== APP_VERSION) {

@@ -6,9 +6,9 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 
 // 共通モデルリスト（ユーザー指定: 2.5 Flash / 2.5 Flash-lite）
 const MODELS = [
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-2.0-flash-exp"
+    "gemini-2.5-flash", 
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro"
 ];
 
 // 429エラー（Quota）発生時の待機用

@@ -5,7 +5,7 @@ import TabBar from './components/TabBar';
 import GenerationScreen from './components/GenerationScreen';
 import SpotHeroImage from './components/SpotHeroImage';
 import { useFavorites } from './hooks/useFavorites';
-import { searchAreaCenter, searchNearbySpots, searchRouteSpots } from './lib/places';
+import { searchAreaCenter, searchNearbySpots, searchRouteSpots, getPlaceLatLng } from './lib/places';
 import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
 import type { WaitingScreenContent } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
@@ -37,8 +37,14 @@ function App() {
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
     // ===== ジオコード関数 =====
-    const geocode = async (q: string): Promise<{ lat: number; lon: number; name: string } | null> => {
+    const geocode = async (q: string, placeId?: string): Promise<{ lat: number; lon: number; name: string } | null> => {
         try {
+            // Place ID があれば優先的に詳細座標を取得 (高精度)
+            if (placeId) {
+                const res = await getPlaceLatLng(placeId);
+                if (res) return { lat: res.lat, lon: res.lng, name: res.name };
+            }
+            // なければ従来のテキスト検索
             const res = await searchAreaCenter(q);
             if (res) return { lat: res.lat, lon: res.lng, name: res.name };
         } catch { /* ignore */ }
@@ -56,10 +62,13 @@ function App() {
         setStatus('場所を検索中...');
 
         try {
-            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize } = params;
+            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId } = params;
             if (searchMode === 'route' && destination) {
                 // ===== ルート検索 =====
-                const [startGeo, endGeo] = await Promise.all([geocode(query), geocode(destination)]);
+                const [startGeo, endGeo] = await Promise.all([
+                    geocode(query, queryPlaceId), 
+                    geocode(destination, destinationPlaceId)
+                ]);
                 if (!startGeo) throw new Error(`「${query}」が見つかりませんでした。`);
                 if (!endGeo) throw new Error(`「${destination}」が見つかりませんでした。`);
 
@@ -204,7 +213,8 @@ function App() {
 
             } else {
                 // ===== エリア検索 (従来) =====
-                const startGeo = await geocode(query);
+                const { query, queryPlaceId, radius: r, duration, travelMode, mood, budget, groupSize } = params;
+                const startGeo = await geocode(query, queryPlaceId);
                 if (!startGeo) throw new Error("場所が見つかりませんでした。");
 
                 setCenter({ lat: startGeo.lat, lon: startGeo.lon });
@@ -214,13 +224,23 @@ function App() {
                 let allSpotsRaw = await searchNearbySpots(startGeo.lat, startGeo.lon, r);
 
                 // もしスポットが少なければ半径を2倍にして再検索
-                if (allSpotsRaw.length < 5) {
+                if (allSpotsRaw.length < 3) {
                     console.log(`Spots too few (${allSpotsRaw.length}), expanding search radius to ${r * 2}m...`);
                     setStatus(`範囲を広げて再検索しています... (${(r * 2) / 1000}km圏内)`);
                     const widerSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, r * 2);
-                    // マージして一意にする
                     const spotMap = new globalThis.Map<string, any>();
                     [...allSpotsRaw, ...widerSpots].forEach(s => spotMap.set(s.place_id, s));
+                    allSpotsRaw = Array.from(spotMap.values());
+                }
+                
+                // それでも少なければ最大5000mまでアグレッシブに拡大
+                if (allSpotsRaw.length < 3 && r < 5000) {
+                    const finalRadius = Math.max(r * 4, 5000);
+                    console.log(`Still few spots, trying aggressive expansion to ${finalRadius}m...`);
+                    setStatus(`さらに広く再検索しています... (${finalRadius/1000}km圏内)`);
+                    const finalSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, finalRadius);
+                    const spotMap = new globalThis.Map<string, any>();
+                    [...allSpotsRaw, ...finalSpots].forEach(s => spotMap.set(s.place_id, s));
                     allSpotsRaw = Array.from(spotMap.values());
                 }
 

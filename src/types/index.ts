@@ -79,6 +79,15 @@ export interface SearchParams {
     mood?: string;
     budget?: string;
     groupSize?: string;
+    queryPlaceId?: string; // 追加: 出発地の Place ID
+    destinationPlaceId?: string; // 追加: 目的地の Place ID
+}
+
+export interface AutocompleteResult {
+    placeId: string;
+    description: string;
+    mainText: string;
+    secondaryText?: string;
 }
 
 export interface GeoResult {

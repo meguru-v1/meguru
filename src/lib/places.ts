@@ -1,4 +1,4 @@
-import { PlaceDetails } from '../types';
+import { PlaceDetails, AutocompleteResult } from '../types';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -18,7 +18,7 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
             headers: {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'places.location,places.displayName',
+                'X-Goog-FieldMask': 'places.location,places.displayName,places.id',
             },
             body: JSON.stringify(data),
         });
@@ -70,7 +70,12 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             },
             languageCode: 'ja'
         };
-        if (types) data.includedTypes = types;
+        if (types) {
+            data.includedTypes = types;
+        } else {
+            // フォールバック: 指定がない場合は広範なカテゴリを検索対象にする (API要件)
+            data.includedTypes = ['tourist_attraction', 'point_of_interest', 'establishment'];
+        }
 
         const response = await fetch(url, {
             method: 'POST',
@@ -151,4 +156,81 @@ export async function searchRouteSpots(originObj: { lat: number, lng: number }, 
     });
 
     return Array.from(map.values());
+}
+
+/**
+ * 入力テキストから場所の候補を取得する (Autocomplete)
+ */
+export async function getAutocompleteSuggestions(input: string, lat?: number, lng?: number): Promise<AutocompleteResult[]> {
+    if (!input.trim()) return [];
+    const url = `https://places.googleapis.com/v1/places:autocomplete`;
+    
+    const data: any = {
+        input,
+        languageCode: 'ja',
+        regionCode: 'JP'
+    };
+
+    if (lat !== undefined && lng !== undefined) {
+        data.locationBias = {
+            circle: {
+                center: { latitude: lat, longitude: lng },
+                radius: 10000 // 10km bias
+            }
+        };
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': API_KEY,
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) return [];
+        const result = await response.json();
+        
+        return (result.suggestions || []).map((s: any) => ({
+            placeId: s.placePrediction.placeId,
+            description: s.placePrediction.text.text,
+            mainText: s.placePrediction.structuredFormat.mainText.text,
+            secondaryText: s.placePrediction.structuredFormat.secondaryText?.text
+        }));
+    } catch (e) {
+        console.error("Autocomplete failed", e);
+        return [];
+    }
+}
+
+/**
+ * Place ID から緯度経度を取得する (GetDetails)
+ */
+export async function getPlaceLatLng(placeId: string): Promise<{ lat: number; lng: number; name: string } | null> {
+    const url = `https://places.googleapis.com/v1/places/${placeId}`;
+    
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': API_KEY,
+                'X-Goog-FieldMask': 'location,displayName',
+            }
+        });
+
+        if (!response.ok) return null;
+        const place = await response.json();
+        
+        return {
+            lat: place.location.latitude,
+            lng: place.location.longitude,
+            name: place.displayName.text
+        };
+    } catch (e) {
+        console.error("GetPlaceLatLng failed", e);
+        return null;
+    }
 }

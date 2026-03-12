@@ -222,26 +222,29 @@ function App() {
 
                 setStatus(`周辺スポットを探しています... (${r / 1000}km圏内)`);
                 let allSpotsRaw = await searchNearbySpots(startGeo.lat, startGeo.lon, r);
-
-                // もしスポットが少なければ半径を2倍にして再検索
-                if (allSpotsRaw.length < 3) {
+                console.log(`Initial spots found: ${allSpotsRaw.length}.`);
+                
+                // もしスポットが少なければ(15件未満)半径を2倍にして再検索
+                if (allSpotsRaw.length < 15) {
                     console.log(`Spots too few (${allSpotsRaw.length}), expanding search radius to ${r * 2}m...`);
                     setStatus(`範囲を広げて再検索しています... (${(r * 2) / 1000}km圏内)`);
                     const widerSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, r * 2);
                     const spotMap = new Map<string, any>();
                     [...allSpotsRaw, ...widerSpots].forEach(s => spotMap.set(s.place_id, s));
                     allSpotsRaw = Array.from(spotMap.values());
+                    console.log(`Expanded (2x) spots found: ${allSpotsRaw.length}.`);
                 }
                 
-                // それでも少なければ最大5000mまでアグレッシブに拡大
-                if (allSpotsRaw.length < 3 && r < 5000) {
-                    const finalRadius = Math.max(r * 4, 5000);
-                    console.log(`Still few spots, trying aggressive expansion to ${finalRadius}m...`);
+                // それでも少なければ(10件未満)かつ最大5000mまでアグレッシブに拡大
+                if (allSpotsRaw.length < 10 && r < 5000) {
+                    const finalRadius = 5000;
+                    console.log(`Still few spots (${allSpotsRaw.length}), trying aggressive expansion to ${finalRadius}m...`);
                     setStatus(`さらに広く再検索しています... (${finalRadius/1000}km圏内)`);
                     const finalSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, finalRadius);
                     const spotMap = new Map<string, any>();
                     [...allSpotsRaw, ...finalSpots].forEach(s => spotMap.set(s.place_id, s));
                     allSpotsRaw = Array.from(spotMap.values());
+                    console.log(`Aggressive expansion (5km) spots found: ${allSpotsRaw.length}.`);
                 }
 
                 // Spot型にマッピング
@@ -258,7 +261,7 @@ function App() {
                     photos: p.photo_reference ? [p.photo_reference] : []
                 }));
 
-                if (allSpots.length < 5) throw new Error("周辺に見どころとなるスポットがあまり見つかりませんでした。別の大きな駅やエリア名で試してみてください。");
+                if (allSpots.length === 0) throw new Error("周辺に見どころとなるスポットが見つかりませんでした。別の場所や、検索範囲を広くして試してみてください。");
 
                 setStatus('AIが最適なコースを生成中...');
                 setShowGenScreen(true);

@@ -73,8 +73,11 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         if (types) {
             data.includedTypes = types;
         } else {
-            // フォールバック: 指定がない場合は広範なカテゴリを検索対象にする (API要件)
-            data.includedTypes = ['tourist_attraction', 'point_of_interest', 'establishment'];
+            // フォールバック: 指定がない場合は広範なカテゴリを検索対象にする (API要件: Table Aのみ使用可能)
+            data.includedTypes = [
+                'tourist_attraction', 'park', 'amusement_park', 'museum', 'art_gallery', 
+                'movie_theater', 'shopping_mall', 'aquarium', 'zoo', 'landmark', 'historical_landmark'
+            ];
         }
 
         const response = await fetch(url, {

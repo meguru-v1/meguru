@@ -30,6 +30,11 @@ export interface Spot {
     photos?: string[];
     price_level?: number;
     formatted_address?: string;
+    // 拡張情報
+    editorial_summary?: string;
+    opening_hours?: string[];
+    reviews?: string[];
+    business_status?: string;
 }
 
 export interface PlaceDetails {
@@ -42,6 +47,11 @@ export interface PlaceDetails {
     types?: string[];
     formatted_address?: string;
     photo_reference?: string;
+    editorial_summary?: string;
+    opening_hours?: string[];
+    reviews?: { text: string; rating: number }[];
+    price_level?: number;
+    business_status?: string;
 }
 
 export interface Course {

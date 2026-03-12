@@ -50,9 +50,6 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
 export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number): Promise<PlaceDetails[]> {
     const url = `https://places.googleapis.com/v1/places:searchNearby`;
 
-    // 検索に含めるPlace types (観光地、飲食店など)
-    // 種類を絞りすぎると見つからないことがあるので、主要なものに留める
-    // 注: 'temple', 'shrine' は Places API (New) の includedTypes としてサポートされていないため外しています
     // 1. まずは主要な観光・飲食カテゴリに絞って検索 (確実に見どころを見つけるため)
     const includedTypes = [
         'tourist_attraction', 'museum', 'park',
@@ -80,7 +77,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             headers: {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos',
+                'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos,places.editorialSummary,places.regularOpeningHours,places.reviews,places.priceLevel,places.businessStatus',
             },
             body: JSON.stringify(data),
         });
@@ -97,7 +94,6 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         let spots = await fetchData(includedTypes);
 
         // スポットが少なすぎる場合(10件未満)は、カテゴリ指定なしで全件検索を試みる
-        // これにより、歴史遺産や神社など、Table Aにないタイプも拾えるようになる
         if (spots.length < 10) {
             console.log(`Places API: Too few spots (${spots.length}), trying fallback (all types)...`);
             const fallbackSpots = await fetchData();
@@ -119,7 +115,12 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             user_ratings_total: p.userRatingCount,
             types: p.types,
             formatted_address: p.formattedAddress,
-            photo_reference: p.photos && p.photos.length > 0 ? p.photos[0].name : undefined
+            photo_reference: p.photos && p.photos.length > 0 ? p.photos[0].name : undefined,
+            editorial_summary: p.editorialSummary?.text,
+            opening_hours: p.regularOpeningHours?.weekdayDescriptions,
+            reviews: p.reviews?.map((r: any) => ({ text: r.text?.text || r.text || "", rating: r.rating })),
+            price_level: p.priceLevel,
+            business_status: p.businessStatus
         }));
     } catch (e) {
         console.error("Failed to search nearby spots", e);
@@ -128,7 +129,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 }
 
 /**
- * ルート検索用に複数エリアのプレイスを取得する（出発地、目的地、その中間など）
+ * ルート検索用に複数エリア의 プレイスを取得する（出発地、目的地、その中間など）
  */
 export async function searchRouteSpots(originObj: { lat: number, lng: number }, destObj: { lat: number, lng: number }, radiusMeters: number): Promise<PlaceDetails[]> {
     // 簡易的に、出発地周辺、目的地周辺、および中間地点周辺の候補を取得してマージする

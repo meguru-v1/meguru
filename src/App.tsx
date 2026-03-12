@@ -13,7 +13,7 @@ import { getCurrentWeather } from './lib/weather';
 import { getDistance } from 'geolib';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
-    Navigation, AlertCircle, Map, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap
+    Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId, TravelMode } from './types';
 
@@ -228,7 +228,7 @@ function App() {
                     console.log(`Spots too few (${allSpotsRaw.length}), expanding search radius to ${r * 2}m...`);
                     setStatus(`範囲を広げて再検索しています... (${(r * 2) / 1000}km圏内)`);
                     const widerSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, r * 2);
-                    const spotMap = new globalThis.Map<string, any>();
+                    const spotMap = new Map<string, any>();
                     [...allSpotsRaw, ...widerSpots].forEach(s => spotMap.set(s.place_id, s));
                     allSpotsRaw = Array.from(spotMap.values());
                 }
@@ -239,7 +239,7 @@ function App() {
                     console.log(`Still few spots, trying aggressive expansion to ${finalRadius}m...`);
                     setStatus(`さらに広く再検索しています... (${finalRadius/1000}km圏内)`);
                     const finalSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, finalRadius);
-                    const spotMap = new globalThis.Map<string, any>();
+                    const spotMap = new Map<string, any>();
                     [...allSpotsRaw, ...finalSpots].forEach(s => spotMap.set(s.place_id, s));
                     allSpotsRaw = Array.from(spotMap.values());
                 }
@@ -537,7 +537,7 @@ function App() {
                         {/* 地図で見るボタン */}
                         <button onClick={() => setActiveTab('map')}
                             className="flex items-center justify-center gap-2 w-full mt-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold transition-all active:scale-95">
-                            <Map size={16} /> 地図で全体を見る
+                            <MapIcon size={16} /> 地図で全体を見る
                         </button>
                     </div>
 

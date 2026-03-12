@@ -87,7 +87,11 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             body: JSON.stringify(data),
         });
 
-        if (!response.ok) return [];
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Places API Error (${response.status}):`, errorText);
+            return [];
+        }
         const result = await response.json();
         return result.places || [];
     };

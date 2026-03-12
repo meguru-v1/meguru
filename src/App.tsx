@@ -145,6 +145,8 @@ function App() {
                 const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
                 const weatherContext = await getCurrentWeather(midLat, midLon);
 
+                console.log("AI Generation Context:", { time: timeContext, weather: weatherContext, center: { midLat, midLon } });
+
                 // メインAIとサブAIを並列で呼び出し
                 const mainPromise = generateSmartCourses(
                     candidates,

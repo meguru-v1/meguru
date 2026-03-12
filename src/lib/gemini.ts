@@ -206,7 +206,7 @@ ${diningRule}
                 pro_tip: s.pro_tip || null,
                 trivia: s.trivia || undefined
             } as Spot;
-        }).filter((s): s is Spot => s !== null);
+        }).filter((s: Spot | null): s is Spot => s !== null);
 
         // Sorting by distance
         if (hydratedSpots.length > 1) {

@@ -55,6 +55,8 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     // 注: 'temple', 'shrine' は Places API (New) の includedTypes としてサポートされていないため外しています
     const includedTypes = [
         'tourist_attraction', 'museum', 'park',
+        'historical_landmark', 'art_gallery', 'observation_deck',
+        'amusement_park', 'aquarium', 'zoo',
         'cafe', 'restaurant'
     ];
 
@@ -63,7 +65,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 
     const data = {
         includedTypes: includedTypes,
-        maxResultCount: 20, // Geminiに渡す候補数
+        maxResultCount: 50, // 候補を大幅に増やして多様性を確保
         locationRestriction: {
             circle: {
                 center: { latitude: lat, longitude: lng },

@@ -102,13 +102,20 @@ ${diningRule}
 **CURRENT CONTEXT (CRITICAL FOR SPOT SELECTION):**
 - Current Time: ${timeContext}
 - Current Weather: ${weatherContext}
+* **INTELLIGENT TIME REFLECTION**: 
+    - If it's around 11:30~13:30, include a Lunch spot.
+    - If it's 15:00~16:30, include a Cafe/Tea spot.
+    - If it's after 17:30, include a Dinner spot and prioritize night views.
+    - Mention why you chose this timing in the 'recommendation_reason' (e.g., "ちょうどお腹が空く時間なので...", "夕日が綺麗な時間に合わせて...").
 * If it is raining/snowing, prioritize indoor activities or covered arcades.
-* If it is evening/night, prioritize night views, dinner spots, or places open late.
-* You MUST adapt your tone and course titles to match this context (e.g., if it's evening, focus on dinner, night views, or evening walks).
 
 **JSON KEY RULES (HARD CONSTRAINT):**
 - **NEVER TRANSLATE KEYS**: Keep all keys strictly in English ("id", "title", "description", "spots", etc.).
 - **VALUES IN JAPANESE**: Only the text values must be in Japanese.
+
+**DIVERSITY RULE (STRICT):**
+- **NO FOOD-ONLY COURSES**: A course MUST contain at least one (ideally two or more) NON-DINING spot (e.g., a museum, park, historical landmark, scenic walk).
+- **BALANCE**: Think of the itinerary as a journey, not a food tour. Food spots should complement the activity, not be the only activities.
 
 **NEGATIVE CONSTRAINTS (MUST FOLLOW):**
 - **NO RAW CODE / FUNCTIONS**: Write completely natural Japanese.

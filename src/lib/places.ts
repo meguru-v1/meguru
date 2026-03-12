@@ -61,7 +61,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 
     const fetchData = async (types?: string[]) => {
         const data: any = {
-            maxResultCount: 50,
+            maxResultCount: 20,
             locationRestriction: {
                 circle: {
                     center: { latitude: lat, longitude: lng },
@@ -76,7 +76,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             // フォールバック: 指定がない場合は広範なカテゴリを検索対象にする (API要件: Table Aのみ使用可能)
             data.includedTypes = [
                 'tourist_attraction', 'park', 'amusement_park', 'museum', 'art_gallery', 
-                'movie_theater', 'shopping_mall', 'aquarium', 'zoo', 'landmark', 'historical_landmark'
+                'movie_theater', 'shopping_mall', 'aquarium', 'zoo', 'historical_landmark'
             ];
         }
 

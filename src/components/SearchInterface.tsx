@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Search, MapPin, Clock, Compass, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown,
-    Smile, Banknote, Users, Sparkles
+    Smile, Banknote, Users, Sparkles, Loader2
 } from 'lucide-react';
-import type { SearchParams, SearchMode, TravelMode } from '../types';
+import type { SearchParams, SearchMode, TravelMode, AutocompleteResult } from '../types';
+import { getAutocompleteSuggestions } from '../lib/places';
 
 interface SearchInterfaceProps {
     onSearch: (params: SearchParams) => void;
@@ -19,7 +20,9 @@ const TRAVEL_MODES: { id: TravelMode; label: string; icon: React.ElementType }[]
 const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
     const [searchMode, setSearchMode] = useState<SearchMode>('area');
     const [query, setQuery] = useState('');
+    const [queryPlaceId, setQueryPlaceId] = useState('');
     const [destination, setDestination] = useState('');
+    const [destinationPlaceId, setDestinationPlaceId] = useState('');
     const [radius, setRadius] = useState(1);
     const [duration, setDuration] = useState(180);
     const [travelMode, setTravelMode] = useState<TravelMode>('walk');
@@ -28,14 +31,71 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
     const [groupSize, setGroupSize] = useState('');
     const [isSearching, setIsSearching] = useState(false);
 
+    // オートコンプリート用の状態
+    const [suggestions, setSuggestions] = useState<AutocompleteResult[]>([]);
+    const [activeInput, setActiveInput] = useState<'query' | 'destination' | null>(null);
+    const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+    const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
+    
+    // デバウンス用タイマー
+    const debounceTimer = useRef<any>(null);
+
+    // 現在地の取得 (バイアス用)
+    useEffect(() => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => {/* ignore errors */},
+            { enableHighAccuracy: false, timeout: 5000 }
+        );
+    }, []);
+
+    // 検索候補の取得
+    const fetchSuggestions = (input: string, type: 'query' | 'destination') => {
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        
+        if (!input.trim() || input.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+
+        setIsLoadingSuggestions(true);
+        debounceTimer.current = setTimeout(async () => {
+            const results = await getAutocompleteSuggestions(
+                input, 
+                userLocation?.lat, 
+                userLocation?.lng
+            );
+            setSuggestions(results);
+            setActiveInput(type);
+            setIsLoadingSuggestions(false);
+        }, 400);
+    };
+
+    const handleSelectSuggestion = (s: AutocompleteResult) => {
+        if (activeInput === 'query') {
+            setQuery(s.mainText);
+            setQueryPlaceId(s.placeId);
+        } else if (activeInput === 'destination') {
+            setDestination(s.mainText);
+            setDestinationPlaceId(s.placeId);
+        }
+        setSuggestions([]);
+        setActiveInput(null);
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!query.trim()) return;
         if (searchMode === 'route' && !destination.trim()) return;
         setIsSearching(true);
         onSearch({
-            searchMode, query, radius: radius * 1000, duration,
+            searchMode, 
+            query, 
+            radius: radius * 1000, 
+            duration,
             destination: searchMode === 'route' ? destination : undefined,
+            queryPlaceId: queryPlaceId || undefined,
+            destinationPlaceId: destinationPlaceId || undefined,
             travelMode,
             mood: mood || undefined,
             budget: budget || undefined,
@@ -85,8 +145,26 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                                     出発地点
                                 </label>
                                 <div className="relative">
-                                    <input id="area-query" name="area-query" type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                                    <input id="area-query" name="area-query" type="text" value={query} 
+                                        onChange={(e) => { setQuery(e.target.value); setQueryPlaceId(''); fetchSuggestions(e.target.value, 'query'); }}
+                                        onFocus={() => query.length >= 2 && fetchSuggestions(query, 'query')}
                                         placeholder="例: 京都駅、浅草寺..." className="input-premium text-base" />
+                                    {isLoadingSuggestions && activeInput === 'query' && (
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                            <Loader2 size={16} className="animate-spin text-slate-300" />
+                                        </div>
+                                    )}
+                                    {activeInput === 'query' && suggestions.length > 0 && (
+                                        <div className="absolute z-50 left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-scale-in">
+                                            {suggestions.map(s => (
+                                                <button key={s.placeId} type="button" onClick={() => handleSelectSuggestion(s)}
+                                                    className="w-full flex flex-col items-start px-5 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 text-left">
+                                                    <span className="text-sm font-bold text-slate-800">{s.mainText}</span>
+                                                    <span className="text-[10px] text-slate-400 truncate w-full">{s.secondaryText}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="space-y-2 animate-slide-up stagger-1">
@@ -105,16 +183,42 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                         <div className="space-y-3 animate-slide-up">
                             <div className="relative">
                                 <label htmlFor="route-origin" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">出発地</label>
-                                <input id="route-origin" name="route-origin" type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                                <input id="route-origin" name="route-origin" type="text" value={query} 
+                                    onChange={(e) => { setQuery(e.target.value); setQueryPlaceId(''); fetchSuggestions(e.target.value, 'query'); }}
+                                    onFocus={() => query.length >= 2 && fetchSuggestions(query, 'query')}
                                     placeholder="例: 京都駅" className="input-premium text-sm py-3" />
+                                {activeInput === 'query' && suggestions.length > 0 && (
+                                    <div className="absolute z-50 left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+                                        {suggestions.map(s => (
+                                            <button key={s.placeId} type="button" onClick={() => handleSelectSuggestion(s)}
+                                                className="w-full flex flex-col items-start px-5 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 text-left">
+                                                <span className="text-sm font-bold text-slate-800">{s.mainText}</span>
+                                                <span className="text-[11px] text-slate-400 truncate w-full">{s.secondaryText}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-col items-center justify-center gap-0 pointer-events-none z-10">
                                 <ArrowDown size={16} className="text-slate-300 -my-2 bg-white rounded-full" />
                             </div>
                             <div className="relative">
                                 <label htmlFor="route-destination" className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1 block">目的地</label>
-                                <input id="route-destination" name="route-destination" type="text" value={destination} onChange={(e) => setDestination(e.target.value)}
+                                <input id="route-destination" name="route-destination" type="text" value={destination} 
+                                    onChange={(e) => { setDestination(e.target.value); setDestinationPlaceId(''); fetchSuggestions(e.target.value, 'destination'); }}
+                                    onFocus={() => destination.length >= 2 && fetchSuggestions(destination, 'destination')}
                                     placeholder="例: 嵐山" className="input-premium text-sm py-3" />
+                                {activeInput === 'destination' && suggestions.length > 0 && (
+                                    <div className="absolute z-50 left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+                                        {suggestions.map(s => (
+                                            <button key={s.placeId} type="button" onClick={() => handleSelectSuggestion(s)}
+                                                className="w-full flex flex-col items-start px-5 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 text-left">
+                                                <span className="text-sm font-bold text-slate-800">{s.mainText}</span>
+                                                <span className="text-[11px] text-slate-400 truncate w-full">{s.secondaryText}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, MapPin, Compass, ChevronRight } from 'lucide-react';
+import { Sparkles, MapPin, Compass, ChevronRight, AlertCircle } from 'lucide-react';
 import type { WaitingScreenContent } from '../lib/gemini';
 
 // ===== フォールバック用の静的データ =====
@@ -72,6 +72,7 @@ interface GenerationScreenProps {
     onTransitionComplete?: () => void;
     subAiContent?: WaitingScreenContent | null;
     imageUrls?: string[]; // フルURLの配列
+    error?: string | null; // エラーメッセージ
 }
 
 export default function GenerationScreen({
@@ -81,7 +82,8 @@ export default function GenerationScreen({
     locationName = "この街",
     onTransitionComplete,
     subAiContent,
-    imageUrls
+    imageUrls,
+    error
 }: GenerationScreenProps) {
     // 取得済みのURL群からスライドショー画像を生成
     const slideshowImages = React.useMemo(() => {
@@ -244,9 +246,9 @@ export default function GenerationScreen({
                 </div>
                 <div className="px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                        <span className="text-[11px] font-semibold text-slate-500 tracking-wide">
-                            {displayStatus}
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${error ? 'bg-red-500' : 'bg-amber-400'}`} />
+                        <span className={`text-[11px] font-semibold tracking-wide ${error ? 'text-red-500' : 'text-slate-500'}`}>
+                            {error ? `エラー: ${error}` : displayStatus}
                         </span>
                     </div>
                     <span className="text-[10px] font-mono text-slate-300">
@@ -271,29 +273,44 @@ export default function GenerationScreen({
                 </div>
 
                 <div className="absolute inset-0 flex flex-col items-center justify-center px-8">
-                    <div className="glass-gen-panel p-6 rounded-3xl max-w-sm w-full text-center">
-                        <Compass className="w-8 h-8 text-amber-500 mx-auto mb-3 animate-pulse" />
-                        <p className="text-[10px] font-bold text-amber-600 tracking-[0.2em] uppercase mb-2">
-                            {locationName} の旅
-                        </p>
-                        <p className={`text-lg font-bold text-slate-800 leading-relaxed font-serif transition-all duration-500
-                            ${fadeForecast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
-                            {forecastCopies[currentForecastIdx]}
-                        </p>
-                        {/* サブAI到着インジケーター */}
-                        <div className="mt-4 flex items-center justify-center gap-1.5">
-                            {hasSubAiArrived ? (
-                                <span className="text-[9px] font-bold text-emerald-500 tracking-wider flex items-center gap-1">
-                                    <Sparkles size={10} /> AI がコンテンツをお届け中
-                                </span>
-                            ) : (
-                                [0, 1, 2].map(i => (
-                                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"
-                                        style={{ animationDelay: `${i * 0.15}s` }} />
-                                ))
-                            )}
+                    {error ? (
+                        <div className="glass-gen-panel p-8 rounded-3xl max-w-sm w-full text-center border-red-200 animate-scale-in">
+                            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                            <p className="text-xs font-bold text-red-600 tracking-widest uppercase mb-2">解析エラー発生</p>
+                            <p className="text-sm font-bold text-slate-800 leading-relaxed mb-6 bg-red-50/50 p-4 rounded-xl border border-red-100 italic">
+                                "{error}"
+                            </p>
+                            <p className="text-[10px] text-slate-400 leading-relaxed">
+                                AIの応答を正常に処理できませんでした。<br/>
+                                しばらく待ってから再試行するか、<br/>
+                                条件（時間や予算）を変えてみてください。
+                            </p>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="glass-gen-panel p-6 rounded-3xl max-w-sm w-full text-center">
+                            <Compass className="w-8 h-8 text-amber-500 mx-auto mb-3 animate-pulse" />
+                            <p className="text-[10px] font-bold text-amber-600 tracking-[0.2em] uppercase mb-2">
+                                {locationName} の旅
+                            </p>
+                            <p className={`text-lg font-bold text-slate-800 leading-relaxed font-serif transition-all duration-500
+                                ${fadeForecast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
+                                {forecastCopies[currentForecastIdx]}
+                            </p>
+                            {/* サブAI到着インジケーター */}
+                            <div className="mt-4 flex items-center justify-center gap-1.5">
+                                {hasSubAiArrived ? (
+                                    <span className="text-[9px] font-bold text-emerald-500 tracking-wider flex items-center gap-1">
+                                        <Sparkles size={10} /> AI がコンテンツをお届け中
+                                    </span>
+                                ) : (
+                                    [0, 1, 2].map(i => (
+                                        <div key={i} className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"
+                                            style={{ animationDelay: `${i * 0.15}s` }} />
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* ③ アンケートオーバーレイ */}

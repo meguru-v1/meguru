@@ -48,7 +48,9 @@ function App() {
     // ===== 検索ハンドラ =====
     const handleSearch = async (params: SearchParams) => {
         setLoading(true);
+        let hasError = false; // クロージャ問題を避けるためのローカルフラグ
         setError(null);
+        setSubAiContent(null);
         setCourses([]);
         setSelectedCourse(null);
         setStatus('場所を検索中...');
@@ -155,16 +157,28 @@ function App() {
                     groupSize
                 );
 
-                // サブAI: 待ち画面コンテンツを並列生成
-                generateWaitingScreenContent(query, weatherContext)
-                    .then(content => { if (content) setSubAiContent(content); })
-                    .catch(() => { /* フォールバックで対応 */ });
+                // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
+                setTimeout(() => {
+                    generateWaitingScreenContent(query, weatherContext)
+                        .then(content => { if (content) setSubAiContent(content); })
+                        .catch(() => { /* フォールバックで対応 */ });
+                }, 200);
 
                 let generatedCourses: Course[] = [];
                 try {
+                    console.log("App: Awaiting mainPromise (generateSmartCourses)...");
                     generatedCourses = await mainPromise;
+                    if (!generatedCourses || generatedCourses.length === 0) {
+                        throw new Error("AIがコース案を作成できませんでした。別の条件で試してみてください。");
+                    }
                 }
-                catch { /* fallback below */ }
+                catch (e) {
+                    console.error("App: generateSmartCourses failed:", e);
+                    setError(e instanceof Error ? e.message : "AIコース生成中にエラーが発生しました。");
+                    // エラーを画面で見せるために10秒間待機してから閉じる（ユーザー確認用）
+                    await new Promise(r => setTimeout(r, 10000));
+                    throw e; 
+                }
 
                 const routeTravelMode = travelMode || 'walk';
                 const enhancedCourses = generatedCourses.map(course => ({
@@ -255,16 +269,28 @@ function App() {
                     groupSize
                 );
 
-                // サブAI: 待ち画面コンテンツを並列生成
-                generateWaitingScreenContent(query, weatherContext)
-                    .then(content => { if (content) setSubAiContent(content); })
-                    .catch(() => { /* フォールバックで対応 */ });
+                // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
+                setTimeout(() => {
+                    generateWaitingScreenContent(query, weatherContext)
+                        .then(content => { if (content) setSubAiContent(content); })
+                        .catch(() => { /* フォールバックで対応 */ });
+                }, 300);
 
                 let generatedCourses: Course[] = [];
                 try {
+                    console.log("App: Awaiting mainPromise (generateSmartCourses) for Area Search...");
                     generatedCourses = await mainPromise;
+                    if (!generatedCourses || generatedCourses.length === 0) {
+                        throw new Error("AIがコース案を作成できませんでした。別の条件で試してみてください。");
+                    }
                 }
-                catch { /* fallback below */ }
+                catch (e) {
+                    console.error("App: generateSmartCourses failed (Area):", e);
+                    setError(e instanceof Error ? e.message : "AIコース生成中にエラーが発生しました。");
+                    // エラーを画面で見せるために10秒間待機してから閉じる
+                    await new Promise(r => setTimeout(r, 10000));
+                    throw e; 
+                }
 
                 const areaTravelMode = travelMode || 'walk';
                 const enhancedCourses = generatedCourses.map(course => ({
@@ -289,11 +315,15 @@ function App() {
         } catch (err) {
             console.error(err);
             setError(err instanceof Error ? err.message : "検索中にエラーが発生しました。");
+            hasError = true;
         } finally {
             setLoading(false);
-            setShowGenScreen(false);
-            setSubAiContent(null);
-            setStatus('');
+            // エラーが発生しなかった場合のみ画面を閉じる
+            if (!hasError) {
+                setShowGenScreen(false);
+                setSubAiContent(null);
+                setStatus('');
+            }
         }
     };
 
@@ -711,6 +741,7 @@ function App() {
                     subAiContent={subAiContent}
                     imageUrls={generationImages}
                     onTransitionComplete={() => setShowGenScreen(false)}
+                    error={error}
                 />
             )}
 

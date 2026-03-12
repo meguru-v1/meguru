@@ -4,9 +4,15 @@ import type { Spot, Course } from '../types';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// 共通モデルリスト（実在する安定したモデル）
-const MODELS = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"];
-const MODELS_LITE = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
+// 共通モデルリスト（ユーザー指定: 2.5 Flash / 2.5 Flash-lite）
+const MODELS = [
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-2.0-flash-exp"
+];
+
+// 429エラー（Quota）発生時の待機用
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const getDiningRule = (durationMinutes: number) => {
     if (durationMinutes <= 150) {
@@ -100,9 +106,9 @@ ${diningRule}
 * If it is evening/night, prioritize night views, dinner spots, or places open late.
 * You MUST adapt your tone and course titles to match this context (e.g., if it's evening, focus on dinner, night views, or evening walks).
 
-**CRITICAL LANGUAGE REQUIREMENT:**
-- ALL generated text VALUES inside the JSON MUST be strictly in Japanese (日本語). DO NOT USE ENGLISH.
-- CRITICAL: DO NOT translate the JSON keys. Keep keys like "id", "title", "description", "spots", "must_see" exactly as English.
+**JSON KEY RULES (HARD CONSTRAINT):**
+- **NEVER TRANSLATE KEYS**: Keep all keys strictly in English ("id", "title", "description", "spots", etc.).
+- **VALUES IN JAPANESE**: Only the text values must be in Japanese.
 
 **NEGATIVE CONSTRAINTS (MUST FOLLOW):**
 - **NO RAW CODE / FUNCTIONS**: Write completely natural Japanese.
@@ -161,17 +167,23 @@ ${diningRule}
             const result = await model.generateContent(prompt);
             const response = await result.response;
             text = response.text();
-            console.log(`✅ Model ${modelName} succeeded!`);
+            console.log(`✅ Model ${modelName} succeeded! Response length: ${text?.length || 0}`);
             break;
         } catch (err) {
+            const isQuotaError = err instanceof Error && err.message.includes("429");
             console.warn(`❌ Model ${modelName} failed:`, err instanceof Error ? err.message : err);
             lastError = err;
+            if (isQuotaError) {
+                console.log("Quota exceeded (429). Waiting 500ms before fallback (Paid Tier Optimized)...");
+                await sleep(500); // 待機時間を短縮
+            }
         }
     }
 
     if (!text) {
-        console.error("All Gemini models failed. Last error:", lastError instanceof Error ? lastError.message : lastError);
-        return [];
+        const errorMsg = lastError instanceof Error ? lastError.message : String(lastError);
+        console.error("All Gemini models failed. Last error:", errorMsg);
+        throw new Error(`AI生成に失敗しました: ${errorMsg}`);
     }
 
     console.log("Gemini Raw Response (First 500 chars):", text.substring(0, 500));
@@ -219,8 +231,8 @@ ${diningRule}
     } catch (e) {
         console.error("CRITICAL: JSON Parse Error or Invalid Format.");
         console.error("Error Detail:", e);
-        console.error("Problematic String:", jsonStr);
-        return [];
+        console.log("Problematic Raw Response:", text);
+        throw new Error(`AIの応答を解析できませんでした。形式が正しくありません。 (Parse Error)`);
     }
 
     return coursesData.map(course => {
@@ -287,7 +299,7 @@ export const remixCourse = async (
     timeContext: string = "不明",
     weatherContext: string = "不明"
 ): Promise<Course | null> => {
-    const MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
+    // グローバルの MODELS を使用
 
     const candidateList = candidates.map((s, i) =>
         `${i}: ${s.name} (${s.category}, ★${s.rating || '-'}, ※${s.estimatedStayTime || 30}分)`
@@ -330,9 +342,9 @@ ${candidateList}
 - Same rules as before: No code, unique trivia, stayTime/travel_time_minutes estimation.
 - Context: Time ${timeContext}, Weather ${weatherContext}.
 
-**CRITICAL LANGUAGE REQUIREMENT:**
-1. ALL generated text VALUES (title, description, spots' reason, etc.) MUST be in Japanese (日本語).
-2. **STRICTLY PROHIBITED**: DO NOT translate JSON KEYS (id, title, description, spots, must_see, etc.). Keep them in English.
+**JSON KEY RULES:**
+- DO NOT translate JSON keys (id, title, description, spots, must_see, etc.).
+- Use natural Japanese for text values only.
 
 **JSON SCHEMA:**
 {
@@ -362,9 +374,15 @@ ${candidateList}
             const result = await model.generateContent(prompt);
             const response = await result.response;
             text = response.text();
+            console.log(`✅ Remix with ${modelName} succeeded!`);
             break;
         } catch (err) {
-            console.warn(`Remix attempt with ${modelName} failed:`, err);
+            const isQuotaError = err instanceof Error && err.message.includes("429");
+            console.warn(`Remix attempt with ${modelName} failed:`, err instanceof Error ? err.message : err);
+            if (isQuotaError) {
+                console.log("Quota exceeded (429) in Remix. Waiting 500ms...");
+                await sleep(500);
+            }
         }
     }
 
@@ -453,24 +471,28 @@ export const generateWaitingScreenContent = async (
 **JSON SCHEMA:**
 {
   "status_texts": [
-    "(10個) AIが作業しているようなステータスメッセージ。例: '${locationName}の隠れた名所をリストアップ中…', '地元の人しか知らないカフェを探しています…'"
+    "(10個) AIが作業している具体的な地名を含むメッセージ。例: '嵐山の隠れた穴場をリストアップ中…'"
   ],
   "forecast_copies": [
-    "(7個) 旅の期待感を煽るポエティックな一文。例: '${locationName}の路地裏に、まだ見ぬ物語が待っている'"
+    "(7個) ポエティックな日本語の一文。例: '鴨川のせせらぎに、新しい発見が待っています'"
   ],
   "travel_tips": [
-    "(8個) その土地の豆知識。絵文字を先頭に付けて。例: '⛩️ ${locationName}の〇〇神社は…'"
+    "(8個) その土地の豆知識。'⛩️ 〇〇寺の…' 形式"
   ],
   "interaction": [
     {
-      "question": "(2個) ユーザーへの2択アンケート質問",
+      "question": "(2個) ユーザーへの2択質問 (日本語)",
       "options": [
-        {"id": "A", "label": "絵文字+選択肢A"},
-        {"id": "B", "label": "絵文字+選択肢B"}
+        {"id": "A", "label": "選択肢A (日本語)"},
+        {"id": "B", "label": "選択肢B (日本語)"}
       ]
     }
   ]
 }
+
+**IMPORTANT**: 
+- ALL text VALUES must be in Japanese.
+- ALL JSON KEYS (status_texts, forecast_copies, travel_tips, interaction, question, options, id, label) MUST remain in ENGLISH. DO NOT TRANSLATE KEYS.
 
 Output MUST be valid JSON only. No markdown, no explanation.
 `;
@@ -496,7 +518,11 @@ Output MUST be valid JSON only. No markdown, no explanation.
             console.log("✅ Sub-AI waiting screen content generated!");
             return data;
         } catch (err) {
-            console.warn(`Sub-AI (${modelName}) failed:`, err);
+            const isQuotaError = err instanceof Error && err.message.includes("429");
+            console.warn(`Sub-AI (${modelName}) failed:`, err instanceof Error ? err.message : err);
+            if (isQuotaError) {
+                await sleep(200); // サブAIはさらに短めの待機
+            }
         }
     }
 

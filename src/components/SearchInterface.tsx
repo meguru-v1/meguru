@@ -81,20 +81,20 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     {searchMode === 'area' && (
                         <>
                             <div className="space-y-2 animate-slide-up">
-                                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                                <label htmlFor="area-query" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                                     出発地点
                                 </label>
                                 <div className="relative">
-                                    <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                                    <input id="area-query" name="area-query" type="text" value={query} onChange={(e) => setQuery(e.target.value)}
                                         placeholder="例: 京都駅、浅草寺..." className="input-premium text-base" />
                                 </div>
                             </div>
                             <div className="space-y-2 animate-slide-up stagger-1">
-                                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <label htmlFor="area-radius" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                                     <Compass size={12} /> 範囲
                                     <span className="ml-auto text-amber-500 font-extrabold text-sm normal-case">{radius} km</span>
                                 </label>
-                                <input type="range" min="0.5" max="7" step="0.5" value={radius}
+                                <input id="area-radius" name="area-radius" type="range" min="0.5" max="7" step="0.5" value={radius}
                                     onChange={(e) => setRadius(parseFloat(e.target.value))} className="w-full" />
                                 <div className="flex justify-between text-[10px] text-slate-300 font-medium"><span>0.5km</span><span>7.0km</span></div>
                             </div>
@@ -104,16 +104,16 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     {searchMode === 'route' && (
                         <div className="space-y-3 animate-slide-up">
                             <div className="relative">
-                                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">出発地</label>
-                                <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                                <label htmlFor="route-origin" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">出発地</label>
+                                <input id="route-origin" name="route-origin" type="text" value={query} onChange={(e) => setQuery(e.target.value)}
                                     placeholder="例: 京都駅" className="input-premium text-sm py-3" />
                             </div>
                             <div className="flex flex-col items-center justify-center gap-0 pointer-events-none z-10">
                                 <ArrowDown size={16} className="text-slate-300 -my-2 bg-white rounded-full" />
                             </div>
                             <div className="relative">
-                                <label className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1 block">目的地</label>
-                                <input type="text" value={destination} onChange={(e) => setDestination(e.target.value)}
+                                <label htmlFor="route-destination" className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1 block">目的地</label>
+                                <input id="route-destination" name="route-destination" type="text" value={destination} onChange={(e) => setDestination(e.target.value)}
                                     placeholder="例: 嵐山" className="input-premium text-sm py-3" />
                             </div>
                         </div>
@@ -139,11 +139,11 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
 
                     {/* 共通のオプション（よりみち時間） */}
                     <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <label htmlFor="duration-slider" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                             <Clock size={12} /> よりみち時間
                             <span className="ml-auto text-amber-500 font-extrabold text-sm normal-case">{duration} 分</span>
                         </label>
-                        <input type="range" min="30" max="720" step="30" value={duration}
+                        <input id="duration-slider" name="duration-slider" type="range" min="30" max="720" step="30" value={duration}
                             onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full" />
                         <div className="flex justify-between text-[10px] text-slate-300 font-medium pb-1"><span>30分</span><span>12時間</span></div>
                     </div>

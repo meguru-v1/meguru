@@ -160,6 +160,7 @@ ${diningRule}
 `;
 
     let text: string | undefined;
+    let lastError: string = "原因不明";
     console.log("Attempting High-Performance Gemini generation...");
 
     for (const modelName of MODELS) {
@@ -167,36 +168,71 @@ ${diningRule}
             console.log(`Trying model: ${modelName}...`);
             const model = genAI.getGenerativeModel({
                 model: modelName,
-                // 高性能化のため MIME type は指定せず、手動でパース（thinkingが含まれるため）
             });
             const result = await model.generateContent(prompt);
             const response = await result.response;
             text = response.text();
-            console.log(`✅ Model ${modelName} succeeded! Response length: ${text?.length || 0}`);
+            
+            if (!text || text.trim().length === 0) {
+                throw new Error("Empty response from AI");
+            }
+
+            console.log(`✅ Model ${modelName} succeeded! Response length: ${text.length}`);
             break;
         } catch (err) {
-            console.warn(`❌ Model ${modelName} failed:`, err instanceof Error ? err.message : err);
-            await sleep(500); 
+            lastError = err instanceof Error ? err.message : String(err);
+            console.warn(`❌ Model ${modelName} failed:`, lastError);
+            // 429 (Quota) やそれ以外でも少し待機してリトライ
+            await sleep(1000); 
         }
     }
 
-    if (!text) throw new Error(`AI生成に失敗しました。`);
-
-    // thinkingタグを除去してJSONを抽出
-    let jsonStr = text;
-    const firstBracket = jsonStr.indexOf('[');
-    const lastBracket = jsonStr.lastIndexOf(']');
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-        jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
-    } else {
-        jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+    if (!text) {
+        throw new Error(`AI生成に失敗しました (全モデル試行済)。詳細: ${lastError}`);
     }
 
-    const coursesData = JSON.parse(jsonStr) as any[];
+    // --- JSON抽出ロジックの堅牢化 ---
+    let jsonStr = text;
+    
+    // 1. JSONコードブロックを探す (```json ... ```)
+    const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+        jsonStr = jsonMatch[1];
+    } else {
+        // 2. [ ] で囲まれた配列を探す (thinkingが含まれる場合を考慮)
+        const firstBracket = jsonStr.indexOf('[');
+        const lastBracket = jsonStr.lastIndexOf(']');
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+            jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
+        } else {
+            // 3. 全体から ``` を除去してトリム (フォールバック)
+            jsonStr = jsonStr.replace(/```/g, "").trim();
+        }
+    }
+
+    let coursesData: any[];
+    try {
+        coursesData = JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("Failed to parse AI response as JSON. Original text snippet:", text.substring(0, 200));
+        throw new Error("AIの回答形式を読み取れませんでした(JSON解析エラー)。再試行してください。");
+    }
+
+    if (!Array.isArray(coursesData)) {
+        throw new Error("AIから正しいコースリストが返されませんでした。");
+    }
+
+    // UUIDフォールバック
+    const generateId = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        return Math.random().toString(36).substring(2, 15);
+    };
 
     return coursesData.map(course => {
-        const uniqueId = crypto.randomUUID();
-        const hydratedSpots: Spot[] = course.spots.map((s: any) => {
+        const uniqueId = generateId();
+        const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
             const original = candidates[s.id];
             if (!original) return null;
             return {
@@ -226,7 +262,8 @@ ${diningRule}
                         nearestIdx = i;
                     }
                 }
-                sorted.push(remaining.splice(nearestIdx, 1)[0]);
+                const picked = remaining.splice(nearestIdx, 1)[0];
+                if (picked) sorted.push(picked);
             }
 
             for (let i = 0; i < sorted.length; i++) {

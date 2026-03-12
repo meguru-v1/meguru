@@ -53,31 +53,28 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     // 検索に含めるPlace types (観光地、飲食店など)
     // 種類を絞りすぎると見つからないことがあるので、主要なものに留める
     // 注: 'temple', 'shrine' は Places API (New) の includedTypes としてサポートされていないため外しています
+    // 1. まずは主要な観光・飲食カテゴリに絞って検索 (確実に見どころを見つけるため)
     const includedTypes = [
         'tourist_attraction', 'museum', 'park',
-        'historical_landmark', 'art_gallery', 'observation_deck',
-        'amusement_park', 'aquarium', 'zoo',
+        'amusement_park', 'aquarium', 'zoo', 'art_gallery',
         'cafe', 'restaurant'
     ];
 
-    // 半径が小さすぎるとゼロ件になりやすいので最低値を保証(500m以上)
     const safeRadiusMeters = Math.max(radiusMeters, 500);
 
-    const data = {
-        includedTypes: includedTypes,
-        maxResultCount: 50, // 候補を大幅に増やして多様性を確保
-        locationRestriction: {
-            circle: {
-                center: { latitude: lat, longitude: lng },
-                radius: safeRadiusMeters,
-            }
-        },
-        languageCode: 'ja'
-    };
+    const fetchData = async (types?: string[]) => {
+        const data: any = {
+            maxResultCount: 50,
+            locationRestriction: {
+                circle: {
+                    center: { latitude: lat, longitude: lng },
+                    radius: safeRadiusMeters,
+                }
+            },
+            languageCode: 'ja'
+        };
+        if (types) data.includedTypes = types;
 
-    console.log(`Places API: searchNearby request (Lat: ${lat}, Lng: ${lng}, Radius: ${safeRadiusMeters}m)`);
-
-    try {
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -88,19 +85,32 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             body: JSON.stringify(data),
         });
 
-        if (!response.ok) {
-            console.error(`Places API Error: ${response.status} ${response.statusText}`);
-            return [];
-        }
-
+        if (!response.ok) return [];
         const result = await response.json();
-        if (!result.places || result.places.length === 0) {
-            console.warn(`Places API: No spots found for Lat: ${lat}, Lng: ${lng}, Radius: ${safeRadiusMeters}m`);
-            return [];
+        return result.places || [];
+    };
+
+    try {
+        console.log(`Places API: searchNearby (Lat: ${lat}, Lng: ${lng}, Radius: ${safeRadiusMeters}m)`);
+        
+        // 初回検索 (カテゴリ絞り込み)
+        let spots = await fetchData(includedTypes);
+
+        // スポットが少なすぎる場合(10件未満)は、カテゴリ指定なしで全件検索を試みる
+        // これにより、歴史遺産や神社など、Table Aにないタイプも拾えるようになる
+        if (spots.length < 10) {
+            console.log(`Places API: Too few spots (${spots.length}), trying fallback (all types)...`);
+            const fallbackSpots = await fetchData();
+            const existingIds = new Set(spots.map((s: any) => s.id));
+            fallbackSpots.forEach((s: any) => {
+                if (!existingIds.has(s.id)) spots.push(s);
+            });
         }
 
-        console.log(`Places API: Found ${result.places.length} spots`);
-        return result.places.map((p: any) => ({
+        if (spots.length === 0) return [];
+
+        console.log(`Places API: Final total ${spots.length} spots`);
+        return spots.slice(0, 50).map((p: any) => ({
             place_id: p.id,
             name: p.displayName.text,
             lat: p.location.latitude,

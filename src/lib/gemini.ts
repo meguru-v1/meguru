@@ -4,7 +4,7 @@ import type { Spot, Course } from '../types';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// 共通モデルリスト (次世代モデルに統一)
+// 共通モデルリスト (次世代モデルに統一 / Grounding対応の2.5系のみ)
 const MODELS = [
     "gemini-2.5-pro",           // 最上位
     "gemini-2.5-flash",         // 標準

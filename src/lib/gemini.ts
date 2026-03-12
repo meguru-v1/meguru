@@ -6,9 +6,10 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 
 // 共通モデルリスト (高性能化のため Pro を優先)
 const MODELS = [
-    "gemini-2.5-pro",
-    "gemini-2.5-flash", 
-    "gemini-2.5-flash-lite"
+    "gemini-2.0-pro-exp-02-05", // 最高性能
+    "gemini-2.0-flash",         // 高速・安定
+    "gemini-1.5-pro",           // バックアップ
+    "gemini-1.5-flash"
 ];
 
 // 429エラー（Quota）発生時の待機用

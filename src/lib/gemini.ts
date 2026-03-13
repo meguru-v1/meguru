@@ -35,13 +35,16 @@ const waitRateLimit = async (modelName: string, intervalMs: number) => {
 
 const getDiningRule = (durationMinutes: number) => {
     if (durationMinutes <= 150) {
-        return `- **Dining/Cafe limits**: MIN 0, MAX 1 total spot for food/drink.\n  - STRICT: AT MOST 1 spot total for dining OR cafe. Do not choose both.`;
+        // 2.5時間以下: 食事またはカフェのどちらか「1件のみ」
+        return `- **食事・カフェの件数**: 合計で **最大1件** まで (厳守)。どちらか1つに絞ること。`;
     } else if (durationMinutes <= 300) {
-        return `- **Dining/Cafe limits**: MIN 1, MAX 2 total spots for food/drink.\n  - Suggestion: 1 Restaurant and 1 Cafe. AT MOST 1 Cafe.`;
+        // 5時間以下: 合計で最大2件まで
+        return `- **食事・カフェの件数**: 合計で **最大2件** まで。`;
     } else if (durationMinutes <= 450) {
-        return `- **Dining/Cafe limits**: MIN 2, MAX 3 total spots for food/drink.\n  - STRICT: NEVER consecutive restaurants. Diversity is key.`;
+        // 7.5時間以下: 合計で最大3件まで
+        return `- **食事・カフェの件数**: 合計で **最大3件** まで。`;
     } else {
-        return `- **Dining/Cafe limits**: MIN 2, MAX 4 total spots for food/drink.\n  - AT MOST 2 Cafes. Ensure non-dining spots remain dominant in interest.`;
+        return `- **食事・カフェの件数**: 合計で **最大4件** まで。`;
     }
 };
 

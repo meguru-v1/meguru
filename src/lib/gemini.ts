@@ -14,15 +14,34 @@ const MODELS = [
 // 429エラー（Quota）発生時の待機用
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// モデル別最終リクエスト時刻管理
+const lastRequestTimes: Record<string, number> = {
+    "gemini-2.5-flash-lite": 0,
+    "gemini-2.5-flash": 0,
+    "gemini-2.5-pro": 0
+};
+
+// レート制限待機用
+const waitRateLimit = async (modelName: string, intervalMs: number) => {
+    const now = Date.now();
+    const elapsed = now - (lastRequestTimes[modelName] || 0);
+    if (elapsed < intervalMs) {
+        const wait = intervalMs - elapsed;
+        console.log(`[RateLimit] Waiting ${wait}ms for model: ${modelName}`);
+        await sleep(wait);
+    }
+    lastRequestTimes[modelName] = Date.now();
+};
+
 const getDiningRule = (durationMinutes: number) => {
     if (durationMinutes <= 150) {
-        return `- **Dining/Cafe limits**: MIN 0, MAX 2 total spots for food/drink.\n  - Of those MAX 2, there can be AT MOST 1 Restaurant and AT MOST 1 Cafe.\n  - STRICT: NEVER consecutive restaurants.`;
+        return `- **Dining/Cafe limits**: MIN 0, MAX 1 total spot for food/drink.\n  - STRICT: AT MOST 1 spot total for dining OR cafe. Do not choose both.`;
     } else if (durationMinutes <= 300) {
-        return `- **Dining/Cafe limits**: MIN 1, MAX 2 total spots for food/drink.\n  - Of those spots, there can be AT MOST 1 Cafe.\n  - STRICT: NEVER consecutive restaurants.`;
+        return `- **Dining/Cafe limits**: MIN 1, MAX 2 total spots for food/drink.\n  - Suggestion: 1 Restaurant and 1 Cafe. AT MOST 1 Cafe.`;
     } else if (durationMinutes <= 450) {
-        return `- **Dining/Cafe limits**: MIN 2, MAX 3 total spots for food/drink.\n  - Of those spots, there can be AT MOST 1 Cafe.\n  - STRICT: NEVER consecutive restaurants.`;
+        return `- **Dining/Cafe limits**: MIN 2, MAX 3 total spots for food/drink.\n  - STRICT: NEVER consecutive restaurants. Diversity is key.`;
     } else {
-        return `- **Dining/Cafe limits**: MIN 3, MAX 4 total spots for food/drink.\n  - Of those spots, MUST include 1 or 2 Cafes.\n  - STRICT: NEVER consecutive restaurants.`;
+        return `- **Dining/Cafe limits**: MIN 2, MAX 4 total spots for food/drink.\n  - AT MOST 2 Cafes. Ensure non-dining spots remain dominant in interest.`;
     }
 };
 
@@ -50,201 +69,133 @@ export const generateSmartCourses = async (
     }).join('\n');
 
     const diningRule = getDiningRule(durationMinutes);
-    const targetSpots = Math.min(Math.ceil(durationMinutes / 50), 15);
 
     const allThemes = [
         "🕰️ Time Travel: 時代を感じる歴史旅",
         "🌿 Nature's Whisper: 静寂と緑",
         "🏙️ Urban Jungle: 都会の喧騒と魅力を歩く",
         "⛩️ Spiritual Awakening: 神社仏閣とパワースポット",
-        "🍽️ Gourmet Adventure: 美食と食べ歩き",
         "🎨 Art & Soul: アートとクリエイティブ",
         "💎 Hidden Gems: 地元民しか知らない穴場",
         "📸 Photogenic: 思わず写真を撮りたくなる風景",
         "☕ Retro Revival: 昭和レトロな純喫茶・路地裏",
         "✨ Luxury & Leisure: ちょっぴり贅沢な大人の休日",
-        "👻 Mystery & Legend: ちょっと怖い伝説・ミステリー",
-        "🛍️ Local Life: 商店街と地元民の暮らし",
-        "🏛️ Architecture Walk: 名建築とユニークな建物",
-        "🤫 Silence & Solitude: 究極の「おひとりさま」静寂",
         "🌅 Morning/Evening Glow: 朝焼け・夕焼けが美しい場所",
-        "♨️ Healing Waters: 温泉・銭湯と下町リラックス",
-        "🎯 Trend Hunter: 最新ショップと流行スポット",
         "📚 Culture & Book: 本とカルチャー、知的好奇心を満たす旅",
         "👾 Pop Culture & Anime: アニメ・ゲーム・サブカルの聖地へ",
-        "🏃 Active & Sports: 体を動かすアクティビティと自然",
-        "🍻 Evening Izakaya & Pub: 大人の夜遊び・はしご酒",
-        "🏭 Industrial & Night View: 工場夜景とインダストリアルな風景",
-        "👨‍👩‍👧‍👦 Family Fun: 子供と一緒に楽しむファミリープラン",
-        "🌊 Waterfront: 海や川辺の爽やかな風を感じて",
-        "🚂 Railway & Transit: 乗り物を楽しむ鉄分多めの旅"
+        "🌊 Waterfront: 海や川辺の爽やかな風を感じて"
     ];
 
     const selectedThemes = allThemes.sort(() => 0.5 - Math.random()).slice(0, 5);
     const themeInstructions = selectedThemes.map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
 
+    // 爆速化プロンプト: 「小ネタカタログ」＋「コース構成」の2段構え
     const prompt = `
-You are an expert, high-end travel concierge for Japan.
-Your client has ${durationMinutes} minutes to spend starting from a specific location.
+You are a top-tier Japanese luxury travel curator.
+Your task is to create 5 distinct plans for a **${durationMinutes} minute** trip.
 
-Here is a list of candidate spots nearby (ID: Name(Detailed Infos)):
-${candidateList}
+** MISSION (2-STAGE PROCESS for FASTEST OUTPUT):**
+1. **STAGE 1: THE TRIVIA CATALOG**: Generate unique details (trivia, pro-tip, must-see) for ALL candidate spots selected for any course. Do this ONCE.
+2. **STAGE 2: THE ITINERARY**: Construct 5 courses using the IDs from candidate list. Strictly reference STAGE 1 details.
 
-**YOUR MISSION:**
-Create 5 distinct, **extraordinary** model courses using the "Thinking Step" for higher performance.
+**NAMING & TONE (MAGAZINE QUALITY):**
+- **Title**: Use poetic, emotional Japanese (e.g., "琥珀色の午後、文学の香りに誘われて").
 
-**EACH COURSE MUST FOLLOW A SPECIFIC THEME SELECTED BELOW:**
+**CONSTRAINTS:**
+- **Time Budget**: Sum of (Stay + Travel) <= ${durationMinutes} mins.
+- **Dining Rule**: ${diningRule}
+- **Themes**:
 ${themeInstructions}
 
-**CRITICAL: MANDATORY DINING CONSTRAINTS (HARD RULES)**
-For a ${durationMinutes} min itinerary, YOU MUST strictly follow these counts:
-${diningRule}
-* **PENALTY**: Any course violating these MIN/MAX counts or having consecutive restaurants will be REJECTED. Count carefully!
+**CANDIDATES:**
+${candidateList}
 
-**PERSONALIZATION CONTEXT:**
-- Mood: ${mood}
-- Budget: ${budget}
-- Group Size/Type: ${groupSize}
-* Adjust your selection based on priceLevel and ratings.
+**SYSTEM INFO:**
+- Mood: ${mood}, Budget: ${budget}, People: ${groupSize}
+- Context: ${timeContext}, ${weatherContext}
 
-**CURRENT CONTEXT (CRITICAL FOR SPOT SELECTION):**
-- Current Time: ${timeContext}
-- Current Weather: ${weatherContext}
-* **INTELLIGENT TIME REFLECTION**: 
-    - If it's around 11:30~13:30, include a Lunch spot.
-    - If it's 15:00~16:30, include a Cafe/Tea spot.
-    - If it's after 17:30, include a Dinner spot and prioritize night views.
-    - Mention why you chose this timing in the 'recommendation_reason'.
-* If it is raining/snowing, prioritize indoor activities.
-
-**DIVERSITY RULE (STRICT):**
-- **NO FOOD-ONLY COURSES**: A course MUST contain at least one (ideally two or more) NON-DINING spot (e.g., museum, park, etc.).
-
-**YOUR WORKFLOW (STRICT):**
-1. **THINKING STEP (<thinking>)**:
-    - Before generating the JSON, output a <thinking> block in Japanese (200-400 chars).
-    - Analyze candidates, user mood/budget, and context (time/weather).
-    - Plan a logical route (minimizing travel) and theme-consistent activities.
-    - **Verify Dining Rules**: Double-check that MIN/MAX dining counts are met.
-    - **Use Details**: Integrate the provided opening hours and review summaries.
-2. **JSON OUTPUT**:
-    - Output the final courses in valid JSON format after the </thinking> closing tag.
-
-**JSON SCHEMA:**
-[
-    {
-        "id": "theme_id_1",
-        "title": "Poetic Magazine-like Title",
-        "theme": "Assigned Theme Name",
-        "description": "Engaging course summary...",
-        "totalTime": ${durationMinutes},
-        "spots": [
-            {
-                "id": 12,
-                "stayTime": 60,
-                "travel_time_minutes": 10,
-                "recommendation_reason": "Specific reason citing details...",
-                "must_see": "Primary highlight...",
-                "pro_tip": "Insider tip based on review/summary...",
-                "trivia": "Rich trivia based on facts (3+ lines)..."
-            }
-        ]
+**OUTPUT SCHEMA (JSON only, after <thinking>):**
+{
+  "trivia_catalog": {
+    "CANDIDATE_ID": {
+      "recommendation_reason": "Summary based on context",
+      "must_see": "Primary highlight",
+      "pro_tip": "Insider insight",
+      "trivia": "Rich historical/flavor trivia (3+ lines)"
     }
-]
-
-**JSON KEY RULES (HARD CONSTRAINT):**
-- **NEVER TRANSLATE KEYS**: Keep all keys strictly in English ("id", "title", "description", "spots", etc.).
-- **VALUES IN JAPANESE**: Only the text values must be in Japanese.
-- Output ONLY the JSON after the thinking block. No other text.
+  },
+  "courses": [
+    {
+      "title": "Emotional Title",
+      "theme": "Theme Name",
+      "description": "Mag-style intro",
+      "spots": [
+        { "id": ID, "stayTime": MINS, "travel_time_minutes": MINS }
+      ]
+    }
+  ]
+}
 `;
 
+    const modelName = "gemini-2.5-flash-lite"; // コース生成はLite固定
     let text: string | undefined;
-    let lastError: string = "原因不明";
-    console.log("Attempting High-Performance Gemini generation...");
 
-    for (const modelName of MODELS) {
-        try {
-            console.log(`Trying model: ${modelName}...`);
-            const model = genAI.getGenerativeModel({
-                model: modelName,
-            });
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            text = response.text();
-            
-            if (!text || text.trim().length === 0) {
-                throw new Error("Empty response from AI");
-            }
-
-            console.log(`✅ Model ${modelName} succeeded! Response length: ${text.length}`);
-            break;
-        } catch (err) {
-            lastError = err instanceof Error ? err.message : String(err);
-            console.warn(`❌ Model ${modelName} failed:`, lastError);
-            // 429 (Quota) やそれ以外でも少し待機してリトライ
-            await sleep(1000); 
-        }
-    }
-
-    if (!text) {
-        throw new Error(`AI生成に失敗しました (全モデル試行済)。詳細: ${lastError}`);
-    }
-
-    // --- JSON抽出ロジックの堅牢化 ---
-    let jsonStr = text;
-    
-    // 1. JSONコードブロックを探す (```json ... ```)
-    const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-        jsonStr = jsonMatch[1];
-    } else {
-        // 2. [ ] で囲まれた配列を探す (thinkingが含まれる場合を考慮)
-        const firstBracket = jsonStr.indexOf('[');
-        const lastBracket = jsonStr.lastIndexOf(']');
-        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-            jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
-        } else {
-            // 3. 全体から ``` を除去してトリム (フォールバック)
-            jsonStr = jsonStr.replace(/```/g, "").trim();
-        }
-    }
-
-    let coursesData: any[];
     try {
-        coursesData = JSON.parse(jsonStr);
-    } catch (e) {
-        console.error("Failed to parse AI response as JSON. Original text snippet:", text.substring(0, 200));
-        throw new Error("AIの回答形式を読み取れませんでした(JSON解析エラー)。再試行してください。");
-    }
-
-    if (!Array.isArray(coursesData)) {
-        throw new Error("AIから正しいコースリストが返されませんでした。");
-    }
-
-    // UUIDフォールバック
-    const generateId = () => {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            return crypto.randomUUID();
+        await waitRateLimit(modelName, 5000); // 5秒制限
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        text = response.text();
+    } catch (err) {
+        console.error(`Lite generation failed:`, err);
+        // フォールバック: Pro/Flash (これらも 5-7秒待つ)
+        for (const fbModel of ["gemini-2.5-pro", "gemini-2.5-flash"]) {
+            try {
+                await waitRateLimit(fbModel, fbModel === "gemini-2.5-pro" ? 1000 : 7000);
+                const model = genAI.getGenerativeModel({ model: fbModel });
+                const result = await model.generateContent(prompt);
+                text = (await result.response).text();
+                break;
+            } catch (e) { console.warn(`${fbModel} failed`); }
         }
-        return Math.random().toString(36).substring(2, 15);
-    };
+    }
 
-    return coursesData.map(course => {
+    if (!text) throw new Error("AI生成に失敗しました (全モデル試行済)。");
+
+    // JSON抽出
+    let jsonStr = text;
+    const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) jsonStr = jsonMatch[1];
+    else {
+        const start = jsonStr.indexOf('{');
+        const end = jsonStr.lastIndexOf('}');
+        if (start !== -1 && end !== -1) jsonStr = jsonStr.substring(start, end + 1);
+    }
+
+    const rawData = JSON.parse(jsonStr);
+    const catalog = rawData.trivia_catalog || {};
+    const courses = rawData.courses || [];
+
+    // UUID
+    const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+
+    return courses.map((course: any) => {
         const uniqueId = generateId();
         const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
             const original = candidates[s.id];
+            const details = catalog[s.id] || {};
             if (!original) return null;
             return {
                 ...original,
                 stayTime: s.stayTime,
-                aiDescription: s.recommendation_reason,
-                must_see: s.must_see || null,
-                pro_tip: s.pro_tip || null,
-                trivia: s.trivia || undefined
+                aiDescription: details.recommendation_reason || "おすすめのスポットです",
+                must_see: details.must_see || null,
+                pro_tip: details.pro_tip || null,
+                trivia: details.trivia || undefined
             } as Spot;
-        }).filter((s: Spot | null): s is Spot => s !== null);
+        }).filter((s: any): s is Spot => s !== null);
 
-        // Sorting by distance
+        // Sorting/Travel time (already implemented in gemini.ts before, keeping logic)
         if (hydratedSpots.length > 1) {
             const sorted: Spot[] = [hydratedSpots[0]];
             const remaining = hydratedSpots.slice(1);
@@ -256,19 +207,14 @@ ${diningRule}
                     const dx = (remaining[i].lat - current.lat) * 111000;
                     const dy = (remaining[i].lon - current.lon) * 111000 * Math.cos(current.lat * Math.PI / 180);
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < nearestDist) {
-                        nearestDist = dist;
-                        nearestIdx = i;
-                    }
+                    if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
                 }
                 const picked = remaining.splice(nearestIdx, 1)[0];
                 if (picked) sorted.push(picked);
             }
-
             for (let i = 0; i < sorted.length; i++) {
-                if (i === 0) {
-                    sorted[i].travel_time_minutes = 0;
-                } else {
+                if (i === 0) sorted[i].travel_time_minutes = 0;
+                else {
                     const prev = sorted[i - 1];
                     const dx = (sorted[i].lat - prev.lat) * 111000;
                     const dy = (sorted[i].lon - prev.lon) * 111000 * Math.cos(prev.lat * Math.PI / 180);
@@ -276,10 +222,9 @@ ${diningRule}
                     sorted[i].travel_time_minutes = Math.round(dist / 80);
                 }
             }
-            return { ...course, id: uniqueId, spots: sorted } as Course;
+            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: sorted } as Course;
         }
-
-        return { ...course, id: uniqueId, spots: hydratedSpots } as Course;
+        return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: hydratedSpots } as Course;
     });
 };
 
@@ -287,52 +232,37 @@ export const remixCourse = async (
     originalCourse: Course,
     candidates: Spot[],
     remixInstruction: string,
-    center: { lat: number; lon: number },
-    timeContext: string = "不明",
-    weatherContext: string = "不明"
+    center: { lat: number; lon: number }
 ): Promise<Course | null> => {
     const candidateList = candidates.map((s, i) => `${i}: ${s.name}`).join('\n');
-    const originalCourseInfo = JSON.stringify({
-        title: originalCourse.title,
-        spots: originalCourse.spots.map(s => s.name)
-    });
+    const prompt = `Remix this course: ${originalCourse.title} based on: "${remixInstruction}". Candidates: ${candidateList}. Return JSON ONLY with title, description, and list of spot IDs with stayTimes.`;
 
-    const prompt = `Remix this course: ${originalCourseInfo} based on: "${remixInstruction}". Use thinking step and output JSON only. Candidates: ${candidateList}`;
+    const modelName = "gemini-2.5-flash-lite"; // RemixもLite
+    try {
+        await waitRateLimit(modelName, 5000);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const data = JSON.parse(response.text().match(/{[\s\S]*}/)?.[0] || "{}");
+        
+        const hydratedSpots = (data.spots || []).map((s: any) => {
+            const original = candidates[s.id];
+            if (!original) return null;
+            return { ...original, stayTime: s.stayTime, aiDescription: s.recommendation_reason || "リミックスされたスポットです" };
+        }).filter((s: any): s is Spot => s !== null);
 
-    for (const modelName of MODELS) {
-        try {
-            const model = genAI.getGenerativeModel({ model: modelName });
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            const text = response.text();
-
-            let jsonStr = text;
-            const firstBrace = jsonStr.indexOf('{');
-            const lastBrace = jsonStr.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-            }
-
-            const data = JSON.parse(jsonStr);
-            const hydratedSpots = data.spots.map((s: any) => {
-                const original = candidates[s.id];
-                if (!original) return null;
-                return { ...original, stayTime: s.stayTime, aiDescription: s.recommendation_reason };
-            }).filter((s: any): s is Spot => s !== null);
-
-            return {
-                id: crypto.randomUUID(),
-                title: data.title,
-                description: data.description || "",
-                totalTime: originalCourse.totalTime,
-                spots: hydratedSpots,
-                theme: remixInstruction
-            } as Course;
-        } catch (err) {
-            console.warn(`Remix attempt failed:`, err);
-        }
+        return {
+            id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+            title: data.title,
+            description: data.description || "",
+            totalTime: originalCourse.totalTime,
+            spots: hydratedSpots,
+            theme: remixInstruction
+        } as Course;
+    } catch (err) {
+        console.error(`Remix failed:`, err);
+        return null;
     }
-    return null;
 };
 
 export interface WaitingScreenContent {
@@ -349,16 +279,15 @@ export const generateWaitingScreenContent = async (
     locationName: string,
     weatherContext: string = "不明"
 ): Promise<WaitingScreenContent | null> => {
-    const prompt = `Create waiting screen content for ${locationName} (Weather: ${weatherContext}). Output JSON with: status_texts, forecast_copies, travel_tips, interaction.`;
-    for (const modelName of MODELS) {
-        try {
-            const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            return JSON.parse(response.text()) as WaitingScreenContent;
-        } catch (err) {
-            console.warn(`Sub-AI failed:`, err);
-        }
+    const prompt = `Create premium Japanese waiting screen content for ${locationName} (Weather: ${weatherContext}). JSON ONLY.`;
+    const modelName = "gemini-2.5-flash"; // 待機画面はFlash固定
+    try {
+        await waitRateLimit(modelName, 7000); // 7秒制限
+        const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
+        const result = await model.generateContent(prompt);
+        return JSON.parse((await result.response).text()) as WaitingScreenContent;
+    } catch (err) {
+        console.warn(`Sub-AI (Flash) failed:`, err);
+        return null;
     }
-    return null;
 };

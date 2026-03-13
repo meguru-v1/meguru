@@ -50,29 +50,15 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
 export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number): Promise<PlaceDetails[]> {
     const url = `https://places.googleapis.com/v1/places:searchNearby`;
 
-<<<<<<< HEAD
-    // 1. スポット探知システムの高性能化: 検索カテゴリを正規化 (Table A のみに準拠)
-    const includedTypes = [
-        'tourist_attraction', 'museum', 'park', 'amusement_park', 'aquarium', 'zoo', 'art_gallery',
-        'shopping_mall', 'department_store', 'stadium', 'cafe', 'restaurant' 
-=======
     // 1. カテゴリの拡充 (Table A に準拠)
     const primaryTypes = [
         'tourist_attraction', 'museum', 'park',
         'amusement_park', 'aquarium', 'zoo', 'art_gallery',
         'historical_landmark', 'observation_deck', 'shrine', 'temple'
->>>>>>> bb31a14e08347aaa7c321c0860d230c1e84924e1
     ];
     const diningTypes = ['cafe', 'restaurant'];
     const allSearchTypes = [...primaryTypes, ...diningTypes];
 
-<<<<<<< HEAD
-    const safeRadiusMeters = Math.max(radiusMeters, 500);
-
-    const fetchData = async (types?: string[], rankPreference: 'POPULARITY' | 'DISTANCE' = 'POPULARITY') => {
-        const data: any = {
-            maxResultCount: 50, // 最大件数を取得
-=======
     const initialRadius = Math.max(radiusMeters, 500);
     const maxRadius = 5000; // 最大 5km まで拡大
     
@@ -80,25 +66,15 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     const fetchData = async (currentRadius: number, types: string[]) => {
         const data = {
             maxResultCount: 20, // API制限により1リクエスト最大20件
->>>>>>> bb31a14e08347aaa7c321c0860d230c1e84924e1
             locationRestriction: {
                 circle: {
                     center: { latitude: lat, longitude: lng },
                     radius: currentRadius,
                 }
             },
-<<<<<<< HEAD
-            rankPreference: rankPreference,
-            languageCode: 'ja'
-        };
-        if (types && types.length > 0) {
-            data.includedTypes = types;
-        }
-=======
             includedTypes: types,
             languageCode: 'ja'
         };
->>>>>>> bb31a14e08347aaa7c321c0860d230c1e84924e1
 
         const response = await fetch(url, {
             method: 'POST',
@@ -120,20 +96,6 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     };
 
     try {
-<<<<<<< HEAD
-        console.log(`Places API (Stable): searchNearby (Lat: ${lat}, Lng: ${lng}, Radius: ${safeRadiusMeters}m)`);
-        
-        // 探知1: 人気・主要カテゴリ中心
-        let spots = await fetchData(includedTypes, 'POPULARITY');
-
-        // 探知2: スポットが少ない場合、カテゴリ制限なしで距離順に探す (確実にヒットさせる)
-        if (spots.length < 10) {
-            console.log(`Places API: Supplementing with more spots (Broad search)...`);
-            const fallbackSpots = await fetchData([], 'DISTANCE');
-            const existingIds = new Set(spots.map((s: any) => s.id));
-            fallbackSpots.forEach((s: any) => {
-                if (!existingIds.has(s.id)) spots.push(s);
-=======
         let allFoundSpots: any[] = [];
         const foundIds = new Set<string>();
 
@@ -143,7 +105,6 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
                     foundIds.add(p.id);
                     allFoundSpots.push(p);
                 }
->>>>>>> bb31a14e08347aaa7c321c0860d230c1e84924e1
             });
         };
 
@@ -171,23 +132,11 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             addSpots(await fetchData(currentRadius, allSearchTypes));
         }
 
-<<<<<<< HEAD
-        // 高性能化: 評価や件数でスコートし、AIに渡す候補を整理
-        spots.sort((a: any, b: any) => {
-            const scoreA = (a.rating || 0) * Math.log10((a.userRatingCount || 1) + 1);
-            const scoreB = (b.rating || 0) * Math.log10((b.userRatingCount || 1) + 1);
-            return scoreB - scoreA;
-        });
-
-        console.log(`Places API: Found ${spots.length} spots.`);
-        return spots.map((p: any) => ({
-=======
         if (allFoundSpots.length === 0) return [];
 
         console.log(`Places API: Found ${allFoundSpots.length} unique spots total.`);
 
         return allFoundSpots.slice(0, 50).map((p: any) => ({
->>>>>>> bb31a14e08347aaa7c321c0860d230c1e84924e1
             place_id: p.id,
             name: p.displayName.text,
             lat: p.location.latitude,
@@ -210,7 +159,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 }
 
 /**
- * ルート検索用に複数エリア의 プレイスを取得する（出発地、目的地、その中間など）
+ * ルート検索用に複数エリアのプレイスを取得する（出発地、目的地、その中間など）
  */
 export async function searchRouteSpots(originObj: { lat: number, lng: number }, destObj: { lat: number, lng: number }, radiusMeters: number): Promise<PlaceDetails[]> {
     // 簡易的に、出発地周辺、目的地周辺、および中間地点周辺の候補を取得してマージする

@@ -242,10 +242,28 @@ export const remixCourse = async (
     originalCourse: Course,
     candidates: Spot[],
     remixInstruction: string,
-    center: { lat: number; lon: number }
+    center: { lat: number; lon: number },
+    timeContext: string = "不明",
+    weatherContext: string = "不明"
 ): Promise<Course | null> => {
     const candidateList = candidates.map((s, i) => `${i}: ${s.name}`).join('\n');
-    const prompt = `Remix this course: ${originalCourse.title} based on: "${remixInstruction}". Candidates: ${candidateList}. Return JSON ONLY with title, description, and list of spot IDs with stayTimes.`;
+    const prompt = `
+Remix this course: "${originalCourse.title}" based on the instruction: "${remixInstruction}".
+
+**Context:**
+- Current Time: ${timeContext}
+- Weather: ${weatherContext}
+- Center: ${center.lat}, ${center.lon}
+
+**Candidates:**
+${candidateList}
+
+**Requirement:**
+Return JSON ONLY with:
+- title: New emotional Japanese title
+- description: Mag-style Japanese description
+- spots: list of { id: index, stayTime: minutes }
+`;
 
     const modelName = "gemini-2.5-flash-lite"; // RemixもLite
     try {

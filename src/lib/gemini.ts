@@ -6,7 +6,6 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 
 // 共通モデルリスト (次世代モデルに統一 / Grounding対応の2.5系のみ)
 const MODELS = [
-    "gemini-2.5-pro",           // 最上位
     "gemini-2.5-flash",         // 標準
     "gemini-2.5-flash-lite"     // 軽量
 ];
@@ -17,8 +16,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // モデル別最終リクエスト時刻管理
 const lastRequestTimes: Record<string, number> = {
     "gemini-2.5-flash-lite": 0,
-    "gemini-2.5-flash": 0,
-    "gemini-2.5-pro": 0
+    "gemini-2.5-flash": 0
 };
 
 // レート制限待機用
@@ -161,15 +159,15 @@ ${candidateList}
         text = response.text();
     } catch (err) {
         console.error(`Lite generation failed:`, err);
-        // フォールバック: Pro/Flash (これらも 5-7秒待つ)
-        for (const fbModel of ["gemini-2.5-pro", "gemini-2.5-flash"]) {
-            try {
-                await waitRateLimit(fbModel, fbModel === "gemini-2.5-pro" ? 1000 : 7000);
-                const model = genAI.getGenerativeModel({ model: fbModel });
-                const result = await model.generateContent(prompt);
-                text = (await result.response).text();
-                break;
-            } catch (e) { console.warn(`${fbModel} failed`); }
+        // フォールバック: Flash (7秒待つ)
+        const fbModel = "gemini-2.5-flash";
+        try {
+            await waitRateLimit(fbModel, 7000);
+            const model = genAI.getGenerativeModel({ model: fbModel });
+            const result = await model.generateContent(prompt);
+            text = (await result.response).text();
+        } catch (e) {
+            console.warn(`${fbModel} failed`);
         }
     }
 

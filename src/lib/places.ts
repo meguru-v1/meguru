@@ -50,16 +50,17 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
 export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number): Promise<PlaceDetails[]> {
     const url = `https://places.googleapis.com/v1/places:searchNearby`;
 
-    // 1. まずは主要な観光・飲食カテゴリに絞って検索 (確実に見どころを見つけるため)
+    // 1. スポット探知システムの高性能化: 検索カテゴリを大幅に拡充し、多角的に見どころを拾う
     const includedTypes = [
-        'tourist_attraction', 'museum', 'park',
-        'amusement_park', 'aquarium', 'zoo', 'art_gallery',
-        'cafe', 'restaurant'
+        'tourist_attraction', 'museum', 'park', 'amusement_park', 'aquarium', 'zoo', 'art_gallery',
+        'historical_landmark', 'temple', 'church', 'shrine', 'castle', 'monument', 'scenic_lookout',
+        'shopping_mall', 'department_store', 'market', 'cultural_center', 'stadium', 'marina',
+        'cafe', 'restaurant' 
     ];
 
     const safeRadiusMeters = Math.max(radiusMeters, 500);
 
-    const fetchData = async (types?: string[]) => {
+    const fetchData = async (types?: string[], rankPreference: 'POPULARITY' | 'DISTANCE' = 'POPULARITY') => {
         const data: any = {
             maxResultCount: 20,
             locationRestriction: {
@@ -68,15 +69,20 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
                     radius: safeRadiusMeters,
                 }
             },
+            routingParameters: {
+                origin: { latitude: lat, longitude: lng }
+            },
+            routingSummaries: [],
+            rankPreference: rankPreference, // 人気順で取得して質の高いスポットを優先
             languageCode: 'ja'
         };
         if (types) {
             data.includedTypes = types;
         } else {
-            // フォールバック: 指定がない場合は広範なカテゴリを検索対象にする (API要件: Table Aのみ使用可能)
+            // 広義の観光スポットを広範囲にカバー
             data.includedTypes = [
-                'tourist_attraction', 'park', 'amusement_park', 'museum', 'art_gallery', 
-                'movie_theater', 'shopping_mall', 'aquarium', 'zoo', 'historical_landmark'
+                'tourist_attraction', 'museum', 'park', 'landmark', 'historical_landmark',
+                'shopping_mall', 'aquarium', 'zoo', 'art_gallery'
             ];
         }
 
@@ -100,15 +106,15 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     };
 
     try {
-        console.log(`Places API: searchNearby (Lat: ${lat}, Lng: ${lng}, Radius: ${safeRadiusMeters}m)`);
+        console.log(`Places API (Advanced): searchNearby (Lat: ${lat}, Lng: ${lng}, Radius: ${safeRadiusMeters}m)`);
         
-        // 初回検索 (カテゴリ絞り込み)
-        let spots = await fetchData(includedTypes);
+        // 探知1: 人気・主要カテゴリ中心
+        let spots = await fetchData(includedTypes, 'POPULARITY');
 
-        // スポットが少なすぎる場合(10件未満)は、カテゴリ指定なしで全件検索を試みる
-        if (spots.length < 10) {
-            console.log(`Places API: Too few spots (${spots.length}), trying fallback (all types)...`);
-            const fallbackSpots = await fetchData();
+        // 探知2: スポットが少ない場合、距離順も含めて幅広く探す
+        if (spots.length < 15) {
+            console.log(`Places API: Supplementing with more spots...`);
+            const fallbackSpots = await fetchData(undefined, 'DISTANCE');
             const existingIds = new Set(spots.map((s: any) => s.id));
             fallbackSpots.forEach((s: any) => {
                 if (!existingIds.has(s.id)) spots.push(s);
@@ -117,7 +123,14 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 
         if (spots.length === 0) return [];
 
-        console.log(`Places API: Final total ${spots.length} spots`);
+        // 高性能化: 評価や件数でソートし、AIに渡す20件を厳選
+        spots.sort((a: any, b: any) => {
+            const scoreA = (a.rating || 0) * Math.log10((a.userRatingCount || 1) + 1);
+            const scoreB = (b.rating || 0) * Math.log10((b.userRatingCount || 1) + 1);
+            return scoreB - scoreA;
+        });
+
+        console.log(`Places API: Highly evaluated top ${spots.length} spots retrieved.`);
         return spots.slice(0, 50).map((p: any) => ({
             place_id: p.id,
             name: p.displayName.text,

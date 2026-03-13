@@ -94,18 +94,28 @@ export const generateSmartCourses = async (
 You are a top-tier Japanese luxury travel curator.
 Your task is to create 5 distinct plans for a **${durationMinutes} minute** trip.
 
-** MISSION (2-STAGE PROCESS for FASTEST OUTPUT):**
-1. **STAGE 1: THE TRIVIA CATALOG**: Generate unique details (trivia, pro-tip, must-see) for ALL candidate spots selected for any course. Do this ONCE.
-2. **STAGE 2: THE ITINERARY**: Construct 5 courses using the IDs from candidate list. Strictly reference STAGE 1 details.
+**【最重要ミッション】**
+あなたは世界最高峰のトラベルキュレーターです。**必ず日本語で**、雑誌の特集のような魅力的な5つのプランを作成してください。
 
-**NAMING & TONE (MAGAZINE QUALITY):**
-- **Title**: Use poetic, emotional Japanese (e.g., "琥珀色の午後、文学の香りに誘われて").
+**1. 時間予算の厳守 (重要):**
+- **「各スポットの滞在時間の合計」＋「スポット間の移動時間」**が、指定された **${durationMinutes}分** を超えないように厳選してください。
+- 詰め込みすぎず、そのテーマにおいて最高に価値のある3〜5程度のスポットに絞るのがコツです。
 
-**CONSTRAINTS:**
-- **Time Budget**: Sum of (Stay + Travel) <= ${durationMinutes} mins.
-- **Dining Rule**: ${diningRule}
-- **Themes**:
+**2. 食事・カフェの制限:**
+${diningRule}
+- 食べてばかりのプランにならないよう、文化、景色、体験を主役にしてください。
+
+**3. 情緒的な命名とトーン:**
+- **タイトル**: 「〜を巡る旅」のような平凡な名前は禁止です。思わずクリックしたくなる、詩的でキャッチーな日本語タイトルにしてください（例：「琥珀色の午後、文学の香りに誘われて」）。
+- **トーン**: 洗練され、ワクワクさせるような、高級旅行誌の文体で書いてください。
+
+**4. 構成と多様性:**
 ${themeInstructions}
+- **食事のみのコースは禁止**です。必ず1つ以上（理想は2つ以上）の非飲食スポット（美術館、公園、史跡など）を含めてください。
+
+**【出力形式】**
+- **JSONの「値」はすべて日本語**で出力してください。
+- **JSONの「キー」は絶対に英語のまま**（id, title, description, trivia等）にしてください。
 
 **CANDIDATES:**
 ${candidateList}

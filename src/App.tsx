@@ -130,7 +130,10 @@ function App() {
                     rating: p.rating,
                     user_ratings_total: p.user_ratings_total,
                     tags: { types: p.types, formatted_address: p.formatted_address },
-                    photos: p.photo_reference ? [p.photo_reference] : []
+                    photos: p.photo_reference ? [p.photo_reference] : [],
+                    editorial_summary: p.editorial_summary,
+                    opening_hours: p.opening_hours,
+                    reviews: p.reviews?.map(r => r.text) || []
                 }));
 
                 if (allSpots.length < 3) throw new Error("ルート周辺に見どころとなるスポットがあまり見つかりませんでした。検索範囲や時間を大きくしてみてください。");
@@ -258,7 +261,10 @@ function App() {
                     rating: p.rating,
                     user_ratings_total: p.user_ratings_total,
                     tags: { types: p.types, formatted_address: p.formatted_address },
-                    photos: p.photo_reference ? [p.photo_reference] : []
+                    photos: p.photo_reference ? [p.photo_reference] : [],
+                    editorial_summary: p.editorial_summary,
+                    opening_hours: p.opening_hours,
+                    reviews: p.reviews?.map(r => r.text) || []
                 }));
 
                 if (allSpots.length === 0) throw new Error("周辺に見どころとなるスポットが見つかりませんでした。別の場所や、検索範囲を広くして試してみてください。");

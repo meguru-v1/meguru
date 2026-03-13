@@ -21,13 +21,13 @@ const lastRequestTimes: Record<string, number> = {
     "gemini-2.5-pro": 0
 };
 
-// レート制限待機用
+// レートリミット待機処理
 const waitRateLimit = async (modelName: string, intervalMs: number) => {
     const now = Date.now();
     const elapsed = now - (lastRequestTimes[modelName] || 0);
     if (elapsed < intervalMs) {
         const wait = intervalMs - elapsed;
-        console.log(`[RateLimit] Waiting ${wait}ms for model: ${modelName}`);
+        console.log(`[RateLimit] Waiting for ${wait}ms for ${modelName}`);
         await sleep(wait);
     }
     lastRequestTimes[modelName] = Date.now();
@@ -35,13 +35,16 @@ const waitRateLimit = async (modelName: string, intervalMs: number) => {
 
 const getDiningRule = (durationMinutes: number) => {
     if (durationMinutes <= 150) {
-        return `- **Dining/Cafe limits**: MIN 0, MAX 1 total spot for food/drink.\n  - STRICT: AT MOST 1 spot total for dining OR cafe. Do not choose both.`;
+        // 2.5時間以下: 食事またはカフェのどちらか「1件のみ」
+        return `- **食事・カフェの件数**: 合計で **最大1件** まで (厳守)。どちらか1つに絞ること。`;
     } else if (durationMinutes <= 300) {
-        return `- **Dining/Cafe limits**: MIN 1, MAX 2 total spots for food/drink.\n  - Suggestion: 1 Restaurant and 1 Cafe. AT MOST 1 Cafe.`;
+        // 5時間以下: 合計で最大2件まで
+        return `- **食事・カフェ의件数**: 合計で **最大2件** まで。`;
     } else if (durationMinutes <= 450) {
-        return `- **Dining/Cafe limits**: MIN 2, MAX 3 total spots for food/drink.\n  - STRICT: NEVER consecutive restaurants. Diversity is key.`;
+        // 7.5時間以下: 合計で最大3件まで
+        return `- **食事・カフェの件数**: 合計で **最大3件** まで。`;
     } else {
-        return `- **Dining/Cafe limits**: MIN 2, MAX 4 total spots for food/drink.\n  - AT MOST 2 Cafes. Ensure non-dining spots remain dominant in interest.`;
+        return `- **食事・カフェの件数**: 合計で **最大4件** まで。`;
     }
 };
 
@@ -87,60 +90,57 @@ export const generateSmartCourses = async (
     ];
 
     const selectedThemes = allThemes.sort(() => 0.5 - Math.random()).slice(0, 5);
-    const themeInstructions = selectedThemes.map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
+    const themeInstructions = selectedThemes.map((theme, i) => `   コース ${i + 1}: テーマ「${theme}」に基づくプラン`).join('\n');
 
-    // 爆速化プロンプト: 「小ネタカタログ」＋「コース構成」の2段構え
+    // 生成プロンプト: 完全日本語化 + 高性能探知への信頼
     const prompt = `
-You are a top-tier Japanese luxury travel curator.
-Your task is to create 5 distinct plans for a **${durationMinutes} minute** trip.
+あなたは世界最高峰のトラベルキュレーターです。提供された最高品質のスポット候補から、**${durationMinutes}分** という限られた時間を完璧に使い切る5つのプランを作成してください。
 
-**【最重要ミッション】**
-あなたは世界最高峰のトラベルキュレーターです。**必ず日本語で**、雑誌の特集のような魅力的な5つのプランを作成してください。
+**【ミッション】**
+必ず **日本語で** 出力してください。
 
-**1. 時間予算の厳守 (重要):**
-- **「各スポットの滞在時間の合計」＋「スポット間の移動時間」**が、指定された **${durationMinutes}分** を超えないように厳選してください。
-- 詰め込みすぎず、そのテーマにおいて最高に価値のある3〜5程度のスポットに絞るのがコツです。
-
-**2. 食事・カフェの制限:**
+**1. 食事・カフェの件数制限 (厳守):**
 ${diningRule}
-- 食べてばかりのプランにならないよう、文化、景色、体験を主役にしてください。
+- 食べてばかりのプランは避け、文化、景色、体験を主役にしてください。
 
-**3. 情緒的な命名とトーン:**
-- **タイトル**: 「〜を巡る旅」のような平凡な名前は禁止です。思わずクリックしたくなる、詩的でキャッチーな日本語タイトルにしてください（例：「琥珀色の午後、文学の香りに誘われて」）。
-- **トーン**: 洗練され、ワクワクさせるような、高級旅行誌の文体で書いてください。
+**2. 場所の平均化と地理的バランス:**
+- **近すぎるスポット（同じビル内や隣同士など）の連続を避けてください。**
+- エリアを適度に移動し、周辺の多様な魅力を引き出すルートにしてください。
 
-**4. 構成と多様性:**
+**3. 時間予算の引き算計算 (重要):**
+- 「各スポットの滞在時間」＋「移動時間」が **合計 ${durationMinutes}分** に収まるよう、スポット数を厳選してください。
+- 詰め込みすぎず、各スポットでゆっくり過ごせるゆとりを持たせてください。
+
+**4. エモーショナルな命名:**
+- タイトルは、高級ライフスタイル誌の特集タイトルのように、詩的で美しい日本語にしてください（例：「琥珀色の午後、文学の香りに誘われて」）。
+
+**5. 構成テーマ:**
 ${themeInstructions}
-- **食事のみのコースは禁止**です。必ず1つ以上（理想は2つ以上）の非飲食スポット（美術館、公園、史跡など）を含めてください。
 
-**【出力形式】**
-- **JSONの「値」はすべて日本語**で出力してください。
-- **JSONの「キー」は絶対に英語のまま**（id, title, description, trivia等）にしてください。
-
-**CANDIDATES:**
+**スポット候補:**
 ${candidateList}
 
-**SYSTEM INFO:**
-- Mood: ${mood}, Budget: ${budget}, People: ${groupSize}
-- Context: ${timeContext}, ${weatherContext}
+**状況背景:**
+- 気分: ${mood}, 予算: ${budget}, 人数: ${groupSize}
+- 現在時刻: ${timeContext}, 天候: ${weatherContext}
 
-**OUTPUT SCHEMA (JSON only, after <thinking>):**
+**出力形式 (JSONのみ、キーは英語、値は日本語):**
 {
   "trivia_catalog": {
     "CANDIDATE_ID": {
-      "recommendation_reason": "Summary based on context",
-      "must_see": "Primary highlight",
-      "pro_tip": "Insider insight",
-      "trivia": "Rich historical/flavor trivia (3+ lines)"
+      "recommendation_reason": "日本語",
+      "must_see": "日本語",
+      "pro_tip": "日本語",
+      "trivia": "日本語 (3行以上)"
     }
   },
   "courses": [
     {
-      "title": "Emotional Title",
-      "theme": "Theme Name",
-      "description": "Mag-style intro",
+      "title": "日本語タイトル",
+      "theme": "テーマ名",
+      "description": "日本語の説明文",
       "spots": [
-        { "id": ID, "stayTime": MINS, "travel_time_minutes": MINS }
+        { "id": ID, "stayTime": 分, "travel_time_minutes": 分 }
       ]
     }
   ]
@@ -158,7 +158,7 @@ ${candidateList}
         text = response.text();
     } catch (err) {
         console.error(`Lite generation failed:`, err);
-        // フォールバック: Pro/Flash (これらも 5-7秒待つ)
+        // フォールバック: Pro/Flash
         for (const fbModel of ["gemini-2.5-pro", "gemini-2.5-flash"]) {
             try {
                 await waitRateLimit(fbModel, fbModel === "gemini-2.5-pro" ? 1000 : 7000);
@@ -205,7 +205,7 @@ ${candidateList}
             } as Spot;
         }).filter((s: any): s is Spot => s !== null);
 
-        // Sorting/Travel time (already implemented in gemini.ts before, keeping logic)
+        // Sorting/Travel time
         if (hydratedSpots.length > 1) {
             const sorted: Spot[] = [hydratedSpots[0]];
             const remaining = hydratedSpots.slice(1);

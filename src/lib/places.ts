@@ -50,35 +50,31 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
 export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number): Promise<PlaceDetails[]> {
     const url = `https://places.googleapis.com/v1/places:searchNearby`;
 
-    // 1. まずは主要な観光・飲食カテゴリに絞って検索 (確実に見どころを見つけるため)
-    const includedTypes = [
+    // 1. カテゴリの拡充 (Table A に準拠)
+    const primaryTypes = [
         'tourist_attraction', 'museum', 'park',
         'amusement_park', 'aquarium', 'zoo', 'art_gallery',
-        'cafe', 'restaurant'
+        'historical_landmark', 'observation_deck', 'shrine', 'temple'
     ];
+    const diningTypes = ['cafe', 'restaurant'];
+    const allSearchTypes = [...primaryTypes, ...diningTypes];
 
-    const safeRadiusMeters = Math.max(radiusMeters, 500);
-
-    const fetchData = async (types?: string[]) => {
-        const data: any = {
-            maxResultCount: 20,
+    const initialRadius = Math.max(radiusMeters, 500);
+    const maxRadius = 5000; // 最大 5km まで拡大
+    
+    // スポット取得用内部関数
+    const fetchData = async (currentRadius: number, types: string[]) => {
+        const data = {
+            maxResultCount: 20, // API制限により1リクエスト最大20件
             locationRestriction: {
                 circle: {
                     center: { latitude: lat, longitude: lng },
-                    radius: safeRadiusMeters,
+                    radius: currentRadius,
                 }
             },
+            includedTypes: types,
             languageCode: 'ja'
         };
-        if (types) {
-            data.includedTypes = types;
-        } else {
-            // フォールバック: 指定がない場合は広範なカテゴリを検索対象にする (API要件: Table Aのみ使用可能)
-            data.includedTypes = [
-                'tourist_attraction', 'park', 'amusement_park', 'museum', 'art_gallery', 
-                'movie_theater', 'shopping_mall', 'aquarium', 'zoo', 'historical_landmark'
-            ];
-        }
 
         const response = await fetch(url, {
             method: 'POST',
@@ -100,25 +96,47 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     };
 
     try {
-        console.log(`Places API: searchNearby (Lat: ${lat}, Lng: ${lng}, Radius: ${safeRadiusMeters}m)`);
-        
-        // 初回検索 (カテゴリ絞り込み)
-        let spots = await fetchData(includedTypes);
+        let allFoundSpots: any[] = [];
+        const foundIds = new Set<string>();
 
-        // スポットが少なすぎる場合(10件未満)は、カテゴリ指定なしで全件検索を試みる
-        if (spots.length < 10) {
-            console.log(`Places API: Too few spots (${spots.length}), trying fallback (all types)...`);
-            const fallbackSpots = await fetchData();
-            const existingIds = new Set(spots.map((s: any) => s.id));
-            fallbackSpots.forEach((s: any) => {
-                if (!existingIds.has(s.id)) spots.push(s);
+        const addSpots = (spots: any[]) => {
+            spots.forEach(p => {
+                if (!foundIds.has(p.id)) {
+                    foundIds.add(p.id);
+                    allFoundSpots.push(p);
+                }
             });
+        };
+
+        // 段階的検索
+        let currentRadius = initialRadius;
+        console.log(`Places API: Multi-stage search start (Initial Radius: ${currentRadius}m)`);
+
+        // 第一段階: 観光・施設
+        addSpots(await fetchData(currentRadius, primaryTypes));
+        // 第二段階: 飲食
+        addSpots(await fetchData(currentRadius, diningTypes));
+
+        // スポットが少ない場合(15件未満)、半径を拡大して再試行
+        if (allFoundSpots.length < 15 && currentRadius < maxRadius) {
+            currentRadius = Math.min(initialRadius * 2, maxRadius);
+            console.log(`Places API: Expanding radius to ${currentRadius}m for more spots...`);
+            addSpots(await fetchData(currentRadius, primaryTypes));
+            addSpots(await fetchData(currentRadius, diningTypes));
         }
 
-        if (spots.length === 0) return [];
+        // それでも極端に少ない場合(5件未満)、さらに拡大
+        if (allFoundSpots.length < 5 && currentRadius < maxRadius) {
+            currentRadius = maxRadius;
+            console.log(`Places API: Final expansion to ${currentRadius}m...`);
+            addSpots(await fetchData(currentRadius, allSearchTypes));
+        }
 
-        console.log(`Places API: Final total ${spots.length} spots`);
-        return spots.slice(0, 50).map((p: any) => ({
+        if (allFoundSpots.length === 0) return [];
+
+        console.log(`Places API: Found ${allFoundSpots.length} unique spots total.`);
+
+        return allFoundSpots.slice(0, 50).map((p: any) => ({
             place_id: p.id,
             name: p.displayName.text,
             lat: p.location.latitude,

@@ -34,6 +34,12 @@ function App() {
     const [subAiContent, setSubAiContent] = useState<WaitingScreenContent | null>(null);
     const [generationImages, setGenerationImages] = useState<string[]>([]);
 
+    // リミックス用に検索条件を保持
+    const [lastSearchDuration, setLastSearchDuration] = useState(120);
+    const [lastSearchMood, setLastSearchMood] = useState('不明');
+    const [lastSearchBudget, setLastSearchBudget] = useState('不明');
+    const [lastSearchGroupSize, setLastSearchGroupSize] = useState('不明');
+
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
     // ===== ジオコード関数 =====
@@ -63,6 +69,13 @@ function App() {
 
         try {
             const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId } = params;
+            
+            // リミックス用に条件を保存
+            setLastSearchDuration(duration);
+            setLastSearchMood(mood || '不明');
+            setLastSearchBudget(budget || '不明');
+            setLastSearchGroupSize(groupSize || '不明');
+
             if (searchMode === 'route' && destination) {
                 // ===== ルート検索 =====
                 const [startGeo, endGeo] = await Promise.all([
@@ -376,12 +389,12 @@ function App() {
                 searchCandidates,
                 instruction,
                 center || { lat: 0, lon: 0 },
-                duration,
+                lastSearchDuration,
                 timeContext,
                 weatherContext,
-                mood,
-                budget,
-                groupSize
+                lastSearchMood,
+                lastSearchBudget,
+                lastSearchGroupSize
             );
 
             if (remixed) {

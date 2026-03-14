@@ -335,7 +335,10 @@ ${candidateList}
         const fbModel = "gemini-2.5-flash";
         try {
             await waitRateLimit(fbModel, 7000);
-            const model = genAI.getGenerativeModel({ model: fbModel });
+            const model = genAI.getGenerativeModel({ 
+                model: fbModel,
+                generationConfig: { responseMimeType: "application/json" }
+            });
             const result = await model.generateContent(prompt);
             text = (await result.response).text();
         } catch (e) {

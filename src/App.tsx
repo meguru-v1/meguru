@@ -375,9 +375,7 @@ function App() {
                 selectedCourse,
                 searchCandidates,
                 instruction,
-                center || { lat: 0, lon: 0 },
-                timeContext,
-                weatherContext
+                center || { lat: 0, lon: 0 }
             );
 
             if (remixed) {

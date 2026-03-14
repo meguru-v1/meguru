@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, MapPin, Compass, ChevronRight, AlertCircle } from 'lucide-react';
+import { Sparkles, MapPin, ChevronRight, AlertCircle } from 'lucide-react';
 import type { WaitingScreenContent } from '../lib/gemini';
 
 // ===== フォールバック用の静的データ =====
@@ -288,7 +288,7 @@ export default function GenerationScreen({
                         </div>
                     ) : (
                         <div className="glass-gen-panel p-6 rounded-3xl max-w-sm w-full text-center">
-                            <Compass className="w-8 h-8 text-amber-500 mx-auto mb-3 animate-pulse" />
+                            <MapPin className="w-8 h-8 text-amber-500 mx-auto mb-3 animate-pulse" />
                             <p className="text-[10px] font-bold text-amber-600 tracking-[0.2em] uppercase mb-2">
                                 {locationName} の旅
                             </p>

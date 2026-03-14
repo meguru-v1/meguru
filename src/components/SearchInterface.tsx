@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    Search, MapPin, Clock, Compass, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown,
+    Search, MapPin, Clock, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown,
     Smile, Banknote, Users, Sparkles, Loader2
 } from 'lucide-react';
 import type { SearchParams, SearchMode, TravelMode, AutocompleteResult } from '../types';
@@ -106,17 +106,17 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
 
     return (
         <div className="w-full flex flex-col bg-white">
-            {/* ヘッダー部分は省略 */}
-            <div className="text-center pt-14 pb-2 px-6 animate-fade-in">
-                <div className="inline-block mb-3 animate-float">
-                    <div className="w-12 h-12 mx-auto bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg">
-                        <Compass size={24} className="text-amber-400" />
+            {/* ヘッダー */}
+            <div className="text-center pt-12 pb-2 px-6 animate-fade-in">
+                <div className="inline-block mb-4 animate-float">
+                    <div className="w-20 h-20 mx-auto rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
+                        <img src="/meguru-logo.png" alt="Meguru Logo" className="w-full h-full object-cover" />
                     </div>
                 </div>
-                <h1 className="text-4xl font-bold text-slate-900 tracking-tight mb-1" style={{ fontFamily: 'var(--font-serif)' }}>
-                    Meguru
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-1" style={{ fontFamily: 'var(--font-serif)' }}>
+                    meguru
                 </h1>
-                <p className="text-slate-400 text-sm font-light tracking-wide">あなたのための、特別なよりみち。</p>
+                <p className="text-slate-400 text-xs font-bold tracking-[0.2em] uppercase">Premium Travel Experience</p>
             </div>
 
             {/* モード切り替え */}
@@ -125,7 +125,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     <button type="button" onClick={() => setSearchMode('area')}
                         className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-300
                             ${searchMode === 'area' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                        <Compass size={13} className="inline mr-1.5 -mt-0.5" /> エリア検索
+                        <Search size={13} className="inline mr-1.5 -mt-0.5" /> エリア検索
                     </button>
                     <button type="button" onClick={() => setSearchMode('route')}
                         className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-300
@@ -169,7 +169,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                             </div>
                             <div className="space-y-2 animate-slide-up stagger-1">
                                 <label htmlFor="area-radius" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                    <Compass size={12} /> 範囲
+                                    <Search size={12} /> 範囲
                                     <span className="ml-auto text-amber-500 font-extrabold text-sm normal-case">{radius} km</span>
                                 </label>
                                 <input id="area-radius" name="area-radius" type="range" min="0.5" max="7" step="0.5" value={radius}

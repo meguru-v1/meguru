@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Search, MapPin, Clock, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown,
-    Smile, Banknote, Users, Sparkles, Loader2
+    Smile, Banknote, Users, Sparkles, Loader2, Compass
 } from 'lucide-react';
 import type { SearchParams, SearchMode, TravelMode, AutocompleteResult } from '../types';
 import { getAutocompleteSuggestions } from '../lib/places';

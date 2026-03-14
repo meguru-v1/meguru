@@ -292,13 +292,17 @@ You are a top-tier Japanese luxury travel curator.
 Your task is to REDESIGN this course: "${originalCourse.title}"
 Based on the specific user instruction: "${remixInstruction}"
 
-**【最重要ミッション】**
-1. **大胆な変化と指示の反映**: ユーザーの指示 "${remixInstruction}" に基づき、必要であれば元のスポットの半分以上を入れ替えるなど、**「明らかに変わったこと」が分かる大胆な再編集**を行ってください。
-2. **圧倒的なネーミングセンス**: タイトルは雑誌の特集のように、**詩的でキャッチーな日本語タイトル**に新しく書き換えてください。
-3. **飲食制限の絶対遵守**: ${diningRule}
-   - この制限を超えてカフェや飲食店を入れることは、プロのキュレーターとして許されません。
-4. **スポット数の厳守**: 今回の旅行時間（${durationMinutes}分）において、最適なスポット数は **${spotCountRule}** です。この件数の範囲内で構成してください。
-5. **具体的な解説**: 各スポットの aiDescription は、その場所の風景、歴史、雰囲気が目に浮かぶような具体的な日本語で記述してください。「おすすめのスポットです」などの無意味な表現は厳禁です。
+**【ミッション：継続と革新のバランス】**
+1. **指示の正確な反映**: ユーザーの指示 "${remixInstruction}" を最優先で実現してください。
+2. **スマートな再構成**: すべてを入れ替える必要はありません。既存の素晴らしいスポットは活かしつつ、指示に合わせて一部を差し替えたり、順序を入れ替えたり、滞在時間を調整してください。
+3. **メタデータの完全維持・生成**: 各スポットに以下の情報を必ず含めてください。
+   - **must_see**: その場所で絶対に外せない見どころ（30文字程度）
+   - **pro_tip**: 混雑回避や裏技などの実用的な助言（30文字程度）
+   - **trivia**: 歴史や背景などの面白い小ネタ（30文字程度）
+   ※既存のスポットを使い続ける場合は、元の情報をベースにさらに魅力的に磨き上げてください。
+4. **圧倒的なネーミングセンス**: タイトルは雑誌の特集のように、**詩的でキャッチーな日本語タイトル**に新しく書き換えてください。
+5. **飲食制限の絶対遵守**: ${diningRule}
+6. **スポット数の厳守**: 今回の旅行時間（${durationMinutes}分）において、最適なスポット数は **${spotCountRule}** です。
 
 **CANDIDATES:**
 ${candidateList}
@@ -315,7 +319,10 @@ ${candidateList}
     { 
       "id": 0, 
       "stayTime": MINS, 
-      "aiDescription": "その場所の魅力を情感豊かに語る（日本語）"
+      "aiDescription": "その場所の魅力を情感豊かに語る（日本語）",
+      "must_see": "必見ポイント",
+      "pro_tip": "旅のヒント",
+      "trivia": "賢者の小ネタ"
     }
   ]
 }
@@ -370,7 +377,10 @@ ${candidateList}
             return { 
                 ...original, 
                 stayTime: Number(s.stayTime) || 30, 
-                aiDescription: s.aiDescription || "リミックスされたスポットです" 
+                aiDescription: s.aiDescription || "リミックスされたスポットです",
+                must_see: s.must_see || original.must_see || null,
+                pro_tip: s.pro_tip || original.pro_tip || null,
+                trivia: s.trivia || original.trivia || ""
             } as Spot;
         }).filter((s: any): s is Spot => s !== null);
 

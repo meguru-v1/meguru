@@ -50,14 +50,13 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
 export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number): Promise<PlaceDetails[]> {
     const url = `https://places.googleapis.com/v1/places:searchNearby`;
 
-    // 1. カテゴリの拡充 (Table A に準拠)
-    const primaryTypes = [
-        'tourist_attraction', 'museum', 'park',
-        'amusement_park', 'aquarium', 'zoo', 'art_gallery',
-        'historical_landmark', 'observation_deck', 'shrine', 'temple'
-    ];
+    // 1. カテゴリの拡充とグループ化 (APIの20件制限を回避するため分割して検索)
+    const attractionTypes = ['tourist_attraction', 'observation_deck'];
+    const cultureTypes = ['museum', 'art_gallery'];
+    const natureTypes = ['park', 'zoo', 'aquarium', 'amusement_park'];
+    const historicTypes = ['historical_landmark', 'shrine', 'temple'];
     const diningTypes = ['cafe', 'restaurant'];
-    const allSearchTypes = [...primaryTypes, ...diningTypes];
+    const allSearchTypes = [...attractionTypes, ...cultureTypes, ...natureTypes, ...historicTypes, ...diningTypes];
 
     const initialRadius = Math.max(radiusMeters, 500);
     const maxRadius = 5000; // 最大 5km まで拡大
@@ -96,14 +95,24 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     };
 
     try {
-        let allFoundSpots: any[] = [];
+        let primarySpots: any[] = [];
+        let diningSpots: any[] = [];
         const foundIds = new Set<string>();
 
-        const addSpots = (spots: any[]) => {
+        const addPrimarySpots = (spots: any[]) => {
             spots.forEach(p => {
                 if (!foundIds.has(p.id)) {
                     foundIds.add(p.id);
-                    allFoundSpots.push(p);
+                    primarySpots.push(p);
+                }
+            });
+        };
+
+        const addDiningSpots = (spots: any[]) => {
+            spots.forEach(p => {
+                if (!foundIds.has(p.id)) {
+                    foundIds.add(p.id);
+                    diningSpots.push(p);
                 }
             });
         };
@@ -112,29 +121,43 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         let currentRadius = initialRadius;
         console.log(`Places API: Multi-stage search start (Initial Radius: ${currentRadius}m)`);
 
-        // 第一段階: 観光・施設
-        addSpots(await fetchData(currentRadius, primaryTypes));
-        // 第二段階: 飲食
-        addSpots(await fetchData(currentRadius, diningTypes));
+        const fetchAndCategorize = async (radius: number) => {
+            const [attr, cult, nat, hist, din] = await Promise.all([
+                fetchData(radius, attractionTypes),
+                fetchData(radius, cultureTypes),
+                fetchData(radius, natureTypes),
+                fetchData(radius, historicTypes),
+                fetchData(radius, diningTypes)
+            ]);
+            addPrimarySpots(attr);
+            addPrimarySpots(cult);
+            addPrimarySpots(nat);
+            addPrimarySpots(hist);
+            addDiningSpots(din);
+        };
 
-        // スポットが少ない場合(15件未満)、半径を拡大して再試行
-        if (allFoundSpots.length < 15 && currentRadius < maxRadius) {
-            currentRadius = Math.min(initialRadius * 2, maxRadius);
-            console.log(`Places API: Expanding radius to ${currentRadius}m for more spots...`);
-            addSpots(await fetchData(currentRadius, primaryTypes));
-            addSpots(await fetchData(currentRadius, diningTypes));
+        // 第一段階
+        await fetchAndCategorize(currentRadius);
+
+        // スポットが少ない場合(主役級の観光地が15件未満)、半径を拡大して再試行
+        while (primarySpots.length < 15 && currentRadius < maxRadius) {
+            currentRadius = Math.min(currentRadius * 2, maxRadius);
+            console.log(`Places API: Primary spots insufficient (${primarySpots.length}), expanding radius to ${currentRadius}m...`);
+            await fetchAndCategorize(currentRadius);
         }
 
-        // それでも極端に少ない場合(5件未満)、さらに拡大
-        if (allFoundSpots.length < 5 && currentRadius < maxRadius) {
+        // それでも極端に少ない場合(全体で5件未満)、さらに拡大
+        if (primarySpots.length + diningSpots.length < 5 && currentRadius < maxRadius) {
             currentRadius = maxRadius;
-            console.log(`Places API: Final expansion to ${currentRadius}m...`);
-            addSpots(await fetchData(currentRadius, allSearchTypes));
+            console.log(`Places API: Overall spots low, final expansion to ${currentRadius}m...`);
+            addPrimarySpots(await fetchData(currentRadius, allSearchTypes));
         }
 
+        // 整理してマージ (観光スポットを上位に配置、最大 40件まで)
+        let allFoundSpots = [...primarySpots, ...diningSpots];
         if (allFoundSpots.length === 0) return [];
 
-        console.log(`Places API: Found ${allFoundSpots.length} unique spots total.`);
+        console.log(`Places API: Found ${primarySpots.length} primary spots and ${diningSpots.length} dining spots.`);
 
         return allFoundSpots.slice(0, 50).map((p: any) => ({
             place_id: p.id,

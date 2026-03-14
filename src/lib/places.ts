@@ -51,10 +51,11 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     const url = `https://places.googleapis.com/v1/places:searchNearby`;
 
     // 1. カテゴリの拡充とグループ化 (APIの20件制限を回避するため分割して検索)
+    // 注意: searchNearby (New) では shrine, temple などの Table B タイプはサポートされていないため除外
     const attractionTypes = ['tourist_attraction', 'observation_deck'];
     const cultureTypes = ['museum', 'art_gallery'];
     const natureTypes = ['park', 'zoo', 'aquarium', 'amusement_park'];
-    const historicTypes = ['historical_landmark', 'shrine', 'temple'];
+    const historicTypes = ['historical_landmark'];
     const diningTypes = ['cafe', 'restaurant'];
     const allSearchTypes = [...attractionTypes, ...cultureTypes, ...natureTypes, ...historicTypes, ...diningTypes];
 

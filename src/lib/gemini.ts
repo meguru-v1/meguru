@@ -266,30 +266,99 @@ export const remixCourse = async (
     originalCourse: Course,
     candidates: Spot[],
     remixInstruction: string,
-    center: { lat: number; lon: number }
+    center: { lat: number; lon: number },
+    durationMinutes: number,
+    timeContext: string = "不明",
+    weatherContext: string = "不明",
+    mood: string = "不明",
+    budget: string = "不明",
+    groupSize: string = "不明"
 ): Promise<Course | null> => {
-    const candidateList = candidates.map((s, i) => `${i}: ${s.name}`).join('\n');
-    const prompt = `Remix this course: ${originalCourse.title} based on: "${remixInstruction}". Candidates: ${candidateList}. Return JSON ONLY with title, description, and list of spot IDs with stayTimes.`;
+    const candidateList = candidates.map((s, i) => {
+        const details = [
+            s.category,
+            s.rating ? `★${s.rating}` : null,
+            s.price_level ? `Price:${'¥'.repeat(s.price_level)}` : null,
+            `Est.Stay:${s.estimatedStayTime || 30}min`
+        ].filter(Boolean).join(', ');
+        return `ID ${i}: ${s.name} (${details})`;
+    }).join('\n');
 
-    const modelName = "gemini-2.5-flash-lite"; // RemixもLite
+    const diningRule = getDiningRule(durationMinutes);
+    const spotCountRule = getRecommendedSpotCount(durationMinutes);
+
+    const prompt = `
+You are a top-tier Japanese luxury travel curator.
+Remix this existing course: "${originalCourse.title}"
+Based on user instruction: "${remixInstruction}"
+
+**【リミックスの鉄則】**
+1. **既存コースの尊重と改善**: ユーザーの指示 "${remixInstruction}" を最優先しつつ、元のコースの良さを活かした新しい体験を提案してください。
+2. **スポット数の厳守**: 今回の旅行時間（${durationMinutes}分）において、最適なスポット数は **${spotCountRule}** です。この範囲を絶対に外れないでください。
+3. **飲食制限**: ${diningRule}
+4. **時間予算**: 合計時間が ${durationMinutes}分を超えないように計算してください。
+
+**CANDIDATES:**
+${candidateList}
+
+**SYSTEM INFO:**
+- Mood: ${mood}, Budget: ${budget}, People: ${groupSize}
+- Context: ${timeContext}, ${weatherContext}
+
+**OUTPUT SCHEMA (JSON only, after <thinking>):**
+{
+  "title": "New Emotional Title",
+  "description": "Mag-style intro highlighting the remix change",
+  "spots": [
+    { 
+      "id": 0, 
+      "stayTime": MINS, 
+      "aiDescription": "リミックスにおけるこのスポットの役割と魅力（日本語）"
+    }
+  ]
+}
+`;
+
+    const modelName = "gemini-2.5-flash-lite";
     try {
         await waitRateLimit(modelName, 5000);
         const model = genAI.getGenerativeModel({ model: modelName });
         const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const data = JSON.parse(response.text().match(/{[\s\S]*}/)?.[0] || "{}");
+        const text = (await result.response).text();
+
+        // JSON抽出の堅牢化 (generateSmartCourses と共通)
+        let jsonStr = text;
+        const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+            jsonStr = jsonMatch[1];
+        } else {
+            const start = jsonStr.indexOf('{');
+            const end = jsonStr.lastIndexOf('}');
+            if (start !== -1 && end !== -1) {
+                jsonStr = jsonStr.substring(start, end + 1);
+            }
+        }
+        jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1'); 
+
+        const data = JSON.parse(jsonStr);
         
         const hydratedSpots = (data.spots || []).map((s: any) => {
-            const original = candidates[s.id];
+            const original = candidates[Number(s.id)];
             if (!original) return null;
-            return { ...original, stayTime: s.stayTime, aiDescription: s.recommendation_reason || "リミックスされたスポットです" };
+            return { 
+                ...original, 
+                stayTime: Number(s.stayTime) || 30, 
+                aiDescription: s.aiDescription || "リミックスされたスポットです" 
+            } as Spot;
         }).filter((s: any): s is Spot => s !== null);
+
+        if (hydratedSpots.length === 0) return null;
 
         return {
             id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
-            title: data.title,
+            title: data.title || originalCourse.title + " (Remix)",
             description: data.description || "",
-            totalTime: originalCourse.totalTime,
+            totalTime: durationMinutes,
             spots: hydratedSpots,
             theme: remixInstruction
         } as Course;

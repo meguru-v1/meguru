@@ -113,27 +113,31 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 
         let allFoundSpotsRaw = [...rawPrimary, ...rawDining];
 
-        // 2段階欲張り検索: 1回目で10件未満の場合のみ、カテゴリ制限を解除して再試行
+        // 2段階欲張り検索: 1回目で10件未満の場合のみ、カテゴリ緩和（Stage 2）
         if (allFoundSpotsRaw.length < 10 && currentRadius < maxRadius) {
             currentRadius = Math.min(currentRadius * 2.5, maxRadius);
-            console.log(`Places API: Spots insufficient (${allFoundSpotsRaw.length}), performing stage-2 broad search (${currentRadius}m)...`);
-            
-            // カテゴリ制限を完全に解除し、汎用的なスポットを拾う
+            console.log(`Places API: Stage 2 search (${currentRadius}m)...`);
             const fallbackTypes = ['point_of_interest', 'establishment', 'tourist_attraction', 'restaurant', 'cafe'];
             const expandedSpots = await fetchData(currentRadius, fallbackTypes);
-            
-            // 重複排除してマージ
             const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
-            expandedSpots.forEach((s: any) => {
-                if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s);
-            });
+            expandedSpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
+        }
+
+        // 執念の3段階目: 依然として3件未満ならカテゴリ制限を完全撤廃（Stage 3）
+        if (allFoundSpotsRaw.length < 3 && currentRadius <= maxRadius) {
+            currentRadius = maxRadius;
+            console.log(`Places API: Stage 3 (Emergency) broad search at full radius (${currentRadius}m)...`);
+            // includedTypes を一切指定しないことで、あらゆる地点をヒットさせる
+            const emergencySpots = await fetchData(currentRadius, []); 
+            const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
+            emergencySpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
         }
 
         if (allFoundSpotsRaw.length === 0) {
-            console.warn(`Places API: No spots found even after fallback search at (${lat}, ${lng}) with radius ${currentRadius}m`);
+            console.warn(`Places API: Final count 0 at (${lat}, ${lng}) even after Stage 3.`);
             return [];
         }
-        console.log(`Places API: Multi-stage search complete. Final count: ${allFoundSpotsRaw.length}`);
+        console.log(`Places API: Success. Stage results: ${allFoundSpotsRaw.length}`);
 
         return allFoundSpots.slice(0, 50).map((p: any) => ({
             place_id: p.id,

@@ -115,22 +115,11 @@ function App() {
                 setRadius(searchRadius);
 
                 setStatus(`ルート周辺のスポットを探しています...`);
-                let allSpotsRaw = await searchRouteSpots(
+                const allSpotsRaw = await searchRouteSpots(
                     { lat: startGeo.lat, lng: startGeo.lon },
                     { lat: endGeo.lat, lng: endGeo.lon },
-                    Math.min(searchRadius, 1500)
+                    searchRadius
                 );
-
-                // スポットが少なすぎる場合は少し拡大して再検索
-                if (allSpotsRaw.length < 3) {
-                    console.log(`Route spots too few (${allSpotsRaw.length}), expanding search radius...`);
-                    setStatus(`範囲を広げて再検索しています...`);
-                    allSpotsRaw = await searchRouteSpots(
-                        { lat: startGeo.lat, lng: startGeo.lon },
-                        { lat: endGeo.lat, lng: endGeo.lon },
-                        Math.min(searchRadius * 1.5, 3000)
-                    );
-                }
 
                 // Spot型にマッピング
                 const allSpots: Spot[] = allSpotsRaw.map(p => ({
@@ -202,8 +191,6 @@ function App() {
                 catch (e) {
                     console.error("App: generateSmartCourses failed:", e);
                     setError(e instanceof Error ? e.message : "AIコース生成中にエラーが発生しました。");
-                    // エラーを画面で見せるために10秒間待機してから閉じる（ユーザー確認用）
-                    await new Promise(r => setTimeout(r, 10000));
                     throw e; 
                 }
 
@@ -236,32 +223,9 @@ function App() {
                 setCenter({ lat: startGeo.lat, lon: startGeo.lon });
                 setRadius(r);
 
-                setStatus(`周辺スポットを探しています... (${r / 1000}km圏内)`);
-                let allSpotsRaw = await searchNearbySpots(startGeo.lat, startGeo.lon, r);
-                console.log(`Initial spots found: ${allSpotsRaw.length}.`);
-                
-                // もしスポットが少なければ(15件未満)半径を2倍にして再検索
-                if (allSpotsRaw.length < 15) {
-                    console.log(`Spots too few (${allSpotsRaw.length}), expanding search radius to ${r * 2}m...`);
-                    setStatus(`範囲を広げて再検索しています... (${(r * 2) / 1000}km圏内)`);
-                    const widerSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, r * 2);
-                    const spotMap = new Map<string, any>();
-                    [...allSpotsRaw, ...widerSpots].forEach(s => spotMap.set(s.place_id, s));
-                    allSpotsRaw = Array.from(spotMap.values());
-                    console.log(`Expanded (2x) spots found: ${allSpotsRaw.length}.`);
-                }
-                
-                // それでも少なければ(10件未満)かつ最大5000mまでアグレッシブに拡大
-                if (allSpotsRaw.length < 10 && r < 5000) {
-                    const finalRadius = 5000;
-                    console.log(`Still few spots (${allSpotsRaw.length}), trying aggressive expansion to ${finalRadius}m...`);
-                    setStatus(`さらに広く再検索しています... (${finalRadius/1000}km圏内)`);
-                    const finalSpots = await searchNearbySpots(startGeo.lat, startGeo.lon, finalRadius);
-                    const spotMap = new Map<string, any>();
-                    [...allSpotsRaw, ...finalSpots].forEach(s => spotMap.set(s.place_id, s));
-                    allSpotsRaw = Array.from(spotMap.values());
-                    console.log(`Aggressive expansion (5km) spots found: ${allSpotsRaw.length}.`);
-                }
+                setStatus(`周辺スポットを見極めています...`);
+                const allSpotsRaw = await searchNearbySpots(startGeo.lat, startGeo.lon, r);
+                console.log(`Spots found: ${allSpotsRaw.length}.`);
 
                 // Spot型にマッピング
                 const allSpots: Spot[] = allSpotsRaw.map(p => ({

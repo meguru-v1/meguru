@@ -110,13 +110,13 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
             <div className="text-center pt-12 pb-2 px-6 animate-fade-in">
                 <div className="inline-block mb-4 animate-float">
                     <div className="w-20 h-20 mx-auto rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
-                        <img src="/meguru-logo.png" alt="Meguru Logo" className="w-full h-full object-cover" />
+                        <img src="meguru-logo.png" alt="Meguru Logo" className="w-full h-full object-cover" />
                     </div>
                 </div>
                 <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-1" style={{ fontFamily: 'var(--font-serif)' }}>
-                    meguru
+                    Meguru
                 </h1>
-                <p className="text-slate-400 text-xs font-bold tracking-[0.2em] uppercase">Premium Travel Experience</p>
+                <p className="text-slate-400 text-sm font-bold tracking-tight">あなたのための、特別なよりみち。</p>
             </div>
 
             {/* モード切り替え */}

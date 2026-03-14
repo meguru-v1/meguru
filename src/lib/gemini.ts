@@ -61,7 +61,7 @@ export const generateSmartCourses = async (
             s.opening_hours ? `Hours: ${s.opening_hours.join(', ')}` : null,
             `Est.Stay:${s.estimatedStayTime || 30}min`
         ].filter(Boolean).join(', ');
-        return `${i}: ${s.name} (${details})`;
+        return `ID ${i}: ${s.name} (${details})`;
     }).join('\n');
 
     const diningRule = getDiningRule(durationMinutes);
@@ -124,21 +124,21 @@ ${candidateList}
 
 **OUTPUT SCHEMA (JSON only, after <thinking>):**
 {
-  "trivia_catalog": {
-    "CANDIDATE_ID": {
-      "recommendation_reason": "その場所ならではの具体的な魅力と選んだ理由（「おすすめのスポットです」は禁止）",
-      "must_see": "Primary highlight",
-      "pro_tip": "Insider insight",
-      "trivia": "Rich historical/flavor trivia (3+ lines)"
-    }
-  },
   "courses": [
     {
       "title": "Emotional Title",
       "theme": "Theme Name",
       "description": "Mag-style intro",
       "spots": [
-        { "id": ID, "stayTime": MINS, "travel_time_minutes": MINS }
+        { 
+          "id": 0, 
+          "stayTime": MINS, 
+          "travel_time_minutes": MINS,
+          "recommendation_reason": "その場所ならではの具体的な魅力と選んだ理由（「おすすめのスポットです」は禁止）",
+          "must_see": "Primary highlight",
+          "pro_tip": "Insider insight",
+          "trivia": "Rich historical/flavor trivia (3+ lines)"
+        }
       ]
     }
   ]
@@ -181,7 +181,6 @@ ${candidateList}
     }
 
     const rawData = JSON.parse(jsonStr);
-    const catalog = rawData.trivia_catalog || {};
     const courses = rawData.courses || [];
 
     // UUID
@@ -190,16 +189,15 @@ ${candidateList}
     return courses.map((course: any) => {
         const uniqueId = generateId();
         const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
-            const original = candidates[s.id];
-            const details = catalog[s.id] || {};
+            const original = candidates[Number(s.id)]; // 念のためNumberキャスト
             if (!original) return null;
             return {
                 ...original,
                 stayTime: s.stayTime,
-                aiDescription: details.recommendation_reason || "おすすめのスポットです",
-                must_see: details.must_see || null,
-                pro_tip: details.pro_tip || null,
-                trivia: details.trivia || undefined
+                aiDescription: s.recommendation_reason || "おすすめのスポットです",
+                must_see: s.must_see || null,
+                pro_tip: s.pro_tip || null,
+                trivia: s.trivia || undefined
             } as Spot;
         }).filter((s: any): s is Spot => s !== null);
 

@@ -289,31 +289,33 @@ export const remixCourse = async (
 
     const prompt = `
 You are a top-tier Japanese luxury travel curator.
-Remix this existing course: "${originalCourse.title}"
-Based on user instruction: "${remixInstruction}"
+Your task is to REDESIGN this course: "${originalCourse.title}"
+Based on the specific user instruction: "${remixInstruction}"
 
-**【リミックスの鉄則】**
-1. **既存コースの尊重と改善**: ユーザーの指示 "${remixInstruction}" を最優先しつつ、元のコースの良さを活かした新しい体験を提案してください。
-2. **スポット数の厳守**: 今回の旅行時間（${durationMinutes}分）において、最適なスポット数は **${spotCountRule}** です。この範囲を絶対に外れないでください。
-3. **飲食制限**: ${diningRule}
-4. **時間予算**: 合計時間が ${durationMinutes}分を超えないように計算してください。
+**【最重要ミッション】**
+1. **大胆な変化と指示の反映**: ユーザーの指示 "${remixInstruction}" に基づき、必要であれば元のスポットの半分以上を入れ替えるなど、**「明らかに変わったこと」が分かる大胆な再編集**を行ってください。
+2. **圧倒的なネーミングセンス**: タイトルは雑誌の特集のように、**詩的でキャッチーな日本語タイトル**に新しく書き換えてください。
+3. **飲食制限の絶対遵守**: ${diningRule}
+   - この制限を超えてカフェや飲食店を入れることは、プロのキュレーターとして許されません。
+4. **スポット数の厳守**: 今回の旅行時間（${durationMinutes}分）において、最適なスポット数は **${spotCountRule}** です。この件数の範囲内で構成してください。
+5. **具体的な解説**: 各スポットの aiDescription は、その場所の風景、歴史、雰囲気が目に浮かぶような具体的な日本語で記述してください。「おすすめのスポットです」などの無意味な表現は厳禁です。
 
 **CANDIDATES:**
 ${candidateList}
 
 **SYSTEM INFO:**
-- Mood: ${mood}, Budget: ${budget}, People: ${groupSize}
+- Current Mood: ${mood}, Budget: ${budget}, People: ${groupSize}
 - Context: ${timeContext}, ${weatherContext}
 
 **OUTPUT SCHEMA (JSON only, after <thinking>):**
 {
-  "title": "New Emotional Title",
-  "description": "Mag-style intro highlighting the remix change",
+  "title": "New Catchy Magazine-style Title",
+  "description": "Mag-style intro explaining the essence of this remix",
   "spots": [
     { 
       "id": 0, 
       "stayTime": MINS, 
-      "aiDescription": "リミックスにおけるこのスポットの役割と魅力（日本語）"
+      "aiDescription": "その場所の魅力を情感豊かに語る（日本語）"
     }
   ]
 }
@@ -326,7 +328,6 @@ ${candidateList}
         const result = await model.generateContent(prompt);
         const text = (await result.response).text();
 
-        // JSON抽出の堅牢化 (generateSmartCourses と共通)
         let jsonStr = text;
         const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {

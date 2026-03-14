@@ -109,7 +109,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
             {/* ヘッダー */}
             <div className="text-center pt-12 pb-2 px-6 animate-fade-in">
                 <div className="inline-block mb-4 animate-float">
-                    <div className="w-32 h-32 mx-auto rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white">
+                    <div className="w-20 h-20 mx-auto rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
                         <img src={`${import.meta.env.BASE_URL}meguru-logo.png`} alt="Meguru Logo" className="w-full h-full object-cover" />
                     </div>
                 </div>

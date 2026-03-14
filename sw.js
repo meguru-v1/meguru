@@ -1,1 +1,12 @@
-if(!self.define){let e,i={};const c=(c,n)=>(c=new URL(c+".js",n).href,i[c]||new Promise(i=>{if("document"in self){const e=document.createElement("script");e.src=c,e.onload=i,document.head.appendChild(e)}else e=c,importScripts(c),i()}).then(()=>{let e=i[c];if(!e)throw new Error(`Module ${c} didn’t register its module`);return e}));self.define=(n,r)=>{const d=e||("document"in self?document.currentScript.src:"")||location.href;if(i[d])return;let s={};const o=e=>c(e,d),f={module:{uri:d},exports:s,require:o};i[d]=Promise.all(n.map(e=>f[e]||o(e))).then(e=>(r(...e),s))}}define(["./workbox-8c29f6e4"],function(e){"use strict";self.skipWaiting(),e.clientsClaim(),e.precacheAndRoute([{url:"vite.svg",revision:"8e3a10e157f75ada21ab742c022d5430"},{url:"registerSW.js",revision:"c3709d3351d1a0ad0cd0bda958954133"},{url:"pwa-512x512.png",revision:"1abb1e91437df5b293cd921c14305a09"},{url:"pwa-192x192.png",revision:"18cd6f9c129c6857f497e677018be8ea"},{url:"index.html",revision:"7d0afb40fe79d4ef633e97f5a6ceee4a"},{url:"favicon.ico",revision:"cfcccc43b94ee9da722d7d00e189c6df"},{url:"apple-touch-icon.png",revision:"1efd19d5a7cd95413e4fd2a092297073"},{url:"assets/index-C3vYrE65.js",revision:null},{url:"assets/index-B-L1RCgI.css",revision:null},{url:"apple-touch-icon.png",revision:"1efd19d5a7cd95413e4fd2a092297073"},{url:"favicon.ico",revision:"cfcccc43b94ee9da722d7d00e189c6df"},{url:"pwa-192x192.png",revision:"18cd6f9c129c6857f497e677018be8ea"},{url:"pwa-512x512.png",revision:"1abb1e91437df5b293cd921c14305a09"},{url:"manifest.webmanifest",revision:"e414c72e085e95dc5cd982c96f87180b"}],{}),e.cleanupOutdatedCaches(),e.registerRoute(new e.NavigationRoute(e.createHandlerBoundToURL("index.html")))});
+/* Ghost Service Worker to unregister itself */
+self.addEventListener('install', () => {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', () => {
+    self.registration.unregister()
+        .then(() => self.clients.matchAll())
+        .then(clients => {
+            clients.forEach(client => client.navigate(client.url));
+        });
+});

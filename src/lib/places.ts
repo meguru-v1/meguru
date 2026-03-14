@@ -113,11 +113,15 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 
         let allFoundSpotsRaw = [...rawPrimary, ...rawDining];
 
-        // スポットが極端に少ない場合のみ半径を拡大して1回だけ再試行 (最大2リクエスト追加)
-        if (allFoundSpotsRaw.length < 15 && currentRadius < maxRadius) {
+        // 2段階欲張り検索: 1回目で10件未満の場合のみ、カテゴリ制限を解除して再試行
+        if (allFoundSpotsRaw.length < 10 && currentRadius < maxRadius) {
             currentRadius = Math.min(currentRadius * 2.5, maxRadius);
-            console.log(`Places API: Spots low (${allFoundSpotsRaw.length}), performing one-time expanded search (${currentRadius}m)...`);
-            const expandedSpots = await fetchData(currentRadius, allSearchTypes);
+            console.log(`Places API: Spots insufficient (${allFoundSpotsRaw.length}), performing stage-2 broad search (${currentRadius}m)...`);
+            
+            // カテゴリ制限を完全に解除し、汎用的なスポットを拾う
+            const fallbackTypes = ['point_of_interest', 'establishment', 'tourist_attraction', 'restaurant', 'cafe'];
+            const expandedSpots = await fetchData(currentRadius, fallbackTypes);
+            
             // 重複排除してマージ
             const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
             expandedSpots.forEach((s: any) => {
@@ -125,8 +129,11 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             });
         }
 
-        if (allFoundSpotsRaw.length === 0) return [];
-        console.log(`Places API: Optimization successful. Final count: ${allFoundSpotsRaw.length}`);
+        if (allFoundSpotsRaw.length === 0) {
+            console.warn(`Places API: No spots found even after fallback search at (${lat}, ${lng}) with radius ${currentRadius}m`);
+            return [];
+        }
+        console.log(`Places API: Multi-stage search complete. Final count: ${allFoundSpotsRaw.length}`);
 
         return allFoundSpots.slice(0, 50).map((p: any) => ({
             place_id: p.id,

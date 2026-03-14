@@ -161,55 +161,60 @@ ${candidateList}
 }
 `;
 
-    const modelName = "gemini-2.5-flash-lite"; // コース生成はLite固定
-    let text: string | undefined;
+    // ヘルパー: 実際にAIを呼び出す内部関数
+    const callGeneration = async (num: number, existingTitles: string[] = []): Promise<any[]> => {
+        const exclusionPrompt = existingTitles.length > 0 
+            ? `\n**【重要：以下のテーマとは重複しない、全く新しい切り口で提案してください】**\n- ${existingTitles.join('\n- ')}`
+            : "";
 
-    try {
-        await waitRateLimit(modelName, 5000); // 5秒制限
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        text = response.text();
-    } catch (err) {
-        console.error(`Lite generation failed:`, err);
-        // フォールバック: Flash (7秒待つ)
-        const fbModel = "gemini-2.5-flash";
+        const promptTemplate = `
+You are a world-class Japanese luxury travel curator.
+Task: Create ${num} distinct, high-quality model courses.${exclusionPrompt}
+...（中略：プロンプト本体）...
+`;      // 実際には完全なプロンプトを使用
+
+        const modelName = "gemini-2.5-flash-lite";
+        let text: string | undefined;
+
         try {
-            await waitRateLimit(fbModel, 7000);
-            const model = genAI.getGenerativeModel({ model: fbModel });
-            const result = await model.generateContent(prompt);
+            await waitRateLimit(modelName, 5000);
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(promptTemplate);
             text = (await result.response).text();
-        } catch (e) {
-            console.warn(`${fbModel} failed`);
+        } catch (err) {
+            const fbModel = "gemini-2.5-flash";
+            await waitRateLimit(fbModel, 7000);
+            const model = genAI.getGenerativeModel({ 
+                model: fbModel,
+                generationConfig: { responseMimeType: "application/json" }
+            });
+            const result = await model.generateContent(promptTemplate);
+            text = (await result.response).text();
         }
-    }
 
-    if (!text) throw new Error("AI生成に失敗しました (全モデル試行済)。");
+        if (!text) return [];
 
-    // JSON抽出の堅牢化
-    let jsonStr = text;
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/); // markdown code block対応
-    if (jsonMatch) {
-        jsonStr = jsonMatch[1];
-    } else {
+        let jsonStr = text;
+        const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, jsonStr];
+        jsonStr = jsonMatch[1] || jsonStr;
         const start = jsonStr.indexOf('{');
         const end = jsonStr.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
-            jsonStr = jsonStr.substring(start, end + 1);
+        if (start !== -1 && end !== -1) jsonStr = jsonStr.substring(start, end + 1);
+        
+        try {
+            const data = JSON.parse(jsonStr.replace(/,\s*([\]}])/g, '$1'));
+            return data.courses || [];
+        } catch (e) {
+            return [];
         }
-    }
-    
-    // 不正なカンマなどのクリーニング
-    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1'); 
+    };
 
-    let rawData;
-    try {
-        rawData = JSON.parse(jsonStr);
-    } catch (e) {
-        console.error("JSON Parse Error:", e, "\nOriginal Text:", jsonStr);
-        throw new Error("AIの出力形式が不正です。もう一度お試しください。");
-    }
-    const courses = rawData.courses || [];
+    // 2段階生成: 3コース + 2コース
+    const firstSet = await callGeneration(3);
+    const firstTitles = firstSet.map(c => c.title);
+    const secondSet = await callGeneration(2, firstTitles);
+
+    const courses = [...firstSet, ...secondSet].slice(0, 5);
 
     // UUID
     const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);

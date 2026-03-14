@@ -121,29 +121,33 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         let currentRadius = initialRadius;
         console.log(`Places API: Multi-stage search start (Initial Radius: ${currentRadius}m)`);
 
-        const fetchAndCategorize = async (radius: number) => {
-            const [attr, cult, nat, hist, din] = await Promise.all([
+        const fetchTouristSpots = async (radius: number) => {
+            const [attr, cult, nat, hist] = await Promise.all([
                 fetchData(radius, attractionTypes),
                 fetchData(radius, cultureTypes),
                 fetchData(radius, natureTypes),
-                fetchData(radius, historicTypes),
-                fetchData(radius, diningTypes)
+                fetchData(radius, historicTypes)
             ]);
             addPrimarySpots(attr);
             addPrimarySpots(cult);
             addPrimarySpots(nat);
             addPrimarySpots(hist);
+        };
+
+        const fetchDiningSpots = async (radius: number) => {
+            const din = await fetchData(radius, diningTypes);
             addDiningSpots(din);
         };
 
-        // 第一段階
-        await fetchAndCategorize(currentRadius);
+        // 第一段階: 全ジャンル検索
+        await fetchTouristSpots(currentRadius);
+        await fetchDiningSpots(currentRadius);
 
-        // スポットが少ない場合(主役級の観光地が15件未満)、半径を拡大して再試行
-        while (primarySpots.length < 15 && currentRadius < maxRadius) {
+        // スポットが少ない場合(主役級の観光地が20件未満)、半径を拡大して観光地のみ再試行
+        while (primarySpots.length < 20 && currentRadius < maxRadius) {
             currentRadius = Math.min(currentRadius * 2, maxRadius);
             console.log(`Places API: Primary spots insufficient (${primarySpots.length}), expanding radius to ${currentRadius}m...`);
-            await fetchAndCategorize(currentRadius);
+            await fetchTouristSpots(currentRadius);
         }
 
         // それでも極端に少ない場合(全体で5件未満)、さらに拡大

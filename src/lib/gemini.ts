@@ -134,7 +134,7 @@ ${candidateList}
           "id": 0, 
           "stayTime": MINS, 
           "travel_time_minutes": MINS,
-          "recommendation_reason": "その場所ならではの具体的な魅力と選んだ理由（「おすすめのスポットです」は禁止）",
+          "aiDescription": "その場所ならではの具体的な魅力と選んだ理由（「おすすめのスポットです」は禁止）",
           "must_see": "Primary highlight",
           "pro_tip": "Insider insight",
           "trivia": "Rich historical/flavor trivia (3+ lines)"
@@ -170,17 +170,29 @@ ${candidateList}
 
     if (!text) throw new Error("AI生成に失敗しました (全モデル試行済)。");
 
-    // JSON抽出
+    // JSON抽出の堅牢化
     let jsonStr = text;
-    const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) jsonStr = jsonMatch[1];
-    else {
+    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/); // markdown code block対応
+    if (jsonMatch) {
+        jsonStr = jsonMatch[1];
+    } else {
         const start = jsonStr.indexOf('{');
         const end = jsonStr.lastIndexOf('}');
-        if (start !== -1 && end !== -1) jsonStr = jsonStr.substring(start, end + 1);
+        if (start !== -1 && end !== -1) {
+            jsonStr = jsonStr.substring(start, end + 1);
+        }
     }
+    
+    // 不正なカンマなどのクリーニング
+    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1'); 
 
-    const rawData = JSON.parse(jsonStr);
+    let rawData;
+    try {
+        rawData = JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("JSON Parse Error:", e, "\nOriginal Text:", jsonStr);
+        throw new Error("AIの出力形式が不正です。もう一度お試しください。");
+    }
     const courses = rawData.courses || [];
 
     // UUID
@@ -193,8 +205,8 @@ ${candidateList}
             if (!original) return null;
             return {
                 ...original,
-                stayTime: s.stayTime,
-                aiDescription: s.recommendation_reason || "おすすめのスポットです",
+                stayTime: Number(s.stayTime) || 30,
+                aiDescription: s.aiDescription || s.recommendation_reason || "おすすめのスポットです",
                 must_see: s.must_see || null,
                 pro_tip: s.pro_tip || null,
                 trivia: s.trivia || undefined

@@ -391,6 +391,7 @@ function App() {
             }
         } catch (err) {
             console.error("Remix failed:", err);
+            alert("リミックスに失敗しました。時間をおいて、別の指示でもう一度お試しください。");
         } finally {
             setIsRemixing(false);
         }

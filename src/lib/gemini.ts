@@ -322,12 +322,30 @@ ${candidateList}
 `;
 
     const modelName = "gemini-2.5-flash-lite";
+    let text: string | undefined;
+
     try {
         await waitRateLimit(modelName, 5000);
         const model = genAI.getGenerativeModel({ model: modelName });
         const result = await model.generateContent(prompt);
-        const text = (await result.response).text();
+        text = (await result.response).text();
+    } catch (err) {
+        console.error(`Remix Lite failed:`, err);
+        // フォールバック: Flash
+        const fbModel = "gemini-2.5-flash";
+        try {
+            await waitRateLimit(fbModel, 7000);
+            const model = genAI.getGenerativeModel({ model: fbModel });
+            const result = await model.generateContent(prompt);
+            text = (await result.response).text();
+        } catch (e) {
+            console.warn(`${fbModel} remix fallback failed`);
+        }
+    }
 
+    if (!text) throw new Error("AIによるリミックスに失敗しました。時間をおいて再度お試しください。");
+
+    try {
         let jsonStr = text;
         const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
@@ -353,7 +371,7 @@ ${candidateList}
             } as Spot;
         }).filter((s: any): s is Spot => s !== null);
 
-        if (hydratedSpots.length === 0) return null;
+        if (hydratedSpots.length === 0) throw new Error("有効なスポットが生成されませんでした。");
 
         return {
             id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
@@ -364,8 +382,8 @@ ${candidateList}
             theme: remixInstruction
         } as Course;
     } catch (err) {
-        console.error(`Remix failed:`, err);
-        return null;
+        console.error(`Remix processing failed:`, err);
+        throw err;
     }
 };
 

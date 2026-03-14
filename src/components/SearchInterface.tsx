@@ -113,8 +113,8 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                         <img src={`${import.meta.env.BASE_URL}meguru-logo.png`} alt="Meguru Logo" className="w-full h-full object-cover" />
                     </div>
                 </div>
-                <h1 className="text-5xl font-black text-slate-900 tracking-tighter mb-2">
-                    Meguru
+                <h1 className="text-5xl font-black text-slate-900 tracking-tighter mb-2 font-serif lowercase">
+                    meguru
                 </h1>
                 <p className="text-slate-400 text-sm font-bold tracking-tight">あなたのための、特別なよりみち。</p>
             </div>

@@ -41,6 +41,18 @@ const getDiningRule = (durationMinutes: number) => {
     }
 };
 
+const getRecommendedSpotCount = (durationMinutes: number) => {
+    if (durationMinutes <= 90) { // 1.5時間以下
+        return `**1〜2件**`;
+    } else if (durationMinutes <= 180) { // 3時間以下
+        return `**2〜3件**`;
+    } else if (durationMinutes <= 300) { // 5時間以下
+        return `**3〜4件**`;
+    } else { // 5時間超
+        return `**4〜5件**`;
+    }
+};
+
 export const generateSmartCourses = async (
     candidates: Spot[],
     center: { lat: number; lon: number },
@@ -65,6 +77,7 @@ export const generateSmartCourses = async (
     }).join('\n');
 
     const diningRule = getDiningRule(durationMinutes);
+    const spotCountRule = getRecommendedSpotCount(durationMinutes);
 
     const allThemes = [
         "🕰️ Time Travel: 時代を感じる歴史旅",
@@ -101,12 +114,13 @@ Your task is to create 5 **COMPLETELY DISTINCT** plans for a **${durationMinutes
 ${diningRule}
 - 食べてばかりのプランにならないよう、公園、神社仏閣、名所、美術館などの**「体験・景色」をコースの主役に**してください。
 
-**3. 時間予算の厳守:**
+**3. 時間予算とスポット数の厳守:**
 - 「各スポットの滞在時間」＋「スポット間の移動時間」が指定された **${durationMinutes}分** を超えないように厳選してください。
+- 今回の旅行時間（${durationMinutes}分）において、各コースの**最適なスポット数は ${spotCountRule}** です。この件数の範囲内でコースを構成してください。
 
 **4. 魅力的な命名と具体的な解説:**
 - **タイトル**: 雑誌の特集のように、詩的でキャッチーな日本語タイトルにしてください。
-- **解説 (recommendation_reason)**: 「おすすめのスポットです」といった手抜きの表現は絶対に禁止。その場所の歴史、特徴、雰囲気を具体的に語る、魅力的な説明文を作成してください。
+- **解説 (aiDescription)**: 「おすすめのスポットです」といった手抜きの表現は絶対に禁止。その場所の歴史、特徴、雰囲気を具体的に語る、魅力的な説明文を作成してください。
 
 **5. 構成と多様性:**
 ${themeInstructions}

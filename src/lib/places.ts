@@ -65,7 +65,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     // スポット取得用内部関数
     const fetchData = async (currentRadius: number, types: string[]) => {
         const data = {
-            maxResultCount: 20, // API制限により1リクエスト最大20件
+            maxResultCount: 20, 
             locationRestriction: {
                 circle: {
                     center: { latitude: lat, longitude: lng },
@@ -96,73 +96,37 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     };
 
     try {
-        let primarySpots: any[] = [];
-        let diningSpots: any[] = [];
         const foundIds = new Set<string>();
-
-        const addPrimarySpots = (spots: any[]) => {
-            spots.forEach(p => {
-                if (!foundIds.has(p.id)) {
-                    foundIds.add(p.id);
-                    primarySpots.push(p);
-                }
-            });
-        };
-
-        const addDiningSpots = (spots: any[]) => {
-            spots.forEach(p => {
-                if (!foundIds.has(p.id)) {
-                    foundIds.add(p.id);
-                    diningSpots.push(p);
-                }
-            });
-        };
-
-        // 段階的検索
         let currentRadius = initialRadius;
-        console.log(`Places API: Multi-stage search start (Initial Radius: ${currentRadius}m)`);
+        
+        console.log(`Places API: Optimized single-request search start (Radius: ${currentRadius}m)`);
 
-        const fetchTouristSpots = async (radius: number) => {
-            const [attr, cult, nat, hist] = await Promise.all([
-                fetchData(radius, attractionTypes),
-                fetchData(radius, cultureTypes),
-                fetchData(radius, natureTypes),
-                fetchData(radius, historicTypes)
-            ]);
-            addPrimarySpots(attr);
-            addPrimarySpots(cult);
-            addPrimarySpots(nat);
-            addPrimarySpots(hist);
-        };
+        // 第一段階: 観光地と飲食店を優先度の高い順に（でもリクエストは最小限に）
+        // 観光地カテゴリをまとめて1リクエスト
+        const primarySearchTypes = [...attractionTypes, ...cultureTypes, ...natureTypes, ...historicTypes];
+        
+        // メインスポットと飲食店を並列で（最大でも2リクエスト）
+        const [rawPrimary, rawDining] = await Promise.all([
+            fetchData(currentRadius, primarySearchTypes),
+            fetchData(currentRadius, diningTypes)
+        ]);
 
-        const fetchDiningSpots = async (radius: number) => {
-            const din = await fetchData(radius, diningTypes);
-            addDiningSpots(din);
-        };
+        let allFoundSpotsRaw = [...rawPrimary, ...rawDining];
 
-        // 第一段階: 全ジャンル検索
-        await fetchTouristSpots(currentRadius);
-        await fetchDiningSpots(currentRadius);
-
-        // スポットが少ない場合(主役級の観光地が20件未満)、半径を拡大して観光地のみ再試行
-        while (primarySpots.length < 20 && currentRadius < maxRadius) {
-            currentRadius = Math.min(currentRadius * 2, maxRadius);
-            console.log(`Places API: Primary spots insufficient (${primarySpots.length}), expanding radius to ${currentRadius}m...`);
-            await fetchTouristSpots(currentRadius);
+        // スポットが極端に少ない場合のみ半径を拡大して1回だけ再試行 (最大2リクエスト追加)
+        if (allFoundSpotsRaw.length < 15 && currentRadius < maxRadius) {
+            currentRadius = Math.min(currentRadius * 2.5, maxRadius);
+            console.log(`Places API: Spots low (${allFoundSpotsRaw.length}), performing one-time expanded search (${currentRadius}m)...`);
+            const expandedSpots = await fetchData(currentRadius, allSearchTypes);
+            // 重複排除してマージ
+            const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
+            expandedSpots.forEach((s: any) => {
+                if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s);
+            });
         }
 
-        // それでも極端に少ない場合(全体で5件未満)、さらに拡大
-        if (primarySpots.length + diningSpots.length < 5 && currentRadius < maxRadius) {
-            currentRadius = maxRadius;
-            console.log(`Places API: Overall spots low, final expansion to ${currentRadius}m...`);
-            addPrimarySpots(await fetchData(currentRadius, allSearchTypes));
-        }
-
-        // 整理してマージ (観光スポットを上位に配置、最大 40件まで)
-        let allFoundSpots = [...primarySpots, ...diningSpots];
-        if (allFoundSpots.length === 0) return [];
-
-        console.log(`Places API: Found ${primarySpots.length} primary spots and ${diningSpots.length} dining spots.`);
+        if (allFoundSpotsRaw.length === 0) return [];
+        console.log(`Places API: Optimization successful. Final count: ${allFoundSpotsRaw.length}`);
 
         return allFoundSpots.slice(0, 50).map((p: any) => ({
             place_id: p.id,

@@ -109,11 +109,11 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
             {/* ヘッダー */}
             <div className="text-center pt-12 pb-2 px-6 animate-fade-in">
                 <div className="inline-block mb-4 animate-float">
-                    <div className="w-20 h-20 mx-auto rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
-                        <img src={`${import.meta.env.BASE_URL}meguru-logo.png`} alt="Meguru Logo" className="w-full h-full object-cover" />
+                    <div className="w-12 h-12 mx-auto bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg">
+                        <Compass size={24} className="text-amber-400" />
                     </div>
                 </div>
-                <h1 className="text-5xl font-black text-slate-900 tracking-tighter mb-2 font-serif lowercase">
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-1 font-serif lowercase">
                     meguru
                 </h1>
                 <p className="text-slate-400 text-sm font-bold tracking-tight">あなたのための、特別なよりみち。</p>

@@ -1,4 +1,4 @@
-import { PlaceDetails, AutocompleteResult } from '../types';
+﻿import { PlaceDetails, AutocompleteResult } from '../types';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -116,30 +116,48 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         // 2段階欲張り検索: 1回目で10件未満の場合のみ、カテゴリ緩和（Stage 2）
         if (allFoundSpotsRaw.length < 10 && currentRadius < maxRadius) {
             currentRadius = Math.min(currentRadius * 2.5, maxRadius);
-            console.log(`Places API: Stage 2 search (${currentRadius}m)...`);
-            const fallbackTypes = ['point_of_interest', 'establishment', 'tourist_attraction', 'restaurant', 'cafe'];
-            const expandedSpots = await fetchData(currentRadius, fallbackTypes);
-            const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
-            expandedSpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
-        }
-
-        // 執念の3段階目: 依然として3件未満ならカテゴリ制限を完全撤廃（Stage 3）
+            console.log(`Places         // 執念の3段階目: 依然として3件未満ならカテゴリ制限を完全撤廃（Stage 3）
         if (allFoundSpotsRaw.length < 3 && currentRadius <= maxRadius) {
             currentRadius = maxRadius;
             console.log(`Places API: Stage 3 (Emergency) broad search at full radius (${currentRadius}m)...`);
-            // includedTypes を一切指定しないことで、あらゆる地点をヒットさせる
             const emergencySpots = await fetchData(currentRadius, []); 
             const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
             emergencySpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
         }
 
+        // 最終兵器4段階目: それでもダメなら「テキスト検索」で広域サーチ（Stage 4）
+        if (allFoundSpotsRaw.length < 3) {
+            console.log(`Places API: Stage 4 (Last Resort) Text Search...`);
+            // 現在地周辺の「観光スポット」というキーワードで広域検索
+            const textSearchUrl = `https://places.googleapis.com/v1/places:searchText`;
+            const tsResponse = await fetch(textSearchUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': API_KEY,
+                    'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos,places.editorialSummary,places.regularOpeningHours,places.reviews,places.priceLevel,places.businessStatus',
+                },
+                body: JSON.stringify({
+                    textQuery: "観光スポット 飲食店",
+                    locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: maxRadius } },
+                    languageCode: 'ja'
+                }),
+            });
+            if (tsResponse.ok) {
+                const tsResult = await tsResponse.json();
+                const tsPlaces = tsResult.places || [];
+                const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
+                tsPlaces.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
+            }
+        }
+
         if (allFoundSpotsRaw.length === 0) {
-            console.warn(`Places API: Final count 0 at (${lat}, ${lng}) even after Stage 3.`);
+            console.warn(`Places API: Final count 0 even after Stage 4.`);
             return [];
         }
         console.log(`Places API: Success. Stage results: ${allFoundSpotsRaw.length}`);
 
-        return allFoundSpots.slice(0, 50).map((p: any) => ({
+        return allFoundSpotsRaw.slice(0, 50).map((p: any) => ({
             place_id: p.id,
             name: p.displayName.text,
             lat: p.location.latitude,
@@ -162,10 +180,32 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 }
 
 /**
- * ルート検索用に複数エリアのプレイスを取得する（出発地、目的地、その中間など）
+ * ルート検索用に複数エリアのプレイスを取得する（出発地、目的地、その中間など計5点）
  */
 export async function searchRouteSpots(originObj: { lat: number, lng: number }, destObj: { lat: number, lng: number }, radiusMeters: number): Promise<PlaceDetails[]> {
-    // 簡易的に、出発地周辺、目的地周辺、および中間地点周辺の候補を取得してマージする
+    // 5地点サンプリング（出発、1/4, 2/4, 3/4, 到着）
+    const points = [
+        originObj,
+        { lat: originObj.lat * 0.75 + destObj.lat * 0.25, lng: originObj.lng * 0.75 + destObj.lng * 0.25 },
+        { lat: (originObj.lat + destObj.lat) / 2, lng: (originObj.lng + destObj.lng) / 2 },
+        { lat: originObj.lat * 0.25 + destObj.lat * 0.75, lng: originObj.lng * 0.25 + destObj.lng * 0.75 },
+        destObj
+    ];
+
+    const results = await Promise.all(
+        points.map(p => searchNearbySpots(p.lat, p.lng, radiusMeters))
+    );
+
+    const map = new Map<string, PlaceDetails>();
+    results.flat().forEach(spot => {
+        if (!map.has(spot.place_id)) {
+            map.set(spot.place_id, spot);
+        }
+    });
+
+    return Array.from(map.values());
+}
+��点周辺の候補を取得してマージする
     const midLat = (originObj.lat + destObj.lat) / 2;
     const midLng = (originObj.lng + destObj.lng) / 2;
 
@@ -262,3 +302,4 @@ export async function getPlaceLatLng(placeId: string): Promise<{ lat: number; ln
         return null;
     }
 }
+

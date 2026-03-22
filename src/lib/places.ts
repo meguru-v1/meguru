@@ -1,7 +1,6 @@
 import { PlaceDetails, AutocompleteResult } from '../types';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
 /**
  * テキスト検索でエリアの中心となる場所を探す
  */
@@ -226,27 +225,6 @@ export async function searchRouteSpots(originObj: { lat: number, lng: number }, 
 
     return Array.from(map.values());
 }
-��点周辺の候補を取得してマージする
-    const midLat = (originObj.lat + destObj.lat) / 2;
-    const midLng = (originObj.lng + destObj.lng) / 2;
-
-    const [originSpots, midSpots, destSpots] = await Promise.all([
-        searchNearbySpots(originObj.lat, originObj.lng, radiusMeters),
-        searchNearbySpots(midLat, midLng, radiusMeters),
-        searchNearbySpots(destObj.lat, destObj.lng, radiusMeters),
-    ]);
-
-    // 重複を排除
-    const map = new Map<string, PlaceDetails>();
-    [...originSpots, ...midSpots, ...destSpots].forEach(spot => {
-        if (!map.has(spot.place_id)) {
-            map.set(spot.place_id, spot);
-        }
-    });
-
-    return Array.from(map.values());
-}
-
 /**
  * 入力テキストから場所の候補を取得する (Autocomplete)
  */

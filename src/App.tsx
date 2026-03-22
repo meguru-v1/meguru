@@ -13,7 +13,7 @@ import { getCurrentWeather } from './lib/weather';
 import { getDistance } from 'geolib';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
-    Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap
+    Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap, Send
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId, TravelMode } from './types';
 
@@ -29,6 +29,7 @@ function App() {
     const [activeTab, setActiveTab] = useState<TabId>('search');
     const [searchCandidates, setSearchCandidates] = useState<Spot[]>([]);
     const [isRemixing, setIsRemixing] = useState(false);
+    const [customRemixInput, setCustomRemixInput] = useState('');
     const [showGenScreen, setShowGenScreen] = useState(false);
     const [searchLocationName, setSearchLocationName] = useState('');
     const [subAiContent, setSubAiContent] = useState<WaitingScreenContent | null>(null);
@@ -342,6 +343,7 @@ function App() {
     const handleRemix = async (instruction: string) => {
         if (!selectedCourse || searchCandidates.length === 0) return;
         setIsRemixing(true);
+        setCustomRemixInput(''); // 自由入力をクリア
         try {
             const now = new Date();
             const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
@@ -551,6 +553,29 @@ function App() {
                                     {btn.label}
                                 </button>
                             ))}
+                            
+                            {/* 自由入力リミックス */}
+                            <form 
+                                onSubmit={(e) => { e.preventDefault(); if (customRemixInput.trim()) handleRemix(customRemixInput.trim()); }} 
+                                className="flex items-center relative flex-1 min-w-[200px]"
+                            >
+                                <input
+                                    type="text"
+                                    placeholder="わがままを自由に指示..."
+                                    value={customRemixInput}
+                                    onChange={(e) => setCustomRemixInput(e.target.value)}
+                                    disabled={isRemixing}
+                                    className="w-full pl-3 pr-9 py-1.5 text-xs bg-slate-50 border border-slate-100 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all disabled:opacity-50"
+                                    aria-label="カスタムリミックス入力"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={!customRemixInput.trim() || isRemixing}
+                                    className="absolute right-1 w-6 h-6 flex items-center justify-center bg-indigo-500 text-white rounded-full disabled:opacity-50 disabled:bg-slate-300 transition-colors"
+                                >
+                                    {isRemixing ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                                </button>
+                            </form>
                         </div>
                         {isRemixing && (
                             <p className="text-[10px] text-indigo-400 mt-2 font-medium animate-pulse">AIがコースを再構成しています...</p>

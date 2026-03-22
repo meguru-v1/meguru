@@ -1,4 +1,4 @@
-﻿import { PlaceDetails, AutocompleteResult } from '../types';
+import { PlaceDetails, AutocompleteResult } from '../types';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -116,13 +116,6 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         // 2段階欲張り検索: 1回目で10件未満の場合のみ、カテゴリ緩和（Stage 2）
         if (allFoundSpotsRaw.length < 10 && currentRadius < maxRadius) {
             currentRadius = Math.min(currentRadius * 2.5, maxRadius);
-<<<<<<< HEAD
-            console.log(`Places         // 執念の3段階目: 依然として3件未満ならカテゴリ制限を完全撤廃（Stage 3）
-        if (allFoundSpotsRaw.length < 3 && currentRadius <= maxRadius) {
-            currentRadius = maxRadius;
-            console.log(`Places API: Stage 3 (Emergency) broad search at full radius (${currentRadius}m)...`);
-            const emergencySpots = await fetchData(currentRadius, []); 
-=======
             console.log(`Places API: Stage 2 search (${currentRadius}m)...`);
             const fallbackTypes = ['point_of_interest', 'establishment', 'tourist_attraction', 'restaurant', 'cafe'];
             const expandedSpots = await fetchData(currentRadius, fallbackTypes);
@@ -149,7 +142,6 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             ];
 
             const emergencySpots = await fetchData(currentRadius, ultimateFallbackTypes); 
->>>>>>> c957c535dfbac4da46b75d2a4b1b48a142cf6351
             const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
             emergencySpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
         }

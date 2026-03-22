@@ -116,11 +116,40 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         // 2段階欲張り検索: 1回目で10件未満の場合のみ、カテゴリ緩和（Stage 2）
         if (allFoundSpotsRaw.length < 10 && currentRadius < maxRadius) {
             currentRadius = Math.min(currentRadius * 2.5, maxRadius);
+<<<<<<< HEAD
             console.log(`Places         // 執念の3段階目: 依然として3件未満ならカテゴリ制限を完全撤廃（Stage 3）
         if (allFoundSpotsRaw.length < 3 && currentRadius <= maxRadius) {
             currentRadius = maxRadius;
             console.log(`Places API: Stage 3 (Emergency) broad search at full radius (${currentRadius}m)...`);
             const emergencySpots = await fetchData(currentRadius, []); 
+=======
+            console.log(`Places API: Stage 2 search (${currentRadius}m)...`);
+            const fallbackTypes = ['point_of_interest', 'establishment', 'tourist_attraction', 'restaurant', 'cafe'];
+            const expandedSpots = await fetchData(currentRadius, fallbackTypes);
+            const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
+            expandedSpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
+        }
+
+        // 執念の3段階目: 依然として3件未満ならカテゴリ制限を極限まで緩和（Stage 3: アルティメット・フォールバック）
+        if (allFoundSpotsRaw.length < 3 && currentRadius <= maxRadius) {
+            currentRadius = maxRadius;
+            console.log(`Places API: Stage 3 (Emergency) broad search at full radius (${currentRadius}m)...`);
+            
+            // APIの仕様上、includedTypesは空にできず（403エラー）、最大50個まで指定可能。
+            // そのため、何らかの「見どころ」になり得るあらゆるタイプの施設を列挙する。
+            const ultimateFallbackTypes = [
+                'point_of_interest', 'establishment', 'tourist_attraction', 'restaurant', 'cafe',
+                'park', 'store', 'lodging', 'shrine', 'museum', 'historical_landmark',
+                'bakery', 'bar', 'meal_takeaway', 'meal_delivery', 'shopping_mall',
+                'clothing_store', 'convenience_store', 'supermarket', 'book_store',
+                'hotel', 'guest_house', 'amusement_center', 'amusement_park', 'aquarium',
+                'bowling_alley', 'movie_theater', 'spa', 'zoo', 'transit_station',
+                'train_station', 'bus_station', 'library', 'local_government_office',
+                'city_hall', 'post_office', 'hindu_temple', 'place_of_worship', 'art_gallery'
+            ];
+
+            const emergencySpots = await fetchData(currentRadius, ultimateFallbackTypes); 
+>>>>>>> c957c535dfbac4da46b75d2a4b1b48a142cf6351
             const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
             emergencySpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
         }

@@ -123,12 +123,25 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             expandedSpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
         }
 
-        // 執念の3段階目: 依然として3件未満ならカテゴリ制限を完全撤廃（Stage 3）
+        // 執念の3段階目: 依然として3件未満ならカテゴリ制限を極限まで緩和（Stage 3: アルティメット・フォールバック）
         if (allFoundSpotsRaw.length < 3 && currentRadius <= maxRadius) {
             currentRadius = maxRadius;
             console.log(`Places API: Stage 3 (Emergency) broad search at full radius (${currentRadius}m)...`);
-            // includedTypes を一切指定しないことで、あらゆる地点をヒットさせる
-            const emergencySpots = await fetchData(currentRadius, []); 
+            
+            // APIの仕様上、includedTypesは空にできず（403エラー）、最大50個まで指定可能。
+            // そのため、何らかの「見どころ」になり得るあらゆるタイプの施設を列挙する。
+            const ultimateFallbackTypes = [
+                'point_of_interest', 'establishment', 'tourist_attraction', 'restaurant', 'cafe',
+                'park', 'store', 'lodging', 'shrine', 'museum', 'historical_landmark',
+                'bakery', 'bar', 'meal_takeaway', 'meal_delivery', 'shopping_mall',
+                'clothing_store', 'convenience_store', 'supermarket', 'book_store',
+                'hotel', 'guest_house', 'amusement_center', 'amusement_park', 'aquarium',
+                'bowling_alley', 'movie_theater', 'spa', 'zoo', 'transit_station',
+                'train_station', 'bus_station', 'library', 'local_government_office',
+                'city_hall', 'post_office', 'hindu_temple', 'place_of_worship', 'art_gallery'
+            ];
+
+            const emergencySpots = await fetchData(currentRadius, ultimateFallbackTypes); 
             const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
             emergencySpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
         }

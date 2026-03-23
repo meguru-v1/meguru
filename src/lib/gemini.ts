@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { Spot, Course } from '../types';
+import type { Spot, Course, PersonaId } from '../types';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const genAI = new GoogleGenerativeAI(API_KEY);
@@ -31,28 +31,69 @@ const waitRateLimit = async (modelName: string, intervalMs: number) => {
     lastRequestTimes[modelName] = Date.now();
 };
 
+// ===== ペルソナ定義 =====
+const PERSONA_INSTRUCTIONS: Record<PersonaId, { label: string; kanji: string; systemPrompt: string }> = {
+    miyabi: {
+        label: 'コンシェルジュ', kanji: '雅',
+        systemPrompt: `あなたは「雅のコンシェルジュ」です。伝統と格式を重んじる最高品質の案内人として振る舞ってください。
+語り口は上品で落ち着き、王道の名所の「知られざる一流の魅力」を丁寧に紐解きます。
+好む語彙: 「風格」「佇まい」「格別」「趣深い」「洗練」`
+    },
+    shiki: {
+        label: 'ストーリーテラー', kanji: '識',
+        systemPrompt: `あなたは「識のストーリーテラー」です。千年の記憶を紐解く歴史家として振る舞ってください。
+街の由来、伝説、歴史の裏側をドラマチックに語ります。石碑の一文字、地名の響きにすら物語を見出します。
+好む語彙: 「悠久」「礎」「刻まれた」「かつて」「伝承」`
+    },
+    ei: {
+        label: 'フォトグラファー', kanji: '映',
+        systemPrompt: `あなたは「映のフォトグラファー」です。一瞬の美を切り取る蒐集家として振る舞ってください。
+光の角度、構図、最高の撮影タイミングを具体的に提案します。「何時の光が最も美しいか」を常に意識します。
+好む語彙: 「斜光」「構図」「逆光」「黄金比」「シャッターチャンス」`
+    },
+    aji: {
+        label: 'エピキュリアン', kanji: '味',
+        systemPrompt: `あなたは「味のエピキュリアン」です。五感を刺激する美食の旅人として振る舞ってください。
+隠れた名店、地元民しか知らない味、その土地の食文化の深層を探求します。匂いと食感の描写を重視します。
+好む語彙: 「芳醇」「口福」「土地の記憶」「香ばしい」「滋味」`
+    },
+    sei: {
+        label: 'ナビゲーター', kanji: '静',
+        systemPrompt: `あなたは「静のナビゲーター」です。喧騒を離れ心を整える案内人として振る舞ってください。
+人混みを避け、静かな路地裏や寺院、隠れた公園で自分を見つめ直す旅を提案します。「呼吸が深くなる場所」を選びます。
+好む語彙: 「静寂」「木漏れ日」「一息」「余白」「調和」`
+    },
+    un: {
+        label: 'アドバイザー', kanji: '運',
+        systemPrompt: `あなたは「運のアドバイザー」です。福を呼び込むパワースポット専門家として振る舞ってください。
+運気が上がる神社仏閣、祈りの作法、良い気が流れる場所を専門にガイドします。心身を整える旅を提案します。
+好む語彙: 「御利益」「気脈」「浄化」「導き」「神徳」`
+    }
+};
+
+const getPersonaPrompt = (persona?: PersonaId): string => {
+    if (!persona || !PERSONA_INSTRUCTIONS[persona]) return '';
+    const p = PERSONA_INSTRUCTIONS[persona];
+    return `\n**【AIガイド・ペルソナ: 【${p.kanji}】${p.label}】**\n${p.systemPrompt}\n上記のペルソナの口調・視点・専門用語で、すべての説明文（aiDescription, must_see, pro_tip, trivia）を書いてください。\n`;
+};
+
 const getDiningRule = (durationMinutes: number) => {
-    if (durationMinutes <= 90) { // 1.5時間以下
+    if (durationMinutes <= 90) {
         return `- **食事・カフェの制限**: 各コースにおいて **最大1件** まで。サクッと立ち寄れるカフェや軽食を含めてください。`;
-    } else if (durationMinutes <= 180) { // 3時間以下
+    } else if (durationMinutes <= 180) {
         return `- **食事・カフェの制限**: 各コースにおいて **最大2件（必ず1件は含める）**。体験をメインに据えつつ、美味しい休憩スポットを確保。`;
-    } else if (durationMinutes <= 300) { // 5時間以下
+    } else if (durationMinutes <= 300) {
         return `- **食事・カフェの制限**: 各コースにおいて **必ず1〜2件含める**。ランチとカフェなど、観光の合間に名物を楽しんで。`;
-    } else { // 5時間超
+    } else {
         return `- **食事・カフェの制限**: 各コースにおいて **必ず2〜3件含める**。ランチやディナー、休憩カフェなど、長旅に見合った食事体験を。`;
     }
 };
 
 const getRecommendedSpotCount = (durationMinutes: number) => {
-    if (durationMinutes <= 90) { // 1.5時間以下
-        return `**1〜2件**`;
-    } else if (durationMinutes <= 180) { // 3時間以下
-        return `**2〜3件**`;
-    } else if (durationMinutes <= 300) { // 5時間以下
-        return `**3〜4件**`;
-    } else { // 5時間超
-        return `**4〜5件**`;
-    }
+    if (durationMinutes <= 90) return `**1〜2件**`;
+    if (durationMinutes <= 180) return `**2〜3件**`;
+    if (durationMinutes <= 300) return `**3〜4件**`;
+    return `**4〜5件**`;
 };
 
 export const generateSmartCourses = async (
@@ -64,7 +105,8 @@ export const generateSmartCourses = async (
     mood: string = "不明",
     budget: string = "不明",
     groupSize: string = "不明",
-    userPreferenceContext: string = ""
+    userPreferenceContext: string = "",
+    persona?: PersonaId
 ): Promise<Course[]> => {
     const candidateList = candidates.map((s, i) => {
         const details = [
@@ -81,6 +123,7 @@ export const generateSmartCourses = async (
 
     const diningRule = getDiningRule(durationMinutes);
     const spotCountRule = getRecommendedSpotCount(durationMinutes);
+    const personaPrompt = getPersonaPrompt(persona);
 
     const allThemes = [
         "🕰️ Time Travel: 時代を感じる歴史旅",
@@ -101,17 +144,26 @@ export const generateSmartCourses = async (
     const selectedThemes = allThemes.sort(() => 0.5 - Math.random()).slice(0, 5);
     const themeInstructions = selectedThemes.map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
 
-    // 爆速化プロンプト: 「小ネタカタログ」＋「コース構成」の2段構え
-    const prompt = `
-You are a top-tier Japanese luxury travel curator.
-Your task is to create 5 **COMPLETELY DISTINCT** plans for a **${durationMinutes} minute** trip.
+    // ヘルパー: 実際にAIを呼び出す内部関数
+    const callGeneration = async (num: number, existingTitles: string[] = []): Promise<any[]> => {
+        const exclusionPrompt = existingTitles.length > 0 
+            ? `\n**【重要：以下のテーマとは重複しない、全く新しい切り口で提案してください】**\n- ${existingTitles.join('\n- ')}`
+            : "";
 
+        const themeSlice = existingTitles.length > 0 
+            ? selectedThemes.slice(3).map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n')
+            : selectedThemes.slice(0, num).map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
+
+        const promptTemplate = `
+You are a top-tier Japanese luxury travel curator.
+Your task is to create ${num} **COMPLETELY DISTINCT** plans for a **${durationMinutes} minute** trip.
+${personaPrompt}
 **【最重要ミッション】**
-あなたは世界最高峰のトラベルキュレーターです。提供された候補から、必ず **全く異なる5つのプラン** を作成してください。
+あなたは世界最高峰のトラベルキュレーターです。提供された候補から、必ず **全く異なる${num}つのプラン** を作成してください。
+${exclusionPrompt}
 
 **1. コースの完全な独立性と重複排除 (極めて重要):**
-- **5つのコース間で、スポットを被らせることは絶対に禁止です。**（例: コース1で選んだカフェや公園を、コース2〜5で再利用してはいけません）。
-- 行き先がすべて同じで名前だけ違うようなコースは許容されません。
+- **${num}つのコース間で、スポットを被らせることは絶対に禁止です。**
 
 **2. 体験・観光の主役化と飲食制限:**
 ${diningRule}
@@ -119,18 +171,21 @@ ${diningRule}
 
 **3. 時間予算とスポット数の厳守:**
 - 「各スポットの滞在時間」＋「スポット間の移動時間」が指定された **${durationMinutes}分** を超えないように厳選してください。
-- 今回の旅行時間（${durationMinutes}分）において、各コースの**最適なスポット数は ${spotCountRule}** です。この件数の範囲内でコースを構成してください。
+- 各コースの**最適なスポット数は ${spotCountRule}** です。
 
 **4. 魅力的な命名と具体的な解説:**
 - **タイトル**: 雑誌の特集のように、詩的でキャッチーな日本語タイトルにしてください。
-- **解説 (aiDescription)**: 「おすすめのスポットです」といった手抜きの表現は絶対に禁止。その場所の歴史、特徴、雰囲気を具体的に語る、魅力的な説明文を作成してください。
+- **解説 (aiDescription)**: 「おすすめです」「ぜひ訪れてみてください」等の定型表現は**絶対禁止**。その場所の歴史や五感（音、匂い、手触り）を具体的に語ってください。
 
-**5. 構成と多様性:**
-${themeInstructions}
+**5. 文化財の判定:**
+- スポットが国宝、重要文化財、世界遺産、日本遺産に該当する場合、"cultural_property" フィールドにその称号を記入してください（例: "国宝", "世界遺産"）。該当しない場合はnullにしてください。
+
+**6. 構成と多様性:**
+${themeSlice}
 
 **【出力形式】**
 - **JSONの「値」はすべて日本語**で出力してください。
-- **JSONの「キー」は絶対に英語のまま**（id, title, description, trivia等）にしてください。
+- **JSONの「キー」は絶対に英語のまま**にしてください。
 
 **CANDIDATES:**
 ${candidateList}
@@ -152,28 +207,17 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
           "id": 0, 
           "stayTime": MINS, 
           "travel_time_minutes": MINS,
-          "aiDescription": "その場所ならではの具体的な魅力と選んだ理由（「おすすめのスポットです」は禁止）",
-          "must_see": "Primary highlight",
-          "pro_tip": "Insider insight",
-          "trivia": "Rich historical/flavor trivia (3+ lines)"
+          "aiDescription": "五感を使った具体的な魅力描写（定型文禁止）",
+          "must_see": "必見ポイント",
+          "pro_tip": "旅のプロの視点",
+          "trivia": "知識欲を刺激する小ネタ（3行以上）",
+          "cultural_property": "国宝 or 世界遺産 or null"
         }
       ]
     }
   ]
 }
 `;
-
-    // ヘルパー: 実際にAIを呼び出す内部関数
-    const callGeneration = async (num: number, existingTitles: string[] = []): Promise<any[]> => {
-        const exclusionPrompt = existingTitles.length > 0 
-            ? `\n**【重要：以下のテーマとは重複しない、全く新しい切り口で提案してください】**\n- ${existingTitles.join('\n- ')}`
-            : "";
-
-        const promptTemplate = `
-You are a world-class Japanese luxury travel curator.
-Task: Create ${num} distinct, high-quality model courses.${exclusionPrompt}
-...（中略：プロンプト本体）...
-`;      // 実際には完全なプロンプトを使用
 
         const modelName = "gemini-2.5-flash-lite";
         let text: string | undefined;
@@ -184,14 +228,20 @@ Task: Create ${num} distinct, high-quality model courses.${exclusionPrompt}
             const result = await model.generateContent(promptTemplate);
             text = (await result.response).text();
         } catch (err) {
+            console.warn(`[Gemini API] Primary model ${modelName} failed:`, err);
             const fbModel = "gemini-2.5-flash";
             await waitRateLimit(fbModel, 7000);
-            const model = genAI.getGenerativeModel({ 
-                model: fbModel,
-                generationConfig: { responseMimeType: "application/json" }
-            });
-            const result = await model.generateContent(promptTemplate);
-            text = (await result.response).text();
+            try {
+                const model = genAI.getGenerativeModel({ 
+                    model: fbModel,
+                    generationConfig: { responseMimeType: "application/json" }
+                });
+                const result = await model.generateContent(promptTemplate);
+                text = (await result.response).text();
+            } catch (fallbackErr) {
+                console.error(`[Gemini API] Fallback model ${fbModel} also failed:`, fallbackErr);
+                throw fallbackErr;
+            }
         }
 
         if (!text) return [];
@@ -234,15 +284,16 @@ Task: Create ${num} distinct, high-quality model courses.${exclusionPrompt}
     return courses.map((course: any) => {
         const uniqueId = generateId();
         const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
-            const original = candidates[Number(s.id)]; // 念のためNumberキャスト
+            const original = candidates[Number(s.id)];
             if (!original) return null;
             return {
                 ...original,
                 stayTime: Number(s.stayTime) || 30,
-                aiDescription: s.aiDescription || s.recommendation_reason || "おすすめのスポットです",
+                aiDescription: s.aiDescription || s.recommendation_reason || "魅力的なスポットです",
                 must_see: s.must_see || null,
                 pro_tip: s.pro_tip || null,
-                trivia: s.trivia || undefined
+                trivia: s.trivia || undefined,
+                cultural_property: s.cultural_property || null
             } as Spot;
         }).filter((s: any): s is Spot => s !== null);
 
@@ -273,9 +324,9 @@ Task: Create ${num} distinct, high-quality model courses.${exclusionPrompt}
                     sorted[i].travel_time_minutes = Math.round(dist / 80);
                 }
             }
-            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: sorted } as Course;
+            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: sorted, persona } as Course;
         }
-        return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: hydratedSpots } as Course;
+        return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: hydratedSpots, persona } as Course;
     });
 };
 
@@ -441,17 +492,49 @@ export interface WaitingScreenContent {
 
 export const generateWaitingScreenContent = async (
     locationName: string,
-    weatherContext: string = "不明"
+    weatherContext: string = "不明",
+    persona?: PersonaId
 ): Promise<WaitingScreenContent | null> => {
-    const prompt = `Create premium Japanese waiting screen content for ${locationName} (Weather: ${weatherContext}). JSON ONLY.`;
-    const modelName = "gemini-2.5-flash"; // 待機画面はFlash固定
+    const personaContext = persona && PERSONA_INSTRUCTIONS[persona]
+        ? `選ばれたガイド: 【${PERSONA_INSTRUCTIONS[persona].kanji}】${PERSONA_INSTRUCTIONS[persona].label}。このガイドの視点でチップスを書いてください。`
+        : '';
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const hour = now.getHours();
+    const seasonHint = month <= 2 || month === 12 ? '冬' : month <= 5 ? '春' : month <= 8 ? '夏' : '秋';
+    const timeHint = hour < 10 ? '朝' : hour < 15 ? '昼' : hour < 18 ? '夕方' : '夜';
+
+    const prompt = `あなたは「${locationName}」を知り尽くした地元の達人です。
+今の状況: 季節=${seasonHint}, 時間帯=${timeHint}, 天気=${weatherContext}
+${personaContext}
+
+以下のJSON形式で、**この場所・この天気・この時間だからこそ言える**極めて具体的なコンテンツを日本語で生成してください。
+「傘を持って」「歩きやすい靴で」等の一般的すぎる助言は禁止。「今の${weatherContext}なら〇〇寺の苔が映える」のような、場所と状況に紐づいた専門的な助言のみ許可します。
+
+{
+  "status_texts": ["生成中の演出テキスト4つ（詩的で${locationName}にちなんだもの）"],
+  "forecast_copies": ["今の天気・季節に即した、${locationName}ならではの楽しみ方を2つ"],
+  "travel_tips": ["プロ級の旅のヒント3つ（具体的な場所名・時間・体験を含む）"],
+  "interaction": [{"question": "旅の気分を高める質問", "options": [{"id": "a", "label": "選択肢"}]}]
+}
+JSON ONLY.`;
+    const modelName = "gemini-2.5-flash-lite";
     try {
-        await waitRateLimit(modelName, 7000); // 7秒制限
+        await waitRateLimit(modelName, 5000);
         const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
         const result = await model.generateContent(prompt);
         return JSON.parse((await result.response).text()) as WaitingScreenContent;
     } catch (err) {
-        console.warn(`Sub-AI (Flash) failed:`, err);
-        return null;
+        console.warn(`Sub-AI (Flash-Lite) failed, trying Flash:`, err);
+        try {
+            const fbModel = "gemini-2.5-flash";
+            await waitRateLimit(fbModel, 7000);
+            const model = genAI.getGenerativeModel({ model: fbModel, generationConfig: { responseMimeType: "application/json" } });
+            const result = await model.generateContent(prompt);
+            return JSON.parse((await result.response).text()) as WaitingScreenContent;
+        } catch (fbErr) {
+            console.warn(`Sub-AI (Flash) also failed:`, fbErr);
+            return null;
+        }
     }
 };

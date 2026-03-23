@@ -87,7 +87,7 @@ function App() {
         setStatus('場所を検索中...');
 
         try {
-            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId } = params;
+            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId, persona } = params;
             
             // リミックス用に条件を保存
             setLastSearchDuration(duration);
@@ -190,12 +190,13 @@ function App() {
                     mood,
                     budget,
                     groupSize,
-                    getPreferenceContext()
+                    getPreferenceContext(),
+                    persona
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
                 setTimeout(() => {
-                    generateWaitingScreenContent(query, weatherContext)
+                    generateWaitingScreenContent(query, weatherContext, persona)
                         .then(content => { if (content) setSubAiContent(content); })
                         .catch(() => { /* フォールバックで対応 */ });
                 }, 200);
@@ -295,12 +296,13 @@ function App() {
                     mood,
                     budget,
                     groupSize,
-                    getPreferenceContext()
+                    getPreferenceContext(),
+                    persona
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
                 setTimeout(() => {
-                    generateWaitingScreenContent(query, weatherContext)
+                    generateWaitingScreenContent(query, weatherContext, persona)
                         .then(content => { if (content) setSubAiContent(content); })
                         .catch(() => { /* フォールバックで対応 */ });
                 }, 300);
@@ -640,6 +642,7 @@ function App() {
                                             userRatings={spot.user_ratings_total}
                                             isFirst={isFirst}
                                             isLast={isLast}
+                                            culturalProperty={spot.cultural_property}
                                         />
 
                                         {/* テキストコンテンツ */}

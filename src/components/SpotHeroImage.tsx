@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, Camera, Building } from 'lucide-react';
+import { Star, Camera, Building, Crown, Globe, Landmark } from 'lucide-react';
 
 interface SpotHeroImageProps {
     spotName: string;
@@ -12,6 +12,7 @@ interface SpotHeroImageProps {
     userRatings?: number;
     isFirst: boolean;
     isLast: boolean;
+    culturalProperty?: string | null;
 }
 
 export default function SpotHeroImage({
@@ -24,7 +25,8 @@ export default function SpotHeroImage({
     rating,
     userRatings,
     isFirst,
-    isLast
+    isLast,
+    culturalProperty
 }: SpotHeroImageProps) {
     // googlePhotoRefがない場合は最初から外観モードにする
     const [viewMode, setViewMode] = useState<'photo' | 'exterior'>(googlePhotoRef ? 'photo' : 'exterior');
@@ -67,13 +69,25 @@ export default function SpotHeroImage({
             }} />
             
             {/* ラベルバッジ */}
-            <div className="absolute top-3 left-3 flex gap-2">
+            <div className="absolute top-3 left-3 flex gap-2 flex-wrap">
                 <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold tracking-wider shadow-sm ${isFirst ? 'bg-amber-400 text-white' : isLast ? 'bg-slate-900 text-white' : 'bg-white/90 text-slate-700'}`}>
                     {label}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/80 backdrop-blur-sm shadow-sm text-slate-600">
                     {category}
                 </span>
+                {culturalProperty && (
+                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold tracking-wider shadow-lg flex items-center gap-1 backdrop-blur-sm
+                        ${culturalProperty.includes('国宝') ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-white' 
+                        : culturalProperty.includes('世界遺産') ? 'bg-gradient-to-r from-blue-800 to-indigo-900 text-white'
+                        : culturalProperty.includes('重要文化財') ? 'bg-gradient-to-r from-red-700 to-rose-800 text-white'
+                        : 'bg-gradient-to-r from-teal-600 to-emerald-700 text-white'}`}>
+                        {culturalProperty.includes('国宝') && <Crown size={10} />}
+                        {culturalProperty.includes('世界遺産') && <Globe size={10} />}
+                        {(culturalProperty.includes('重要文化財') || culturalProperty.includes('日本遺産')) && <Landmark size={10} />}
+                        {culturalProperty}
+                    </span>
+                )}
             </div>
             
             {/* モード切替トグル */}

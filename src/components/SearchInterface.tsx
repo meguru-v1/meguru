@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Search, MapPin, Clock, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown,
-    Smile, Banknote, Users, Sparkles, Loader2, Compass
+    Smile, Banknote, Users, Sparkles, Loader2, Compass, LocateFixed
 } from 'lucide-react';
-import type { SearchParams, SearchMode, TravelMode, AutocompleteResult } from '../types';
+import type { SearchParams, SearchMode, TravelMode, AutocompleteResult, PersonaId } from '../types';
 import { getAutocompleteSuggestions } from '../lib/places';
+
+const PERSONAS: { id: PersonaId; kanji: string; label: string; theme: string; color: string }[] = [
+    { id: 'miyabi', kanji: '雅', label: 'コンシェルジュ', theme: '王道の旅', color: 'from-amber-500 to-amber-700' },
+    { id: 'shiki',  kanji: '識', label: 'ストーリーテラー', theme: '歴史の旅', color: 'from-indigo-500 to-indigo-700' },
+    { id: 'ei',     kanji: '映', label: 'フォトグラファー', theme: '美景の旅', color: 'from-rose-400 to-rose-600' },
+    { id: 'aji',    kanji: '味', label: 'エピキュリアン', theme: '美食の旅', color: 'from-orange-400 to-orange-600' },
+    { id: 'sei',    kanji: '静', label: 'ナビゲーター', theme: '静寂の旅', color: 'from-emerald-500 to-emerald-700' },
+    { id: 'un',     kanji: '運', label: 'アドバイザー', theme: '開運の旅', color: 'from-purple-500 to-purple-700' },
+];
 
 interface SearchInterfaceProps {
     onSearch: (params: SearchParams) => void;
@@ -29,6 +38,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
     const [mood, setMood] = useState('');
     const [budget, setBudget] = useState('');
     const [groupSize, setGroupSize] = useState('');
+    const [persona, setPersona] = useState<PersonaId | undefined>(undefined);
     const [isSearching, setIsSearching] = useState(false);
 
     // オートコンプリート用の状態
@@ -100,6 +110,39 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
             mood: mood || undefined,
             budget: budget || undefined,
             groupSize: groupSize || undefined,
+            persona,
+        });
+        setTimeout(() => setIsSearching(false), 1000);
+    };
+
+    const handleExploreNow = () => {
+        if (!userLocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                    triggerExplore(pos.coords.latitude, pos.coords.longitude);
+                },
+                () => alert('現在地を取得できませんでした。位置情報の許可をご確認ください。'),
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        } else {
+            triggerExplore(userLocation.lat, userLocation.lng);
+        }
+    };
+
+    const triggerExplore = (lat: number, lng: number) => {
+        setIsSearching(true);
+        onSearch({
+            searchMode: 'area',
+            query: `${lat},${lng}`,
+            queryPlaceId: undefined,
+            radius: 1500,
+            duration: 120,
+            travelMode: 'walk',
+            mood: undefined,
+            budget: undefined,
+            groupSize: undefined,
+            persona,
         });
         setTimeout(() => setIsSearching(false), 1000);
     };
@@ -133,6 +176,17 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                         <ArrowRight size={13} className="inline mr-1.5 -mt-0.5" /> ルート検索
                     </button>
                 </div>
+
+            {/* 「今すぐめぐる」ボタン */}
+            <div className="px-6 mb-4 animate-slide-up">
+                <button type="button" onClick={handleExploreNow} disabled={isSearching}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 text-white font-extrabold text-sm shadow-lg hover:shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                    <LocateFixed size={18} className="animate-pulse" />
+                    今すぐ、未知へ
+                    <Sparkles size={14} />
+                </button>
+                <p className="text-center text-[10px] text-slate-400 mt-1.5 font-medium">現在地からAIが即座にコースを生成</p>
+            </div>
             </div>
 
             {/* フォーム */}
@@ -301,6 +355,32 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                                 ))}
                             </div>
                         </div>
+
+                    {/* AIガイド（ペルソナ）選択 */}
+                    <div className="space-y-2 animate-slide-up pt-2">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <Sparkles size={12} /> AIガイド
+                            {persona && <span className="ml-auto text-amber-500 normal-case">【{PERSONAS.find(p => p.id === persona)?.kanji}】選択中</span>}
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {PERSONAS.map(p => {
+                                const isActive = persona === p.id;
+                                return (
+                                    <button key={p.id} type="button" onClick={() => setPersona(isActive ? undefined : p.id)}
+                                        className={`relative flex flex-col items-center justify-center py-3 rounded-xl border-2 transition-all duration-300 active:scale-95 overflow-hidden
+                                            ${isActive 
+                                                ? 'border-transparent text-white shadow-lg scale-[1.02]' 
+                                                : 'border-slate-100 bg-white text-slate-600 hover:border-slate-200'}`}
+                                    >
+                                        {isActive && <div className={`absolute inset-0 bg-gradient-to-br ${p.color}`} />}
+                                        <span className={`relative text-xl font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>{p.kanji}</span>
+                                        <span className={`relative text-[9px] font-bold mt-0.5 ${isActive ? 'text-white/90' : 'text-slate-400'}`}>{p.label}</span>
+                                        <span className={`relative text-[8px] mt-0.5 ${isActive ? 'text-white/70' : 'text-slate-300'}`}>{p.theme}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
                     </div>
                 </div>
                 <button type="submit" disabled={isSearching}

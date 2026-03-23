@@ -1,6 +1,25 @@
 import { PlaceDetails, AutocompleteResult } from '../types';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+// ===== セッションキャッシュ（5分有効） =====
+const CACHE_TTL = 5 * 60 * 1000; // 5分
+const placesCache = new Map<string, { data: any; timestamp: number }>();
+
+const getCached = (key: string) => {
+    const entry = placesCache.get(key);
+    if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+        console.log(`[PlacesCache] HIT: ${key.substring(0, 50)}...`);
+        return entry.data;
+    }
+    placesCache.delete(key);
+    return null;
+};
+
+const setCache = (key: string, data: any) => {
+    placesCache.set(key, { data, timestamp: Date.now() });
+};
+
 /**
  * テキスト検索でエリアの中心となる場所を探す
  */
@@ -47,6 +66,11 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
  * 中心座標から指定半径内のプレイスを検索する
  */
 export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number): Promise<PlaceDetails[]> {
+    // キャッシュチェック
+    const cacheKey = `nearby:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters)}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+
     const url = `https://places.googleapis.com/v1/places:searchNearby`;
 
     // 1. カテゴリの拡充とグループ化 (APIの20件制限を回避するため分割して検索)
@@ -80,7 +104,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             headers: {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos,places.editorialSummary,places.regularOpeningHours,places.reviews,places.priceLevel,places.businessStatus',
+                'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos,places.editorialSummary,places.priceLevel,places.businessStatus',
             },
             body: JSON.stringify(data),
         });

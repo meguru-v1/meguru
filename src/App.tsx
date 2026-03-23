@@ -238,7 +238,17 @@ function App() {
             } else {
                 // ===== エリア検索 (従来) =====
                 const { query, queryPlaceId, radius: r, duration, travelMode, mood, budget, groupSize } = params;
-                const startGeo = await geocode(query, queryPlaceId);
+
+                // GPS座標文字列の検出（"35.xxx,135.xxx" 形式 = 「今すぐ未知へ」ボタン経由）
+                const coordMatch = query.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+                let startGeo: { lat: number; lon: number; name: string } | null;
+
+                if (coordMatch) {
+                    // 座標直指定 → geocode不要
+                    startGeo = { lat: parseFloat(coordMatch[1]), lon: parseFloat(coordMatch[2]), name: '現在地' };
+                } else {
+                    startGeo = await geocode(query, queryPlaceId);
+                }
                 if (!startGeo) throw new Error("場所が見つかりませんでした。");
 
                 setCenter({ lat: startGeo.lat, lon: startGeo.lon });
@@ -536,7 +546,7 @@ function App() {
                             </div>
                         )}
                         <div className="flex items-start justify-between gap-2">
-                            <h2 className="font-extrabold text-xl text-slate-900 leading-tight flex-1">{selectedCourse.title}</h2>
+                            <h2 className="course-title text-xl text-slate-900 flex-1">{selectedCourse.title}</h2>
                             <button onClick={() => isFavorite(selectedCourse.id) ? removeFavorite(selectedCourse.id) : addFavorite(selectedCourse)}
                                 className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90 shrink-0
                                     ${isFavorite(selectedCourse.id) ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-100 text-slate-400 hover:text-rose-400 hover:bg-rose-50'}`}>
@@ -548,7 +558,7 @@ function App() {
                             <span className="flex items-center gap-1"><MapPin size={12} /> {selectedCourse.spots.length}スポット</span>
                         </div>
                         {selectedCourse.description && (
-                            <p className="text-sm text-slate-500 mt-2 leading-relaxed">{selectedCourse.description}</p>
+                            <p className="spot-description text-slate-500 mt-2">{selectedCourse.description}</p>
                         )}
                         {/* 地図で見るボタン */}
                         <button onClick={() => setActiveTab('map')}
@@ -648,34 +658,34 @@ function App() {
                                         {/* テキストコンテンツ */}
                                         <div className="p-4 pt-2">
                                             {/* AI説明文 */}
-                                            <p className="text-[13px] text-slate-600 leading-relaxed mb-3">
+                                            <p className="spot-description text-slate-600 mb-3">
                                                 {spot.aiDescription || spot.tags.description || "詳細情報なし"}
                                             </p>
 
                                             {/* 情報カード群 */}
                                             <div className="space-y-2">
                                                 {spot.must_see && (
-                                                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 mb-0.5">
+                                                    <div className="insight-card must-see">
+                                                        <span className="insight-card-title">
                                                             <Star size={10} /> 必見ポイント
                                                         </span>
-                                                        <span className="text-[11px] text-amber-900 leading-relaxed">{spot.must_see}</span>
+                                                        <span className="insight-card-body">{spot.must_see}</span>
                                                     </div>
                                                 )}
                                                 {spot.pro_tip && (
-                                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 mb-0.5">
+                                                    <div className="insight-card pro-tip">
+                                                        <span className="insight-card-title">
                                                             <Sparkles size={10} /> 旅のヒント
                                                         </span>
-                                                        <span className="text-[11px] text-blue-900 leading-relaxed">{spot.pro_tip}</span>
+                                                        <span className="insight-card-body">{spot.pro_tip}</span>
                                                     </div>
                                                 )}
                                                 {spot.trivia && (
-                                                    <div className="bg-fuchsia-50 p-3 rounded-xl border border-fuchsia-100">
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold text-fuchsia-600 mb-0.5">
+                                                    <div className="insight-card trivia">
+                                                        <span className="insight-card-title">
                                                             <Lightbulb size={10} /> 賢者の小ネタ
                                                         </span>
-                                                        <span className="text-[11px] text-fuchsia-900 leading-relaxed">{spot.trivia}</span>
+                                                        <span className="insight-card-body">{spot.trivia}</span>
                                                     </div>
                                                 )}
                                             </div>

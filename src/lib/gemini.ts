@@ -199,14 +199,24 @@ Task: Create ${num} distinct, high-quality model courses.${exclusionPrompt}
         let jsonStr = text;
         const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, jsonStr];
         jsonStr = jsonMatch[1] || jsonStr;
-        const start = jsonStr.indexOf('{');
-        const end = jsonStr.lastIndexOf('}');
-        if (start !== -1 && end !== -1) jsonStr = jsonStr.substring(start, end + 1);
+        const firstBrace = jsonStr.indexOf('{');
+        const firstBracket = jsonStr.indexOf('[');
+        const start = (firstBrace !== -1 && firstBracket !== -1) ? Math.min(firstBrace, firstBracket) : Math.max(firstBrace, firstBracket);
+        const lastBrace = jsonStr.lastIndexOf('}');
+        const lastBracket = jsonStr.lastIndexOf(']');
+        const end = Math.max(lastBrace, lastBracket);
+        if (start !== -1 && end !== -1 && start < end) {
+            jsonStr = jsonStr.substring(start, end + 1);
+        }
         
         try {
             const data = JSON.parse(jsonStr.replace(/,\s*([\]}])/g, '$1'));
-            return data.courses || [];
+            if (Array.isArray(data)) return data;
+            if (data.courses && Array.isArray(data.courses)) return data.courses;
+            console.warn('Gemini returned unusual JSON structure:', data);
+            return [];
         } catch (e) {
+            console.error('Gemini JSON Parse Error. Raw string:', jsonStr);
             return [];
         }
     };
@@ -370,15 +380,25 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
         if (jsonMatch) {
             jsonStr = jsonMatch[1];
         } else {
-            const start = jsonStr.indexOf('{');
-            const end = jsonStr.lastIndexOf('}');
-            if (start !== -1 && end !== -1) {
+            const firstBrace = jsonStr.indexOf('{');
+            const firstBracket = jsonStr.indexOf('[');
+            const start = (firstBrace !== -1 && firstBracket !== -1) ? Math.min(firstBrace, firstBracket) : Math.max(firstBrace, firstBracket);
+            const lastBrace = jsonStr.lastIndexOf('}');
+            const lastBracket = jsonStr.lastIndexOf(']');
+            const end = Math.max(lastBrace, lastBracket);
+            if (start !== -1 && end !== -1 && start < end) {
                 jsonStr = jsonStr.substring(start, end + 1);
             }
         }
         jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1'); 
 
-        const data = JSON.parse(jsonStr);
+        let data;
+        try {
+            data = JSON.parse(jsonStr);
+        } catch (e) {
+            console.error('Gemini JSON Parse Error in Remix. Raw string:', jsonStr);
+            return null;
+        }
         
         const hydratedSpots = (data.spots || []).map((s: any) => {
             const original = candidates[Number(s.id)];

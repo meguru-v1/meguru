@@ -4,11 +4,6 @@ import type { Spot, Course, PersonaId } from '../types';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// 共通モデルリスト (次世代モデルに統一 / Grounding対応の2.5系のみ)
-const MODELS = [
-    "gemini-2.5-flash",         // 標準
-    "gemini-2.5-flash-lite"     // 軽量
-];
 
 // 429エラー（Quota）発生時の待機用
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -108,15 +103,33 @@ export const generateSmartCourses = async (
     userPreferenceContext: string = "",
     persona?: PersonaId
 ): Promise<Course[]> => {
-    const candidateList = candidates.map((s, i) => {
+    // ===== #1: 候補品質フィルタ + #8: 距離ソート =====
+    const qualityFiltered = candidates
+        .filter(s => {
+            // 閉業済みを除外
+            if ((s as any).business_status === 'CLOSED_PERMANENTLY') return false;
+            // 評価がある場合、★3.5未満を除外（評価なしは許可）
+            if (s.rating && s.rating < 3.5) return false;
+            return true;
+        })
+        .map(s => {
+            // 中心からの距離を計算
+            const dx = (s.lat - center.lat) * 111000;
+            const dy = (s.lon - center.lon) * 111000 * Math.cos(center.lat * Math.PI / 180);
+            return { spot: s, dist: Math.sqrt(dx * dx + dy * dy) };
+        })
+        .sort((a, b) => a.dist - b.dist) // 近い順
+        .slice(0, 60) // 最大60件に絞る
+        .map(item => item.spot);
+
+    // ===== #2: トークン圧縮した候補リスト =====
+    const candidateList = qualityFiltered.map((s, i) => {
         const details = [
             s.category,
             s.rating ? `★${s.rating}` : null,
-            s.price_level ? `Price:${'¥'.repeat(s.price_level)}` : null,
-            s.editorial_summary ? `Summary:${s.editorial_summary}` : null,
-            s.reviews ? `Top Review: "${s.reviews[0]}"` : null,
-            s.opening_hours ? `Hours: ${s.opening_hours.join(', ')}` : null,
-            `Est.Stay:${s.estimatedStayTime || 30}min`
+            s.price_level ? `Price:${'\u00a5'.repeat(s.price_level)}` : null,
+            s.editorial_summary ? `Info:${s.editorial_summary.substring(0, 30)}` : null,
+            `Stay:${s.estimatedStayTime || 30}min`
         ].filter(Boolean).join(', ');
         return `ID ${i}: ${s.name} (${details})`;
     }).join('\n');
@@ -142,7 +155,7 @@ export const generateSmartCourses = async (
     ];
 
     const selectedThemes = allThemes.sort(() => 0.5 - Math.random()).slice(0, 5);
-    const themeInstructions = selectedThemes.map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
+    const themeInstructions = selectedThemes.map((theme: string, i: number) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
 
     // ヘルパー: 実際にAIを呼び出す内部関数
     const callGeneration = async (num: number, existingTitles: string[] = []): Promise<any[]> => {
@@ -284,7 +297,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
     return courses.map((course: any) => {
         const uniqueId = generateId();
         const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
-            const original = candidates[Number(s.id)];
+            const original = qualityFiltered[Number(s.id)];
             if (!original) return null;
             return {
                 ...original,
@@ -320,17 +333,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                 const picked = remaining.splice(nearestIdx, 1)[0];
                 if (picked) sorted.push(picked);
             }
-            // 移動時間を計算
-            for (let i = 0; i < sorted.length; i++) {
-                if (i === 0) sorted[i].travel_time_minutes = 0;
-                else {
-                    const prev = sorted[i - 1];
-                    const dx = (sorted[i].lat - prev.lat) * 111000;
-                    const dy = (sorted[i].lon - prev.lon) * 111000 * Math.cos(prev.lat * Math.PI / 180);
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    sorted[i].travel_time_minutes = Math.max(1, Math.round(dist / 80));
-                }
-            }
+            // 移動時間はApp.tsx側でtravelModeに応じて計算するため、ここではソートのみ
             return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: sorted, persona } as Course;
         }
         return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: hydratedSpots, persona } as Course;

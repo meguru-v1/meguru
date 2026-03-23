@@ -359,8 +359,14 @@ function App() {
             hasError = true;
         } finally {
             setLoading(false);
-            // エラーが発生しなかった場合のみ画面を閉じる
-            if (!hasError) {
+            // エラー時も1秒後に生成画面を閉じる（エラーメッセージはstatusPanelで表示される）
+            if (hasError) {
+                setTimeout(() => {
+                    setShowGenScreen(false);
+                    setSubAiContent(null);
+                    setStatus('');
+                }, 1500);
+            } else {
                 setShowGenScreen(false);
                 setSubAiContent(null);
                 setStatus('');

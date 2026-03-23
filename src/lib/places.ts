@@ -179,7 +179,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Goog-Api-Key': API_KEY,
-                    'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos,places.editorialSummary,places.regularOpeningHours,places.reviews,places.priceLevel,places.businessStatus',
+                    'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos,places.editorialSummary,places.priceLevel,places.businessStatus',
                 },
                 body: JSON.stringify({
                     textQuery: "観光スポット 飲食店",
@@ -201,7 +201,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         }
         console.log(`Places API: Success. Stage results: ${allFoundSpotsRaw.length}`);
 
-        return allFoundSpotsRaw.slice(0, 50).map((p: any) => ({
+        const result = allFoundSpotsRaw.slice(0, 50).map((p: any) => ({
             place_id: p.id,
             name: p.displayName.text,
             lat: p.location.latitude,
@@ -217,6 +217,10 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             price_level: p.priceLevel,
             business_status: p.businessStatus
         }));
+
+        // キャッシュに保存
+        setCache(cacheKey, result);
+        return result;
     } catch (e) {
         console.error("Failed to search nearby spots", e);
         return [];

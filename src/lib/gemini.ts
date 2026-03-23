@@ -299,6 +299,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 
         // Sorting/Travel time (already implemented in gemini.ts before, keeping logic)
         if (hydratedSpots.length > 1) {
+            // 最近傍法でスポットをソート
             const sorted: Spot[] = [hydratedSpots[0]];
             const remaining = hydratedSpots.slice(1);
             while (remaining.length > 0) {
@@ -311,9 +312,15 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
                 }
+                // 最近傍でも3km以上離れている場合はスキップ（遠すぎるルート防止）
+                if (nearestDist > 3000) {
+                    remaining.splice(nearestIdx, 1);
+                    continue;
+                }
                 const picked = remaining.splice(nearestIdx, 1)[0];
                 if (picked) sorted.push(picked);
             }
+            // 移動時間を計算
             for (let i = 0; i < sorted.length; i++) {
                 if (i === 0) sorted[i].travel_time_minutes = 0;
                 else {
@@ -321,7 +328,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                     const dx = (sorted[i].lat - prev.lat) * 111000;
                     const dy = (sorted[i].lon - prev.lon) * 111000 * Math.cos(prev.lat * Math.PI / 180);
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    sorted[i].travel_time_minutes = Math.round(dist / 80);
+                    sorted[i].travel_time_minutes = Math.max(1, Math.round(dist / 80));
                 }
             }
             return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: sorted, persona } as Course;
@@ -365,9 +372,10 @@ Based on the specific user instruction: "${remixInstruction}"
 1. **指示の正確な反映**: ユーザーの指示 "${remixInstruction}" を最優先で実現してください。
 2. **スマートな再構成**: すべてを入れ替える必要はありません。既存の素晴らしいスポットは活かしつつ、指示に合わせて一部を差し替えたり、順序を入れ替えたり、滞在時間を調整してください。
 3. **メタデータの完全維持・生成**: 各スポットに以下の情報を必ず含めてください。
-   - **must_see**: その場所で絶対に外せない見どころ（30文字程度）
-   - **pro_tip**: 混雑回避や裏技などの実用的な助言（30文字程度）
-   - **trivia**: 歴史や背景などの面白い小ネタ（30文字程度）
+   - **must_see**: その場所で絶対に外せない見どころ（2〜3文の具体的な描写）
+   - **pro_tip**: 混雑回避や裏技などの実用的な助言（2〜3文の具体的な文章）
+   - **trivia**: 歴史や背景などの面白い小ネタ（2〜3文の具体的な文章）
+   - **aiDescription**: その場所の魅力を感情豊かに語る日本語の文章（3〜4文）
    ※既存のスポットを使い続ける場合は、元の情報をベースにさらに魅力的に磨き上げてください。
 4. **圧倒的なネーミングセンス**: タイトルは雑誌の特集のように、**詩的でキャッチーな日本語タイトル**に新しく書き換えてください。
 5. **飲食制限の絶対遵守**: ${diningRule}
@@ -472,7 +480,8 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
             description: data.description || "",
             totalTime: durationMinutes,
             spots: hydratedSpots,
-            theme: remixInstruction
+            theme: remixInstruction,
+            travelMode: originalCourse.travelMode
         } as Course;
     } catch (err) {
         console.error(`Remix processing failed:`, err);

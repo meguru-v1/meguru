@@ -197,7 +197,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     </button>
                     <button type="button" onClick={handleExploreNow} disabled={isSearching}
                         className="flex-1 py-2.5 rounded-lg text-[12px] font-extrabold transition-all duration-300 bg-gradient-to-r from-amber-400 to-rose-400 text-white shadow-sm active:scale-95">
-                        <LocateFixed size={12} className="inline mr-1 -mt-0.5" /> 未知へ
+                        <LocateFixed size={12} className="inline mr-1 -mt-0.5" /> 現在地
                     </button>
                 </div>
             </div>

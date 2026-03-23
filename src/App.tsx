@@ -279,7 +279,7 @@ function App() {
 
                 setStatus('AIが最適なコースを生成中...');
                 setShowGenScreen(true);
-                setSearchLocationName(query);
+                setSearchLocationName(startGeo.name || '現在地周辺');
                 const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
                 const candidates = shuffled.slice(0, 150);
                 setSearchCandidates(candidates);
@@ -312,7 +312,7 @@ function App() {
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
                 setTimeout(() => {
-                    generateWaitingScreenContent(query, weatherContext, persona)
+                    generateWaitingScreenContent(startGeo.name || '現在地周辺', weatherContext, persona)
                         .then(content => { if (content) setSubAiContent(content); })
                         .catch(() => { /* フォールバックで対応 */ });
                 }, 300);
@@ -397,9 +397,24 @@ function App() {
             );
 
             if (remixed) {
-                setSelectedCourse(remixed);
-                // courses 配列内も更新する
-                setCourses(prev => prev.map(c => c.id === selectedCourse.id ? remixed : c));
+                // 移動時間を再計算
+                const tm = remixed.travelMode || selectedCourse.travelMode || 'walk';
+                const speed = tm === 'walk' ? 80 : (tm === 'bicycle' ? 200 : 400); // m/min
+                const enhancedRemix = {
+                    ...remixed,
+                    travelMode: tm,
+                    spots: remixed.spots.map((spot, index, arr) => {
+                        if (index === 0) return { ...spot, travel_time_minutes: 0 };
+                        const prev = arr[index - 1];
+                        const dist = getDistance(
+                            { latitude: prev.lat, longitude: prev.lon },
+                            { latitude: spot.lat, longitude: spot.lon }
+                        );
+                        return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
+                    })
+                };
+                setSelectedCourse(enhancedRemix);
+                setCourses(prev => prev.map(c => c.id === selectedCourse.id ? enhancedRemix : c));
             }
         } catch (err) {
             console.error("Remix failed:", err);
@@ -546,7 +561,7 @@ function App() {
                             </div>
                         )}
                         <div className="flex items-start justify-between gap-2">
-                            <h2 className="course-title text-xl text-slate-900 flex-1">{selectedCourse.title}</h2>
+                            <h2 className="font-extrabold text-xl text-slate-900 leading-tight flex-1">{selectedCourse.title}</h2>
                             <button onClick={() => isFavorite(selectedCourse.id) ? removeFavorite(selectedCourse.id) : addFavorite(selectedCourse)}
                                 className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90 shrink-0
                                     ${isFavorite(selectedCourse.id) ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-100 text-slate-400 hover:text-rose-400 hover:bg-rose-50'}`}>

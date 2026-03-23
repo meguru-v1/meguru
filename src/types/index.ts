@@ -8,6 +8,9 @@ export interface SpotTags {
     [key: string]: unknown;
 }
 
+// ===== ペルソナ（AIガイド）型定義 =====
+export type PersonaId = 'miyabi' | 'shiki' | 'ei' | 'aji' | 'sei' | 'un';
+
 export interface Spot {
     id: string | number;
     type?: string;
@@ -24,6 +27,7 @@ export interface Spot {
     must_see?: string | null;
     pro_tip?: string | null;
     trivia?: string; // Phase 11: うんちく・小ネタ
+    cultural_property?: string | null; // 国宝・世界遺産等のラベル
     tags: SpotTags;
     // Google Places API Specific
     place_id?: string;
@@ -62,8 +66,10 @@ export interface Course {
     totalTime: number;
     totalDistance?: number;
     spots: Spot[];
-    travelMode?: TravelMode; // 追加: 移動手段
+    travelMode?: TravelMode;
     savedAt?: string; // お気に入り保存日時 (ISO 8601)
+    persona?: PersonaId; // どのガイドが案内したコースか
+    dayIndex?: number;   // 連泊プランの何日目か (0-based)
 }
 
 export type SearchMode = 'area' | 'route';
@@ -79,8 +85,10 @@ export interface SearchParams {
     mood?: string;
     budget?: string;
     groupSize?: string;
-    queryPlaceId?: string; // 追加: 出発地の Place ID
-    destinationPlaceId?: string; // 追加: 目的地の Place ID
+    queryPlaceId?: string;
+    destinationPlaceId?: string;
+    persona?: PersonaId; // 選択されたAIガイド
+    daysCount?: number;  // 連泊プランの日数 (1=当日, 2-3=連泊)
 }
 
 export interface AutocompleteResult {

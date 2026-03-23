@@ -43,6 +43,24 @@ function App() {
 
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
+    const getPreferenceContext = (): string => {
+        if (!favorites || favorites.length === 0) return '';
+        const recentFavorites = favorites.slice(0, 5); // 直近5件を分析
+        const favoriteTypes = new Set<string>();
+        const favoriteDescriptions: string[] = [];
+
+        recentFavorites.forEach(course => {
+            course.spots.forEach(spot => {
+                const s = spot as any;
+                if (s.types) s.types.forEach((t: string) => favoriteTypes.add(t));
+                if (s.editorial_summary) favoriteDescriptions.push(s.editorial_summary);
+            });
+        });
+
+        const typesStr = Array.from(favoriteTypes).slice(0, 15).join(', ');
+        return `よく好むカテゴリ: ${typesStr}\n好みの場所の説明例: ${favoriteDescriptions.slice(0, 3).join(' / ')}`;
+    };
+
     // ===== ジオコード関数 =====
     const geocode = async (q: string, placeId?: string): Promise<{ lat: number; lon: number; name: string } | null> => {
         try {
@@ -171,7 +189,8 @@ function App() {
                     weatherContext,
                     mood,
                     budget,
-                    groupSize
+                    groupSize,
+                    getPreferenceContext()
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
@@ -275,7 +294,8 @@ function App() {
                     weatherContext,
                     mood,
                     budget,
-                    groupSize
+                    groupSize,
+                    getPreferenceContext()
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
@@ -360,7 +380,8 @@ function App() {
                 weatherContext,
                 lastSearchMood,
                 lastSearchBudget,
-                lastSearchGroupSize
+                lastSearchGroupSize,
+                getPreferenceContext()
             );
 
             if (remixed) {

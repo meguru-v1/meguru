@@ -63,7 +63,8 @@ export const generateSmartCourses = async (
     weatherContext: string = "不明",
     mood: string = "不明",
     budget: string = "不明",
-    groupSize: string = "不明"
+    groupSize: string = "不明",
+    userPreferenceContext: string = ""
 ): Promise<Course[]> => {
     const candidateList = candidates.map((s, i) => {
         const details = [
@@ -137,6 +138,7 @@ ${candidateList}
 **SYSTEM INFO:**
 - Mood: ${mood}, Budget: ${budget}, People: ${groupSize}
 - Context: ${timeContext}, ${weatherContext}
+${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 
 **OUTPUT SCHEMA (JSON only, after <thinking>):**
 {
@@ -277,7 +279,8 @@ export const remixCourse = async (
     weatherContext: string = "不明",
     mood: string = "不明",
     budget: string = "不明",
-    groupSize: string = "不明"
+    groupSize: string = "不明",
+    userPreferenceContext: string = ""
 ): Promise<Course | null> => {
     const candidateList = candidates.map((s, i) => {
         const details = [
@@ -315,6 +318,7 @@ ${candidateList}
 **SYSTEM INFO:**
 - Current Mood: ${mood}, Budget: ${budget}, People: ${groupSize}
 - Context: ${timeContext}, ${weatherContext}
+${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 
 **OUTPUT SCHEMA (JSON only, after <thinking>):**
 {

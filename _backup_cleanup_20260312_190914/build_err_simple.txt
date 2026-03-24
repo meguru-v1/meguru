@@ -1,7 +1,0 @@
-﻿
-> meguru@1.0.0 build
-> vite build
-
-[36mvite v5.4.15 [32mbuilding for production...[36m[39m
-transforming...
-[32m笨・[39m 1886 modules transformed.

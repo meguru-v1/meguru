@@ -74,6 +74,7 @@ export interface Course {
 
 export type SearchMode = 'area' | 'route';
 export type TravelMode = 'walk' | 'bicycle' | 'car' | 'transit';
+export type ExploreMode = 'quick' | 'fullday' | 'multiday';
 
 export interface SearchParams {
     searchMode: SearchMode;
@@ -89,6 +90,8 @@ export interface SearchParams {
     destinationPlaceId?: string;
     persona?: PersonaId; // 選択されたAIガイド
     daysCount?: number;  // 連泊プランの日数 (1=当日, 2-3=連泊)
+    startTime?: string;  // 開始時刻 (HH:MM 形式)
+    exploreMode?: ExploreMode; // 探索モード
 }
 
 export interface AutocompleteResult {

@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { Spot, Course, PersonaId } from '../types';
+import type { Spot, Course, PersonaId, ExploreMode } from '../types';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 const genAI = new GoogleGenerativeAI(API_KEY);
@@ -72,6 +72,56 @@ const getPersonaPrompt = (persona?: PersonaId): string => {
     return `\n**【AIガイド・ペルソナ: 【${p.kanji}】${p.label}】**\n${p.systemPrompt}\n上記のペルソナの口調・視点・専門用語で、すべての説明文（aiDescription, must_see, pro_tip, trivia）を書いてください。\n`;
 };
 
+// ===== ジャンル別滞在時間推定 =====
+const getStayTimeByType = (category: string): number => {
+    const cat = (category || '').toLowerCase();
+    if (cat.includes('museum') || cat.includes('art_gallery') || cat.includes('aquarium') || cat.includes('zoo')) return 90;
+    if (cat.includes('park') || cat.includes('garden') || cat.includes('botanical')) return 60;
+    if (cat.includes('temple') || cat.includes('shrine') || cat.includes('church')) return 45;
+    if (cat.includes('castle') || cat.includes('palace') || cat.includes('monument')) return 60;
+    if (cat.includes('cafe') || cat.includes('bakery') || cat.includes('ice_cream')) return 30;
+    if (cat.includes('restaurant') || cat.includes('meal_delivery') || cat.includes('bar')) return 60;
+    if (cat.includes('store') || cat.includes('shop') || cat.includes('market') || cat.includes('mall')) return 40;
+    if (cat.includes('theater') || cat.includes('stadium') || cat.includes('cinema')) return 120;
+    if (cat.includes('spa') || cat.includes('onsen') || cat.includes('hot_spring')) return 90;
+    if (cat.includes('beach') || cat.includes('waterfall') || cat.includes('scenic')) return 45;
+    return 40; // デフォルト
+};
+
+// 【08】 3モード分離テンプレート
+const getExploreModeTemplate = (mode?: ExploreMode): string => {
+    switch (mode) {
+        case 'quick':
+            return `
+**【探索モード: クイック散策】**
+- 短時間で楽しめる軽いコースを作成してください。
+- スポット数は控えめに。移動距離を最小限にし、密度より「一つ一つをゆっくり味わう」ことを重視。
+- 重たい食事よりカフェや軽食を優先してください。`;
+        case 'fullday':
+            return `
+**【探索モード: 1日トラベル】**
+- 朝から夕方まで充実した1日プランを作成してください。
+- ランチは必ず1件含めること。午前・午後で異なるテーマの体験を織り交ぜてください。
+- 休憩スポット（カフェ等）を午後に1件入れてバランスを取ってください。`;
+        case 'multiday':
+            return `
+**【探索モード: 連泊プラン】**
+- 複数日にわたる壮大な旅程を作成してください。
+- 1日あたり8〜10時間の活動時間を想定し、各日に明確なテーマを設けてください。
+- 各日の最初と最後はホテル/宿泊施設周辺に戻れる配慮をしてください。
+- 日ごとにエリアを変え、効率的な移動を心がけてください。`;
+        default:
+            return '';
+    }
+};
+
+// 【07】 モデル動的選択
+const selectModel = (durationMinutes: number): string => {
+    // 3時間以下の散策 → flash-lite（高速・低コスト）
+    // それ以上 → flash（リッチなプロンプト処理能力）
+    return durationMinutes <= 180 ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
+};
+
 const getDiningRule = (durationMinutes: number) => {
     if (durationMinutes <= 90) {
         return `- **食事・カフェの制限**: 各コースにおいて **最大1件** まで。サクッと立ち寄れるカフェや軽食を含めてください。`;
@@ -101,7 +151,8 @@ export const generateSmartCourses = async (
     budget: string = "不明",
     groupSize: string = "不明",
     userPreferenceContext: string = "",
-    persona?: PersonaId
+    persona?: PersonaId,
+    exploreMode?: ExploreMode
 ): Promise<Course[]> => {
     // ===== #1: 候補品質フィルタ + #8: 距離ソート =====
     const qualityFiltered = candidates
@@ -129,7 +180,7 @@ export const generateSmartCourses = async (
             s.rating ? `★${s.rating}` : null,
             s.price_level ? `Price:${'\u00a5'.repeat(s.price_level)}` : null,
             s.editorial_summary ? `Info:${s.editorial_summary.substring(0, 30)}` : null,
-            `Stay:${s.estimatedStayTime || 30}min`
+            `Stay:${s.estimatedStayTime || getStayTimeByType(s.category)}min`
         ].filter(Boolean).join(', ');
         return `ID ${i}: ${s.name} (${details})`;
     }).join('\n');
@@ -137,6 +188,7 @@ export const generateSmartCourses = async (
     const diningRule = getDiningRule(durationMinutes);
     const spotCountRule = getRecommendedSpotCount(durationMinutes);
     const personaPrompt = getPersonaPrompt(persona);
+    const exploreModeTemplate = getExploreModeTemplate(exploreMode);
 
     const allThemes = [
         "🕰️ Time Travel: 時代を感じる歴史旅",
@@ -171,6 +223,7 @@ export const generateSmartCourses = async (
 You are a top-tier Japanese luxury travel curator.
 Your task is to create ${num} **COMPLETELY DISTINCT** plans for a **${durationMinutes} minute** trip.
 ${personaPrompt}
+${exploreModeTemplate}
 **【最重要ミッション】**
 あなたは世界最高峰のトラベルキュレーターです。提供された候補から、必ず **全く異なる${num}つのプラン** を作成してください。
 ${exclusionPrompt}
@@ -182,9 +235,9 @@ ${exclusionPrompt}
 ${diningRule}
 - 食べてばかりのプランにならないよう、公園、神社仏閣、名所、美術館などの**「体験・景色」をコースの主役に**してください。
 
-**3. 時間予算とスポット数の厳守:**
-- 「各スポットの滞在時間」＋「スポット間の移動時間」が指定された **${durationMinutes}分** を超えないように厳選してください。
-- 各コースの**最適なスポット数は ${spotCountRule}** です。
+**3. 自然なペース配分 (Natural Pacing):**
+- スポット数の「上限」は設定しません。代わりに、「各スポットの推定滞在時間（Stayフィールド参照）」＋「スポット間の移動時間（徒歩15分程度を想定）」を積み上げて、合計が **${durationMinutes}分** に自然に収まるスポット数を選んでください。
+- 無理に詰め込まず、各スポットで余裕を持って楽しめるペースで構成してください。
 
 **4. 魅力的な命名と具体的な解説:**
 - **タイトル**: 雑誌の特集のように、詩的でキャッチーな日本語タイトルにしてください。
@@ -197,8 +250,10 @@ ${diningRule}
 ${themeSlice}
 
 **【出力形式】**
-- **JSONの「値」はすべて日本語**で出力してください。
-- **JSONの「キー」は絶対に英語のまま**にしてください。
+- **JSONの「値」（タイトル、説明文、aiDescription、must_see、pro_tip、trivia）はすべて100%日本語**で出力してください。英語の混入は一切禁止です（固有名詞「Starbucks」等は例外）。
+- **JSONの「キー」（title, theme, description, spots, id 等）は絶対に英語のまま**にしてください。
+- **must_see, pro_tip, trivia の末尾は必ず「。」で終えてください。**
+- **aiDescription は3〜4文の日本語で、末尾は「。」で終えてください。**
 
 **CANDIDATES:**
 ${candidateList}
@@ -232,7 +287,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 }
 `;
 
-        const modelName = "gemini-2.5-flash-lite";
+        const modelName = selectModel(durationMinutes);
         let text: string | undefined;
 
         try {
@@ -375,14 +430,15 @@ Based on the specific user instruction: "${remixInstruction}"
 1. **指示の正確な反映**: ユーザーの指示 "${remixInstruction}" を最優先で実現してください。
 2. **スマートな再構成**: すべてを入れ替える必要はありません。既存の素晴らしいスポットは活かしつつ、指示に合わせて一部を差し替えたり、順序を入れ替えたり、滞在時間を調整してください。
 3. **メタデータの完全維持・生成**: 各スポットに以下の情報を必ず含めてください。
-   - **must_see**: その場所で絶対に外せない見どころ（2〜3文の具体的な描写）
-   - **pro_tip**: 混雑回避や裏技などの実用的な助言（2〜3文の具体的な文章）
-   - **trivia**: 歴史や背景などの面白い小ネタ（2〜3文の具体的な文章）
-   - **aiDescription**: その場所の魅力を感情豊かに語る日本語の文章（3〜4文）
+   - **must_see**: その場所で絶対に外せない見どころ（2〜3文の具体的な描写。末尾は「。」）
+   - **pro_tip**: 混雑回避や裏技などの実用的な助言（2〜3文の具体的な文章。末尾は「。」）
+   - **trivia**: 歴史や背景などの面白い小ネタ（2〜3文の具体的な文章。末尾は「。」）
+   - **aiDescription**: その場所の魅力を感情豊かに語る日本語の文章（3〜4文。末尾は「。」）
    ※既存のスポットを使い続ける場合は、元の情報をベースにさらに魅力的に磨き上げてください。
-4. **圧倒的なネーミングセンス**: タイトルは雑誌の特集のように、**詩的でキャッチーな日本語タイトル**に新しく書き換えてください。
+4. **圧倒的なネーミングセンス**: タイトルは雑誌の特集のように、**詩的でキャッチーな日本語タイトル**に新しく書き換えてください。英語のタイトルは絶対に禁止です。
 5. **飲食制限の絶対遵守**: ${diningRule}
-6. **スポット数の厳守**: 今回の旅行時間（${durationMinutes}分）において、最適なスポット数は **${spotCountRule}** です。
+6. **スポット数の安定化**: 現在のコースは **${originalCourse.spots.length}件** のスポットで構成されています。指示に応じて微調整は可能ですが、極端な増減（±2件以上）は避け、時間枠（${durationMinutes}分）に自然に収まるように調整してください。
+7. **テーマのカテゴリー化**: "theme" フィールドには、コース全体を端的に表す **日本語のカテゴリー名（例: 「歴史散策」「グルメ巡り」「自然と癒し」「アート探訪」）** を1つだけ出力してください。ユーザーの指示文をそのまま入れないでください。
 
 **CANDIDATES:**
 ${candidateList}
@@ -394,22 +450,28 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 
 **OUTPUT SCHEMA (JSON only, after <thinking>):**
 {
-  "title": "New Catchy Magazine-style Title",
-  "description": "Mag-style intro explaining the essence of this remix",
+  "title": "詩的でキャッチーな日本語タイトル",
+  "description": "雑誌風の日本語イントロ",
+  "theme": "カテゴリー名（例: 歴史散策、グルメ巡り、自然と癒し）",
   "spots": [
     { 
       "id": 0, 
       "stayTime": MINS, 
-      "aiDescription": "その場所の魅力を情感豊かに語る（日本語）",
-      "must_see": "必見ポイント",
-      "pro_tip": "旅のヒント",
-      "trivia": "賢者の小ネタ"
+      "aiDescription": "その場所の魅力を情感豊かに語る（日本語、末尾は「。」）",
+      "must_see": "必見ポイント（末尾は「。」）",
+      "pro_tip": "旅のヒント（末尾は「。」）",
+      "trivia": "賢者の小ネタ（末尾は「。」）"
     }
   ]
 }
+
+**【出力ルール】**
+- **JSONの「値」（title, description, aiDescription, must_see, pro_tip, trivia）はすべて100%日本語**で出力してください。英語のタイトルや説明は絶対に禁止です。
+- **JSONの「キー」（title, description, spots, id 等）は英語のまま**にしてください。
+- **must_see, pro_tip, trivia, aiDescription の末尾は必ず「。」で終えてください。**
 `;
 
-    const modelName = "gemini-2.5-flash-lite";
+    const modelName = selectModel(durationMinutes);
     let text: string | undefined;
 
     try {
@@ -483,7 +545,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
             description: data.description || "",
             totalTime: durationMinutes,
             spots: hydratedSpots,
-            theme: remixInstruction,
+            theme: data.theme || originalCourse.theme || "よりみち",
             travelMode: originalCourse.travelMode
         } as Course;
     } catch (err) {

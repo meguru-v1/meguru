@@ -10,7 +10,7 @@
   --font-sans: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
   --font-serif: 'Playfair Display', serif;
   --font-display: 'Playfair Display', serif;
-  --font-editorial: 'Shippori Mincho B1', 'Playfair Display', serif;
+  --font-editorial: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
 
   --animate-fade-in: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slide-up: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
@@ -90,18 +90,18 @@ body {
 
 /* ===== エディトリアル・タイポグラフィ ===== */
 .font-editorial {
-  font-family: 'Shippori Mincho B1', 'Playfair Display', serif;
+  font-family: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
 }
 
 .course-title {
-  font-family: 'Shippori Mincho B1', serif;
+  font-family: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1.3;
 }
 
 .spot-description {
-  font-family: 'Shippori Mincho B1', serif;
+  font-family: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
   font-weight: 400;
   letter-spacing: 0.01em;
   line-height: 1.8;
@@ -196,7 +196,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .insight-card-body {
-  font-family: 'Shippori Mincho B1', serif;
+  font-family: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
   @apply text-[12px] leading-relaxed;
   font-weight: 400;
 }
@@ -284,5 +284,62 @@ input[type="range"]::-webkit-slider-thumb {
   .btn-primary {
     min-height: 52px;
     font-size: 15px;
+  }
+
+  /* タッチターゲット統一 (48px) */
+  button, a, [role="button"] {
+    min-height: 44px;
+  }
+
+  /* コースカード */
+  .card-premium {
+    @apply p-4;
+  }
+
+  /* リミックスボタン群 */
+  .card-premium button,
+  form button[type="submit"] {
+    min-height: 44px;
+    @apply text-[11px];
+  }
+
+  /* タイムラインカード */
+  .insight-card {
+    @apply p-3;
+  }
+  .insight-card-body {
+    font-size: 11px;
+  }
+
+  /* 生成画面のグラスパネル */
+  .glass-gen-panel {
+    @apply p-4 mx-2;
+    max-width: calc(100vw - 32px);
+  }
+
+  /* タグバッジ */
+  .tag-badge {
+    @apply text-[9px] px-2 py-0.5;
+  }
+
+  /* スポット説明文 */
+  .spot-description {
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  /* Safe areaを考慮したTabBar余白 */
+  nav {
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ===== 小型スマホ向け追加調整 ===== */
+@media (max-width: 360px) {
+  .input-premium {
+    @apply px-3 py-3;
+  }
+  .glass-gen-panel {
+    @apply p-3;
   }
 }

@@ -12,23 +12,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="version" content="1.2.1" />
-  <script>
-    // 1. Service Worker の強制解除
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (registrations) {
-        for (let registration of registrations) {
-          registration.unregister();
-        }
-      });
-    }
-
-    // 2. ブラウザキャッシュ (CacheStorage) の物理削除
-    if ('caches' in window) {
-      caches.keys().then(function (names) {
-        for (let name of names) caches.delete(name);
-      });
-    }
-  </script>
+  <script src="registerSW.js"></script>
   <meta name="theme-color" content="#ffffff" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />

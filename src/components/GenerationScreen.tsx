@@ -296,8 +296,12 @@ export default function GenerationScreen({
                                 ${fadeForecast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
                                 {forecastCopies[currentForecastIdx]}
                             </p>
+                            {/* 離れてもOKメッセージ */}
+                            <p className="text-[10px] text-slate-400 mt-3 font-medium">
+                                💡 別タブに移動しても大丈夫。完了したらお知らせします。
+                            </p>
                             {/* サブAI到着インジケーター */}
-                            <div className="mt-4 flex items-center justify-center gap-1.5">
+                            <div className="mt-3 flex items-center justify-center gap-1.5">
                                 {hasSubAiArrived ? (
                                     <span className="text-[9px] font-bold text-emerald-500 tracking-wider flex items-center gap-1">
                                         <Sparkles size={10} /> AI がコンテンツをお届け中

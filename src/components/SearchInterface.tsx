@@ -50,6 +50,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
     const [budget, setBudget] = useState('');
     const [groupSize, setGroupSize] = useState('');
     const [persona, setPersona] = useState<PersonaId | undefined>(undefined);
+    const [startTime, setStartTime] = useState('');  // HH:MM format, empty = auto
     const [isSearching, setIsSearching] = useState(false);
 
     // オートコンプリート
@@ -111,6 +112,8 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
             groupSize: groupSize || undefined,
             persona,
             daysCount: exploreMode === 'multiday' ? Math.round(duration / 720) : undefined,
+            startTime: startTime || undefined,
+            exploreMode,
         });
         setTimeout(() => setIsSearching(false), 1000);
     };
@@ -286,6 +289,31 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                             <span>{formatDuration(currentExplore.minDuration)}</span>
                             <span>{formatDuration(currentExplore.maxDuration)}</span>
                         </div>
+                    </div>
+
+                    {/* スタート時刻（オプション） */}
+                    <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <label htmlFor="start-time" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <Clock size={12} /> 出発時刻
+                            <span className="ml-auto text-amber-500 font-extrabold text-sm normal-case">
+                                {startTime || '自動（現在時刻）'}
+                            </span>
+                        </label>
+                        <input
+                            id="start-time"
+                            name="start-time"
+                            type="time"
+                            value={startTime}
+                            onChange={(e) => setStartTime(e.target.value)}
+                            className="w-full rounded-lg px-3 py-2 text-sm bg-white border border-slate-100 focus:border-amber-400 focus:outline-none transition-colors min-h-[44px]"
+                            placeholder="09:00"
+                        />
+                        {startTime && (
+                            <button type="button" onClick={() => setStartTime('')}
+                                className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition-colors">
+                                × クリア（自動に戻す）
+                            </button>
+                        )}
                     </div>
 
                     {/* エリア検索時のみ半径（モード連動） */}

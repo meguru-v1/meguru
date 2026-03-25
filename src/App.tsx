@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import SearchInterface from './components/SearchInterface';
 import MapVisualization from './components/MapVisualization';
 import TabBar from './components/TabBar';
 import GenerationScreen from './components/GenerationScreen';
 import SpotHeroImage from './components/SpotHeroImage';
 import { useFavorites } from './hooks/useFavorites';
-import { searchAreaCenter, searchNearbySpots, searchRouteSpots, getPlaceLatLng } from './lib/places';
+import { searchAreaCenter, searchNearbySpots, searchRouteSpots, getPlaceLatLng, reverseGeocode } from './lib/places';
 import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
 import type { WaitingScreenContent } from './lib/gemini';
 import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
@@ -15,7 +15,7 @@ import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
     Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap, Send
 } from 'lucide-react';
-import type { Course, Spot, SearchParams, TabId, TravelMode } from './types';
+import type { Course, Spot, SearchParams, TabId, TravelMode, ExploreMode } from './types';
 
 function App() {
     const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
@@ -34,14 +34,49 @@ function App() {
     const [searchLocationName, setSearchLocationName] = useState('');
     const [subAiContent, setSubAiContent] = useState<WaitingScreenContent | null>(null);
     const [generationImages, setGenerationImages] = useState<string[]>([]);
+    const [activeDayIndex, setActiveDayIndex] = useState(0); // 連泊タブ用
 
     // リミックス用に検索条件を保持
     const [lastSearchDuration, setLastSearchDuration] = useState(120);
     const [lastSearchMood, setLastSearchMood] = useState('不明');
     const [lastSearchBudget, setLastSearchBudget] = useState('不明');
     const [lastSearchGroupSize, setLastSearchGroupSize] = useState('不明');
+    const [lastExploreMode, setLastExploreMode] = useState<ExploreMode | undefined>(undefined);
 
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
+
+    // 【05】離脱警告: 生成中にタブを閉じようとすると警告
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (loading || isRemixing) {
+                e.preventDefault();
+                e.returnValue = 'コース生成中です。ページを離れると結果が失われます。';
+            }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [loading, isRemixing]);
+
+    // 【26】完了通知: 生成完了時にブラウザ通知を送信
+    const sendCompletionNotification = (title: string) => {
+        if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Meguru - コース完成！', {
+                body: `「${title}」を含む${courses.length > 0 ? courses.length : ''}コースが完成しました。`,
+                icon: '/meguru/pwa-192x192.png',
+                tag: 'meguru-generation-complete'
+            });
+        }
+    };
+
+    // 通知許可のリクエスト（初回のみ）
+    useEffect(() => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            // 初回のコース生成完了時に許可リクエスト
+            if (courses.length > 0 && !loading) {
+                Notification.requestPermission();
+            }
+        }
+    }, [courses.length, loading]);
 
     const getPreferenceContext = (): string => {
         if (!favorites || favorites.length === 0) return '';
@@ -87,13 +122,15 @@ function App() {
         setStatus('場所を検索中...');
 
         try {
-            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId, persona } = params;
+            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId, persona, startTime, exploreMode } = params;
             
             // リミックス用に条件を保存
             setLastSearchDuration(duration);
             setLastSearchMood(mood || '不明');
             setLastSearchBudget(budget || '不明');
             setLastSearchGroupSize(groupSize || '不明');
+            setLastExploreMode(exploreMode);
+            setActiveDayIndex(0); // 連泊タブリセット
 
             if (searchMode === 'route' && destination) {
                 // ===== ルート検索 =====
@@ -175,7 +212,7 @@ function App() {
                 setGenerationImages(googleUrls.slice(0, 10));
 
                 const now = new Date();
-                const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
+                const timeContext = startTime || `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
                 const weatherContext = await getCurrentWeather(midLat, midLon);
 
                 console.log("AI Generation Context:", { time: timeContext, weather: weatherContext, center: { midLat, midLon } });
@@ -191,7 +228,8 @@ function App() {
                     budget,
                     groupSize,
                     getPreferenceContext(),
-                    persona
+                    persona,
+                    exploreMode
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
@@ -216,23 +254,61 @@ function App() {
                 }
 
                 const routeTravelMode = travelMode || 'walk';
-                const enhancedCourses = generatedCourses.map(course => ({
-                    ...course,
-                    travelMode: routeTravelMode,
-                    spots: course.spots.map((spot, index, arr) => {
-                        if (index === 0) return { ...spot, travel_time_minutes: 0 };
-                        const prev = arr[index - 1];
-                        const dist = getDistance(
-                            { latitude: prev.lat, longitude: prev.lon },
-                            { latitude: spot.lat, longitude: spot.lon }
+                const enhancedCourses = generatedCourses.map(course => {
+                    let spots = [...course.spots];
+
+                    // 【14】ルート発着固定: 出発地・目的地を配列の先頭・末尾に固定
+                    const startPin: Spot = {
+                        id: `pin-start-${Date.now()}`, lat: startGeo.lat, lon: startGeo.lon,
+                        name: startGeo.name || query, category: 'starting_point',
+                        tags: {}, travel_time_minutes: 0,
+                        aiDescription: `ここから旅が始まります。${startGeo.name || query}を出発しましょう。`
+                    };
+                    const endPin: Spot = {
+                        id: `pin-end-${Date.now()}`, lat: endGeo.lat, lon: endGeo.lon,
+                        name: endGeo.name || destination, category: 'destination',
+                        tags: {},
+                        aiDescription: `旅のゴール地点、${endGeo.name || destination}に到着です。`
+                    };
+
+                    // 先頭が出発地から500m以上離れていたら挿入
+                    if (spots.length > 0) {
+                        const firstDist = getDistance(
+                            { latitude: startGeo.lat, longitude: startGeo.lon },
+                            { latitude: spots[0].lat, longitude: spots[0].lon }
                         );
-                        // speed: walk 80m/min, bike 200m/min, transit 400m/min, car 400m/min
-                        const speed = routeTravelMode === 'walk' ? 80 : (routeTravelMode === 'bicycle' ? 200 : 400);
-                        return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
-                    })
-                }));
+                        if (firstDist > 500) spots.unshift(startPin);
+                    }
+
+                    // 末尾が目的地から500m以上離れていたら挿入
+                    if (spots.length > 0) {
+                        const lastSpot = spots[spots.length - 1];
+                        const lastDist = getDistance(
+                            { latitude: endGeo.lat, longitude: endGeo.lon },
+                            { latitude: lastSpot.lat, longitude: lastSpot.lon }
+                        );
+                        if (lastDist > 500) spots.push(endPin);
+                    }
+
+                    return {
+                        ...course,
+                        travelMode: routeTravelMode,
+                        spots: spots.map((spot, index, arr) => {
+                            if (index === 0) return { ...spot, travel_time_minutes: 0 };
+                            const prev = arr[index - 1];
+                            const dist = getDistance(
+                                { latitude: prev.lat, longitude: prev.lon },
+                                { latitude: spot.lat, longitude: spot.lon }
+                            );
+                            // speed: walk 80m/min, bike 250m/min (15km/h), transit/car 600m/min
+                            const speed = routeTravelMode === 'walk' ? 80 : routeTravelMode === 'bicycle' ? 250 : 600;
+                            return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
+                        })
+                    };
+                });
 
                 setCourses(enhancedCourses);
+                if (enhancedCourses.length > 0) sendCompletionNotification(enhancedCourses[0].title);
                 setActiveTab('courses');
 
             } else {
@@ -244,8 +320,11 @@ function App() {
                 let startGeo: { lat: number; lon: number; name: string } | null;
 
                 if (coordMatch) {
-                    // 座標直指定 → geocode不要
-                    startGeo = { lat: parseFloat(coordMatch[1]), lon: parseFloat(coordMatch[2]), name: '現在地' };
+                    // 座標直指定 → geocode不要、逆ジオコーディングでエリア名取得
+                    const lat = parseFloat(coordMatch[1]);
+                    const lon = parseFloat(coordMatch[2]);
+                    const areaName = await reverseGeocode(lat, lon);
+                    startGeo = { lat, lon, name: areaName || '現在地' };
                 } else {
                     startGeo = await geocode(query, queryPlaceId);
                 }
@@ -293,7 +372,7 @@ function App() {
                 setGenerationImages(googleUrls.slice(0, 10));
 
                 const now = new Date();
-                const timeContext = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
+                const timeContext = startTime || `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
                 const weatherContext = await getCurrentWeather(startGeo.lat, startGeo.lon);
 
                 // メインAIとサブAIを並列で呼び出し
@@ -307,7 +386,8 @@ function App() {
                     budget,
                     groupSize,
                     getPreferenceContext(),
-                    persona
+                    persona,
+                    exploreMode
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
@@ -344,13 +424,14 @@ function App() {
                             { latitude: prev.lat, longitude: prev.lon },
                             { latitude: spot.lat, longitude: spot.lon }
                         );
-                        // speed: walk 80m/min, bike 200m/min, transit 400m/min, car 400m/min
-                        const speed = areaTravelMode === 'walk' ? 80 : (areaTravelMode === 'bicycle' ? 200 : 400);
+                        // speed: walk 80m/min, bike 250m/min (15km/h), transit/car 600m/min
+                        const speed = areaTravelMode === 'walk' ? 80 : areaTravelMode === 'bicycle' ? 250 : 600;
                         return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
                     })
                 }));
 
                 setCourses(enhancedCourses);
+                if (enhancedCourses.length > 0) sendCompletionNotification(enhancedCourses[0].title);
                 setActiveTab('courses');
             }
         } catch (err) {
@@ -405,7 +486,7 @@ function App() {
             if (remixed) {
                 // 移動時間を再計算
                 const tm = remixed.travelMode || selectedCourse.travelMode || 'walk';
-                const speed = tm === 'walk' ? 80 : (tm === 'bicycle' ? 200 : 400); // m/min
+                const speed = tm === 'walk' ? 80 : tm === 'bicycle' ? 250 : 600; // m/min
                 const enhancedRemix = {
                     ...remixed,
                     travelMode: tm,
@@ -552,6 +633,22 @@ function App() {
 
             {selectedCourse && (
                 <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-5 pb-20">
+                    {/* 【03】連泊タブ: multiday コースの日別切り替え */}
+                    {selectedCourse.spots.some(s => (s as any).dayIndex !== undefined) && (() => {
+                        const days = [...new Set(selectedCourse.spots.map(s => (s as any).dayIndex ?? 0))];
+                        if (days.length <= 1) return null;
+                        return (
+                            <div className="flex gap-1.5 mb-4 animate-fade-in">
+                                {days.sort().map(d => (
+                                    <button key={d} onClick={() => setActiveDayIndex(d)}
+                                        className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all min-h-[44px]
+                                            ${activeDayIndex === d ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                        Day {d + 1}
+                                    </button>
+                                ))}
+                            </div>
+                        );
+                    })()}
                     {/* 戻るボタン */}
                     <button onClick={() => { setSelectedCourse(null); setFocusedSpot(null); }}
                         className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all active:scale-90 mb-3"

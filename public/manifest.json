@@ -1,6 +1,7 @@
 {
   "name": "Meguru - あなたのための、特別なよりみち",
   "short_name": "Meguru",
+  "id": "/meguru/",
   "description": "AIがあなた好みの散策コースを提案する旅行プランニングアプリ",
   "start_url": "/meguru/",
   "scope": "/meguru/",

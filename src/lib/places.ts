@@ -65,7 +65,8 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
 /**
  * 中心座標から指定半径内のプレイスを検索する
  */
-export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number): Promise<PlaceDetails[]> {
+export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number, options?: { maxStage?: number }): Promise<PlaceDetails[]> {
+    const maxStage = options?.maxStage ?? 4; // デフォルト: Stage 4まで全て許可
     // キャッシュチェック
     const cacheKey = `nearby:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters)}`;
     const cached = getCached(cacheKey);
@@ -128,17 +129,15 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         // 観光地カテゴリをまとめて1リクエスト
         const primarySearchTypes = [...attractionTypes, ...cultureTypes, ...natureTypes, ...historicTypes];
         
-        // メインスポットと飲食店を並列で（最大でも2リクエスト）
-        const [rawPrimary, rawDining] = await Promise.all([
-            fetchData(currentRadius, primarySearchTypes),
-            fetchData(currentRadius, diningTypes)
-        ]);
+        // 【20】 カテゴリ検索統合: 観光地+飲食店を1リクエストに統合
+        const allSearchTypesUnified = [...primarySearchTypes, ...diningTypes];
+        const rawAll = await fetchData(currentRadius, allSearchTypesUnified);
 
-        let allFoundSpotsRaw = [...rawPrimary, ...rawDining];
+        let allFoundSpotsRaw = [...rawAll];
 
         // 2段階欲張り検索: 1回目で10件未満の場合のみ、カテゴリ緩和（Stage 2）
-        if (allFoundSpotsRaw.length < 10 && currentRadius < maxRadius) {
-            currentRadius = Math.min(currentRadius * 2.5, maxRadius);
+        if (allFoundSpotsRaw.length < 10 && currentRadius < maxRadius && maxStage >= 2) {
+            currentRadius = Math.min(currentRadius * 1.4, maxRadius);
             console.log(`Places API: Stage 2 search (${currentRadius}m)...`);
             const fallbackTypes = ['point_of_interest', 'establishment', 'tourist_attraction', 'restaurant', 'cafe'];
             const expandedSpots = await fetchData(currentRadius, fallbackTypes);
@@ -146,8 +145,8 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             expandedSpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
         }
 
-        // 執念の3段階目: 依然として3件未満ならカテゴリ制限を極限まで緩和（Stage 3: アルティメット・フォールバック）
-        if (allFoundSpotsRaw.length < 3 && currentRadius <= maxRadius) {
+        // 【23】 Stage 3: ルート検索経由の場合はスキップ
+        if (allFoundSpotsRaw.length < 3 && currentRadius <= maxRadius && maxStage >= 3) {
             currentRadius = maxRadius;
             console.log(`Places API: Stage 3 (Emergency) broad search at full radius (${currentRadius}m)...`);
             
@@ -169,8 +168,8 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
             emergencySpots.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
         }
 
-        // 最終兵器4段階目: それでもダメなら「テキスト検索」で広域サーチ（Stage 4）
-        if (allFoundSpotsRaw.length < 3) {
+        // Stage 4: テキスト検索 (ルート検索経由の場合はスキップ)
+        if (allFoundSpotsRaw.length < 3 && maxStage >= 4) {
             console.log(`Places API: Stage 4 (Last Resort) Text Search...`);
             // 現在地周辺の「観光スポット」というキーワードで広域検索
             const textSearchUrl = `https://places.googleapis.com/v1/places:searchText`;
@@ -231,17 +230,42 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
  * ルート検索用に複数エリアのプレイスを取得する（出発地、目的地、その中間など計5点）
  */
 export async function searchRouteSpots(originObj: { lat: number, lng: number }, destObj: { lat: number, lng: number }, radiusMeters: number): Promise<PlaceDetails[]> {
-    // 5地点サンプリング（出発、1/4, 2/4, 3/4, 到着）
-    const points = [
-        originObj,
-        { lat: originObj.lat * 0.75 + destObj.lat * 0.25, lng: originObj.lng * 0.75 + destObj.lng * 0.25 },
-        { lat: (originObj.lat + destObj.lat) / 2, lng: (originObj.lng + destObj.lng) / 2 },
-        { lat: originObj.lat * 0.25 + destObj.lat * 0.75, lng: originObj.lng * 0.25 + destObj.lng * 0.75 },
-        destObj
-    ];
+    // 【22】距離に応じた動的サンプリング
+    const dx = (originObj.lat - destObj.lat) * 111000;
+    const dy = (originObj.lng - destObj.lng) * 111000 * Math.cos(originObj.lat * Math.PI / 180);
+    const directDist = Math.sqrt(dx * dx + dy * dy);
+
+    let points: { lat: number, lng: number }[];
+    if (directDist < 2000) {
+        // 2km未満: 3点（始点・中間・終点）
+        points = [
+            originObj,
+            { lat: (originObj.lat + destObj.lat) / 2, lng: (originObj.lng + destObj.lng) / 2 },
+            destObj
+        ];
+    } else if (directDist < 5000) {
+        // 2-5km: 4点
+        points = [
+            originObj,
+            { lat: originObj.lat * 0.67 + destObj.lat * 0.33, lng: originObj.lng * 0.67 + destObj.lng * 0.33 },
+            { lat: originObj.lat * 0.33 + destObj.lat * 0.67, lng: originObj.lng * 0.33 + destObj.lng * 0.67 },
+            destObj
+        ];
+    } else {
+        // 5km以上: 5点
+        points = [
+            originObj,
+            { lat: originObj.lat * 0.75 + destObj.lat * 0.25, lng: originObj.lng * 0.75 + destObj.lng * 0.25 },
+            { lat: (originObj.lat + destObj.lat) / 2, lng: (originObj.lng + destObj.lng) / 2 },
+            { lat: originObj.lat * 0.25 + destObj.lat * 0.75, lng: originObj.lng * 0.25 + destObj.lng * 0.75 },
+            destObj
+        ];
+    }
+
+    console.log(`Route search: ${points.length} sample points (distance: ${(directDist / 1000).toFixed(1)}km)`);
 
     const results = await Promise.all(
-        points.map(p => searchNearbySpots(p.lat, p.lng, radiusMeters))
+        points.map(p => searchNearbySpots(p.lat, p.lng, radiusMeters, { maxStage: 2 })) // 【23】 ルート検索はStage2まで
     );
 
     const map = new Map<string, PlaceDetails>();
@@ -330,3 +354,26 @@ export async function getPlaceLatLng(placeId: string): Promise<{ lat: number; ln
     }
 }
 
+/**
+ * 【24】 逆ジオコーディング: GPS座標からエリア名を取得
+ */
+export async function reverseGeocode(lat: number, lng: number): Promise<string> {
+    try {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&language=ja&result_type=sublocality|locality&key=${API_KEY}`;
+        const response = await fetch(url);
+        if (!response.ok) return '';
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+            const result = data.results[0];
+            const name = result.formatted_address
+                ?.replace(/^日本[、,]\s*/, '')
+                ?.replace(/〒\d{3}-\d{4}\s*/, '')
+                ?.trim();
+            return name || '';
+        }
+        return '';
+    } catch (e) {
+        console.error('Reverse geocode failed', e);
+        return '';
+    }
+}

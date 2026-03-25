@@ -1,8 +1,12 @@
-/* Ghost Register Script */
+/* Meguru Service Worker Registration */
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(registrations => {
-        for (const registration of registrations) {
-            registration.unregister();
-        }
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/meguru/sw.js', { scope: '/meguru/' })
+            .then(function(registration) {
+                console.log('[SW] Registered:', registration.scope);
+            })
+            .catch(function(error) {
+                console.warn('[SW] Registration failed:', error);
+            });
     });
 }

@@ -8,7 +8,7 @@ import { useFavorites } from './hooks/useFavorites';
 import { searchAreaCenter, searchNearbySpots, searchRouteSpots, getPlaceLatLng, reverseGeocode } from './lib/places';
 import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
 import type { WaitingScreenContent } from './lib/gemini';
-import { generateCourses as generateHeuristicCourses } from './lib/courseGenerator';
+
 import { getCurrentWeather } from './lib/weather';
 import { getDistance } from 'geolib';
 import {

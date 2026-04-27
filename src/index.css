@@ -64,24 +64,99 @@
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  @keyframes navPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.95); }
+  }
+
+  @keyframes arrivalBurst {
+    0% { transform: scale(0.5); opacity: 0; }
+    60% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes chatSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  @keyframes detourPop {
+    0% { transform: scale(0); opacity: 0; }
+    80% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+}
+
+/* ===== CSS カスタムプロパティ（ライトモード） ===== */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-input: #f1f5f9;
+  --bg-muted: rgba(0, 0, 0, 0.03);
+
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+
+  --border-default: rgba(0, 0, 0, 0.06);
+  --border-input: #e2e8f0;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-elevated: 0 8px 25px rgba(0, 0, 0, 0.08);
+
+  --nav-bg: rgba(255, 255, 255, 0.95);
+  --nav-border: rgba(0, 0, 0, 0.06);
+  --glass-bg: rgba(255, 255, 255, 0.82);
+}
+
+/* ===== ダークモード ===== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-card: #1e293b;
+    --bg-input: #334155;
+    --bg-muted: rgba(255, 255, 255, 0.04);
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-inverse: #0f172a;
+
+    --border-default: rgba(255, 255, 255, 0.08);
+    --border-input: #334155;
+
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-elevated: 0 8px 25px rgba(0, 0, 0, 0.4);
+
+    --nav-bg: rgba(15, 23, 42, 0.95);
+    --nav-border: rgba(255, 255, 255, 0.06);
+    --glass-bg: rgba(30, 41, 59, 0.9);
+  }
 }
 
 /* ===== 生成画面用グラスパネル ===== */
 .glass-gen-panel {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--glass-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 
 /* ===== ベーススタイル ===== */
 body {
-  @apply bg-white text-slate-900 antialiased;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  @apply antialiased;
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
   letter-spacing: -0.01em;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* ===== Safe Area ===== */
@@ -121,9 +196,13 @@ body {
 [data-persona] .persona-bg { background-color: var(--persona-bg, #fffbeb); }
 [data-persona] .persona-border { border-color: var(--persona-border, #fde68a); }
 
-/* ===== グラスモーフィズム（白ベース） ===== */
+/* ===== グラスモーフィズム ===== */
 .glass-panel {
-  @apply bg-white/80 backdrop-blur-xl border border-slate-100 shadow-xl rounded-2xl;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-default);
+  @apply shadow-xl rounded-2xl;
 }
 
 /* ===== ボタン ===== */
@@ -138,23 +217,30 @@ body {
 
 /* ===== カード ===== */
 .card-premium {
-  @apply bg-white rounded-2xl border border-slate-100 transition-all duration-300;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-default);
+  @apply rounded-2xl transition-all duration-300;
+  box-shadow: var(--shadow-card);
 }
 
 .card-premium:hover {
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-elevated);
   transform: translateY(-2px);
-  @apply border-slate-200;
+  border-color: rgba(100,116,139,0.2);
 }
 
 /* ===== 入力フィールド ===== */
 .input-premium {
-  @apply w-full rounded-xl px-4 py-3.5 font-medium transition-all duration-200 outline-none bg-slate-50 border-2 border-slate-100;
+  width: 100%;
+  background-color: var(--bg-input);
+  border: 2px solid var(--border-input);
+  color: var(--text-primary);
+  @apply rounded-xl px-4 py-3.5 font-medium transition-all duration-200 outline-none;
 }
 
 .input-premium:focus {
-  @apply border-amber-400 bg-white;
+  @apply border-amber-400;
+  background-color: var(--bg-card);
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
 }
 

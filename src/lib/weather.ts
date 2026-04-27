@@ -1,8 +1,8 @@
 export async function getCurrentWeather(lat: number, lon: number): Promise<string> {
     try {
         // Open-Meteo API: https://open-meteo.com/en/docs
-        // current_weather=true で現在の天気をWMOコード(0-99)で取得
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`;
+        // 新API形式: current=weather_code を使用 (current_weather=true は非推奨)
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code&timezone=auto`;
         const res = await fetch(url);
         if (!res.ok) {
             console.warn("Weather API failed:", res.statusText);
@@ -10,9 +10,12 @@ export async function getCurrentWeather(lat: number, lon: number): Promise<strin
         }
         const data = await res.json();
 
-        if (data && data.current_weather) {
-            const code = data.current_weather.weathercode;
-            return getWeatherConditionFromCode(code);
+        if (data?.current?.weather_code !== undefined) {
+            return getWeatherConditionFromCode(data.current.weather_code);
+        }
+        // フォールバック: 旧形式のレスポンスにも対応
+        if (data?.current_weather?.weathercode !== undefined) {
+            return getWeatherConditionFromCode(data.current_weather.weathercode);
         }
         return "不明";
     } catch (e) {

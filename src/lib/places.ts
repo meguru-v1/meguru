@@ -68,7 +68,7 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
 export async function searchNearbySpots(lat: number, lng: number, radiusMeters: number, options?: { maxStage?: number }): Promise<PlaceDetails[]> {
     const maxStage = options?.maxStage ?? 4; // デフォルト: Stage 4まで全て許可
     // キャッシュチェック
-    const cacheKey = `nearby:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters)}`;
+    const cacheKey = `nearby:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters)},s${maxStage}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
 
@@ -120,7 +120,7 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     };
 
     try {
-        const foundIds = new Set<string>();
+
         let currentRadius = initialRadius;
         
         console.log(`Places API: Optimized single-request search start (Radius: ${currentRadius}m)`);

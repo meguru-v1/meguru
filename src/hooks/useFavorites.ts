@@ -13,11 +13,26 @@ const loadFavorites = (): Course[] => {
     }
 };
 
+const MAX_FAVORITES = 50; // 保存上限
+
 const saveFavorites = (favorites: Course[]): void => {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(favorites));
-    } catch (e) {
-        console.error('Failed to save favorites:', e);
+        // 上限を超えた場合、古い項目を自動削除
+        const trimmed = favorites.slice(0, MAX_FAVORITES);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } catch (e: any) {
+        // QuotaExceededError: 容量超過時は古い項目を削除してリトライ
+        if (e?.name === 'QuotaExceededError' || e?.code === 22) {
+            console.warn('localStorage quota exceeded. Trimming old favorites...');
+            try {
+                const reduced = favorites.slice(0, Math.max(10, Math.floor(favorites.length / 2)));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(reduced));
+            } catch {
+                console.error('Failed to save favorites even after trimming.');
+            }
+        } else {
+            console.error('Failed to save favorites:', e);
+        }
     }
 };
 

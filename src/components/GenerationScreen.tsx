@@ -156,7 +156,7 @@ export default function GenerationScreen({
             }, 600);
         }, 5000);
         return () => clearInterval(imageTimer);
-    }, []);
+    }, [slideshowImages.length]);
 
     // ===== 予報コピー切替（7秒ごと）=====
     useEffect(() => {

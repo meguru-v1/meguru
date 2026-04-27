@@ -82,10 +82,16 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
         if (!input.trim() || input.length < 2) { setSuggestions([]); return; }
         setIsLoadingSuggestions(true);
         debounceTimer.current = setTimeout(async () => {
-            const results = await getAutocompleteSuggestions(input, userLocation?.lat, userLocation?.lng);
-            setSuggestions(results);
-            setActiveInput(type);
-            setIsLoadingSuggestions(false);
+            try {
+                const results = await getAutocompleteSuggestions(input, userLocation?.lat, userLocation?.lng);
+                setSuggestions(results);
+                setActiveInput(type);
+            } catch (e) {
+                console.warn('Autocomplete fetch failed:', e);
+                setSuggestions([]);
+            } finally {
+                setIsLoadingSuggestions(false);
+            }
         }, 400);
     };
 

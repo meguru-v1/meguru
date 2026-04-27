@@ -39,15 +39,14 @@ self.addEventListener('activate', (event) => {
                 );
             }),
             self.clients.claim(),
+            // バージョン更新を全クライアントに通知
+            self.clients.matchAll({ type: 'window' }).then((clients) => {
+                clients.forEach((client) => {
+                    client.postMessage({ type: 'SW_UPDATED', version: SW_VERSION });
+                });
+            })
         ])
     );
-
-    // バージョン更新を全クライアントに通知
-    self.clients.matchAll({ type: 'window' }).then((clients) => {
-        clients.forEach((client) => {
-            client.postMessage({ type: 'SW_UPDATED', version: SW_VERSION });
-        });
-    });
 });
 
 // Network-first戦略（API呼び出し以外の静的リソースのみキャッシュ）

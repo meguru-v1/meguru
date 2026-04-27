@@ -4,16 +4,20 @@ import MapVisualization from './components/MapVisualization';
 import TabBar from './components/TabBar';
 import GenerationScreen from './components/GenerationScreen';
 import SpotHeroImage from './components/SpotHeroImage';
+import AiChatSheet from './components/AiChatSheet';
+import DetourSuggestion from './components/DetourSuggestion';
 import { useFavorites } from './hooks/useFavorites';
+import { useNavigation } from './hooks/useNavigation';
 import { searchAreaCenter, searchNearbySpots, searchRouteSpots, getPlaceLatLng, reverseGeocode } from './lib/places';
 import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
 import type { WaitingScreenContent } from './lib/gemini';
-
+import { decodeShareUrl, clearShareParam, encodeCourseToUrl, copyToClipboard } from './lib/shareLink';
 import { getCurrentWeather } from './lib/weather';
 import { getDistance } from 'geolib';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
-    Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap, Send
+    Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap, Send,
+    Share2, MessageCircle, CheckCircle2
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId, TravelMode, ExploreMode } from './types';
 
@@ -34,9 +38,10 @@ function App() {
     const [searchLocationName, setSearchLocationName] = useState('');
     const [subAiContent, setSubAiContent] = useState<WaitingScreenContent | null>(null);
     const [generationImages, setGenerationImages] = useState<string[]>([]);
-    const [activeDayIndex, setActiveDayIndex] = useState(0); // 連泊タブ用
+    const [activeDayIndex, setActiveDayIndex] = useState(0);
+    const [showAiChat, setShowAiChat] = useState(false);
+    const [shareToastVisible, setShareToastVisible] = useState(false);
 
-    // リミックス用に検索条件を保持
     const [lastSearchDuration, setLastSearchDuration] = useState(120);
     const [lastSearchMood, setLastSearchMood] = useState('不明');
     const [lastSearchBudget, setLastSearchBudget] = useState('不明');
@@ -44,6 +49,9 @@ function App() {
     const [lastExploreMode, setLastExploreMode] = useState<ExploreMode | undefined>(undefined);
 
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
+
+    const navSpots = selectedCourse?.spots ?? [];
+    const { nav, startNavigation, stopNavigation, goToSpot } = useNavigation(navSpots);
 
     // 【05】離脱警告: 生成中にタブを閉じようとすると警告
     useEffect(() => {
@@ -71,12 +79,39 @@ function App() {
     // 通知許可のリクエスト（初回のみ）
     useEffect(() => {
         if ('Notification' in window && Notification.permission === 'default') {
-            // 初回のコース生成完了時に許可リクエスト
             if (courses.length > 0 && !loading) {
                 Notification.requestPermission();
             }
         }
     }, [courses.length, loading]);
+
+    // 共有URLからコース復元
+    useEffect(() => {
+        const sharedCourse = decodeShareUrl();
+        if (sharedCourse) {
+            setCourses([sharedCourse]);
+            setSelectedCourse(sharedCourse);
+            setActiveTab('courses');
+            clearShareParam();
+        }
+    }, []);
+
+    const handleShareCourse = async (course: Course) => {
+        const url = encodeCourseToUrl(course);
+        if (!url) return;
+        const ok = await copyToClipboard(url);
+        if (ok) {
+            setShareToastVisible(true);
+            setTimeout(() => setShareToastVisible(false), 2500);
+        }
+    };
+
+    const handleAddDetour = (spot: Spot) => {
+        if (!selectedCourse) return;
+        const updated: Course = { ...selectedCourse, spots: [...selectedCourse.spots, spot] };
+        setSelectedCourse(updated);
+        setCourses(prev => prev.map(c => c.id === updated.id ? updated : c));
+    };
 
     const getPreferenceContext = (): string => {
         if (!favorites || favorites.length === 0) return '';
@@ -664,26 +699,81 @@ function App() {
                             </div>
                         )}
                         <div className="flex items-start justify-between gap-2">
-                            <h2 className="font-extrabold text-xl text-slate-900 leading-tight flex-1">{selectedCourse.title}</h2>
-                            <button onClick={() => isFavorite(selectedCourse.id) ? removeFavorite(selectedCourse.id) : addFavorite(selectedCourse)}
-                                className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90 shrink-0
-                                    ${isFavorite(selectedCourse.id) ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-100 text-slate-400 hover:text-rose-400 hover:bg-rose-50'}`}>
-                                <Heart size={20} className={isFavorite(selectedCourse.id) ? 'fill-current' : ''} />
-                            </button>
+                            <h2 className="font-extrabold text-xl leading-tight flex-1" style={{ color: 'var(--text-primary)' }}>{selectedCourse.title}</h2>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <button onClick={() => handleShareCourse(selectedCourse)}
+                                    className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-90"
+                                    style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+                                    aria-label="コースをシェア">
+                                    <Share2 size={16} />
+                                </button>
+                                <button onClick={() => setShowAiChat(true)}
+                                    className="w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-90"
+                                    style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+                                    aria-label="AIガイドに聞く">
+                                    <MessageCircle size={16} />
+                                </button>
+                                <button onClick={() => isFavorite(selectedCourse.id) ? removeFavorite(selectedCourse.id) : addFavorite(selectedCourse)}
+                                    className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90
+                                        ${isFavorite(selectedCourse.id) ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-100 text-slate-400 hover:text-rose-400 hover:bg-rose-50'}`}>
+                                    <Heart size={18} className={isFavorite(selectedCourse.id) ? 'fill-current' : ''} />
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex gap-3 text-xs text-slate-500 mt-2">
+                        <div className="flex gap-3 text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
                             <span className="flex items-center gap-1"><Clock size={12} /> {selectedCourse.totalTime}分</span>
                             <span className="flex items-center gap-1"><MapPin size={12} /> {selectedCourse.spots.length}スポット</span>
                         </div>
                         {selectedCourse.description && (
-                            <p className="spot-description text-slate-500 mt-2">{selectedCourse.description}</p>
+                            <p className="spot-description mt-2" style={{ color: 'var(--text-secondary)' }}>{selectedCourse.description}</p>
                         )}
+
+                        {/* ナビモードバー */}
+                        {nav.status === 'idle' ? (
+                            <button onClick={startNavigation}
+                                className="mt-4 w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 text-white"
+                                style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                                <Navigation size={16} />
+                                旅を始める（ナビモード）
+                            </button>
+                        ) : nav.status === 'arrived_all' ? (
+                            <div className="mt-4 w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 size={16} />
+                                全スポット到着！お疲れさまでした🎉
+                                <button onClick={stopNavigation} className="ml-2 text-xs underline opacity-70">終了</button>
+                            </div>
+                        ) : (
+                            <div className="mt-4 rounded-2xl p-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                        <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                                            ナビ中: {selectedCourse.spots[nav.currentSpotIndex]?.name}
+                                        </span>
+                                    </div>
+                                    <button onClick={stopNavigation} className="text-[11px] font-bold text-rose-400">終了</button>
+                                </div>
+                                {nav.distanceToNext !== null && (
+                                    <p className="text-sm font-extrabold text-emerald-500">
+                                        あと {nav.distanceToNext < 1000 ? `${nav.distanceToNext}m` : `${(nav.distanceToNext/1000).toFixed(1)}km`}
+                                    </p>
+                                )}
+                                <div className="flex gap-1.5 mt-2">
+                                    {selectedCourse.spots.map((_, i) => (
+                                        <button key={i} onClick={() => goToSpot(i)}
+                                            className={`h-1.5 flex-1 rounded-full transition-all ${i < nav.currentSpotIndex ? 'bg-emerald-400' : i === nav.currentSpotIndex ? 'bg-amber-400' : 'bg-slate-200'}`} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* 地図で見るボタン */}
                         <button onClick={() => setActiveTab('map')}
                             className="flex items-center justify-center gap-2 w-full mt-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold transition-all active:scale-95">
                             <MapIcon size={16} /> 地図で全体を見る
                         </button>
                     </div>
+
 
                     {/* リミックスセクション */}
                     <div className="mb-6 animate-fade-in stagger-1">
@@ -937,20 +1027,46 @@ function App() {
 
             <div className="flex-1 overflow-hidden">
                 {activeTab === 'search' && (
-                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{searchView}</div>
+                    <div className="w-full h-full overflow-y-auto scrollbar-hide" style={{ background: 'var(--bg-primary)' }}>{searchView}</div>
                 )}
                 {activeTab === 'courses' && (
-                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{coursesView}</div>
+                    <div className="w-full h-full overflow-y-auto scrollbar-hide" style={{ background: 'var(--bg-primary)' }}>{coursesView}</div>
                 )}
                 {activeTab === 'map' && (
                     <div className="w-full h-full">{mapView}</div>
                 )}
                 {activeTab === 'favorites' && (
-                    <div className="w-full h-full overflow-y-auto scrollbar-hide bg-paper">{favoritesView}</div>
+                    <div className="w-full h-full overflow-y-auto scrollbar-hide" style={{ background: 'var(--bg-primary)' }}>{favoritesView}</div>
                 )}
             </div>
             {!showGenScreen && (
                 <TabBar activeTab={activeTab} onTabChange={handleTabChange} coursesCount={courses.length} favoritesCount={favorites.length} />
+            )}
+
+            {/* AI チャットシート */}
+            <AiChatSheet
+                isOpen={showAiChat}
+                onClose={() => setShowAiChat(false)}
+                course={selectedCourse}
+                focusedSpot={focusedSpot}
+            />
+
+            {/* 寄り道ボタン（ナビ中またはコース閲覧中のみ） */}
+            {selectedCourse && activeTab === 'courses' && (
+                <DetourSuggestion
+                    currentPosition={nav.currentPosition}
+                    currentCourseSpots={selectedCourse.spots}
+                    onAddDetour={handleAddDetour}
+                />
+            )}
+
+            {/* シェアトースト */}
+            {shareToastVisible && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[900] flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl font-bold text-sm text-white"
+                    style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', animation: 'fadeIn 0.3s ease' }}>
+                    <CheckCircle2 size={16} className="text-emerald-400" />
+                    URLをコピーしました！
+                </div>
             )}
         </div>
     );

@@ -1,12 +1,34 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Spot, Course, PersonaId, ExploreMode } from '../types';
+import { getSeasonalPromptContext } from './seasonal';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-const genAI = new GoogleGenerativeAI(API_KEY);
+// Cloud Functions エンドポイント（Gemini APIキーはサーバー側で管理）
+const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL as string || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
+
+// Cloud Functions 経由でAI生成を実行
+const callGeminiProxy = async (prompt: string, model: string, jsonMode: boolean = false): Promise<string> => {
+    const response = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, model, jsonMode }),
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const err = new Error(errorData.error || `Proxy error: ${response.status}`) as any;
+        err.status = response.status;
+        throw err;
+    }
+    const data = await response.json();
+    return data.text;
+};
 
 
-// 429エラー（Quota）発生時の待機用
+// 待機用
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// <thinking>ブロックの除去（Gemini 2.5系が出力することがある）
+const stripThinkingBlock = (text: string): string => {
+    return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+};
 
 // モデル別最終リクエスト時刻管理
 const lastRequestTimes: Record<string, number> = {
@@ -228,6 +250,9 @@ ${exploreModeTemplate}
 あなたは世界最高峰のトラベルキュレーターです。提供された候補から、必ず **全く異なる${num}つのプラン** を作成してください。
 ${exclusionPrompt}
 
+**【季節・時刻コンテキスト（最重要）】**
+${getSeasonalPromptContext()}
+
 **1. コースの完全な独立性と重複排除 (極めて重要):**
 - **${num}つのコース間で、スポットを被らせることは絶対に禁止です。**
 
@@ -290,31 +315,35 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
         const modelName = selectModel(durationMinutes);
         let text: string | undefined;
 
-        try {
-            await waitRateLimit(modelName, 5000);
-            const model = genAI.getGenerativeModel({ model: modelName });
-            const result = await model.generateContent(promptTemplate);
-            text = (await result.response).text();
-        } catch (err) {
-            console.warn(`[Gemini API] Primary model ${modelName} failed:`, err);
-            const fbModel = "gemini-2.5-flash";
-            await waitRateLimit(fbModel, 7000);
+        // 指数バックオフ付きリトライ
+        const MAX_RETRIES = 3;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
-                const model = genAI.getGenerativeModel({ 
-                    model: fbModel,
-                    generationConfig: { responseMimeType: "application/json" }
-                });
-                const result = await model.generateContent(promptTemplate);
-                text = (await result.response).text();
-            } catch (fallbackErr) {
-                console.error(`[Gemini API] Fallback model ${fbModel} also failed:`, fallbackErr);
-                throw fallbackErr;
+                const currentModel = attempt === 0 ? modelName : "gemini-2.5-flash";
+                await waitRateLimit(currentModel, 5000);
+                const useJsonMode = attempt > 0;
+                text = await callGeminiProxy(promptTemplate, currentModel, useJsonMode);
+                break; // 成功したらループ脱出
+            } catch (err: any) {
+                const is429 = err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED');
+                if (is429 && attempt < MAX_RETRIES) {
+                    const backoffMs = Math.min(2000 * Math.pow(2, attempt), 30000);
+                    console.warn(`[Gemini API] 429 Rate Limited. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                    await sleep(backoffMs);
+                    continue;
+                }
+                if (attempt < MAX_RETRIES) {
+                    console.warn(`[Gemini API] Model failed (attempt ${attempt + 1}), trying fallback:`, err);
+                    continue;
+                }
+                console.error(`[Gemini API] All ${MAX_RETRIES + 1} attempts failed:`, err);
+                throw err;
             }
         }
 
         if (!text) return [];
 
-        let jsonStr = text;
+        let jsonStr = stripThinkingBlock(text);
         const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, jsonStr];
         jsonStr = jsonMatch[1] || jsonStr;
         const firstBrace = jsonStr.indexOf('{');
@@ -474,32 +503,35 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
     const modelName = selectModel(durationMinutes);
     let text: string | undefined;
 
-    try {
-        await waitRateLimit(modelName, 5000);
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent(prompt);
-        text = (await result.response).text();
-    } catch (err) {
-        console.error(`Remix Lite failed:`, err);
-        // フォールバック: Flash
-        const fbModel = "gemini-2.5-flash";
+    // 指数バックオフ付きリトライ
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
-            await waitRateLimit(fbModel, 7000);
-            const model = genAI.getGenerativeModel({ 
-                model: fbModel,
-                generationConfig: { responseMimeType: "application/json" }
-            });
-            const result = await model.generateContent(prompt);
-            text = (await result.response).text();
-        } catch (e) {
-            console.warn(`${fbModel} remix fallback failed`);
+            const currentModel = attempt === 0 ? modelName : "gemini-2.5-flash";
+            await waitRateLimit(currentModel, 5000);
+            const useJsonMode = attempt > 0;
+            text = await callGeminiProxy(prompt, currentModel, useJsonMode);
+            break;
+        } catch (err: any) {
+            const is429 = err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED');
+            if (is429 && attempt < MAX_RETRIES) {
+                const backoffMs = Math.min(2000 * Math.pow(2, attempt), 30000);
+                console.warn(`[Remix] 429 Rate Limited. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                await sleep(backoffMs);
+                continue;
+            }
+            if (attempt < MAX_RETRIES) {
+                console.warn(`[Remix] Model failed (attempt ${attempt + 1}), trying fallback:`, err);
+                continue;
+            }
+            console.warn(`[Remix] All attempts failed`);
         }
     }
 
     if (!text) throw new Error("AIによるリミックスに失敗しました。時間をおいて再度お試しください。");
 
     try {
-        let jsonStr = text;
+        let jsonStr = stripThinkingBlock(text);
         const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
             jsonStr = jsonMatch[1];
@@ -546,7 +578,8 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
             totalTime: durationMinutes,
             spots: hydratedSpots,
             theme: data.theme || originalCourse.theme || "よりみち",
-            travelMode: originalCourse.travelMode
+            travelMode: originalCourse.travelMode,
+            persona: originalCourse.persona
         } as Course;
     } catch (err) {
         console.error(`Remix processing failed:`, err);
@@ -595,17 +628,15 @@ JSON ONLY.`;
     const modelName = "gemini-2.5-flash-lite";
     try {
         await waitRateLimit(modelName, 5000);
-        const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
-        const result = await model.generateContent(prompt);
-        return JSON.parse((await result.response).text()) as WaitingScreenContent;
+        const text = await callGeminiProxy(prompt, modelName, true);
+        return JSON.parse(text) as WaitingScreenContent;
     } catch (err) {
         console.warn(`Sub-AI (Flash-Lite) failed, trying Flash:`, err);
         try {
             const fbModel = "gemini-2.5-flash";
             await waitRateLimit(fbModel, 7000);
-            const model = genAI.getGenerativeModel({ model: fbModel, generationConfig: { responseMimeType: "application/json" } });
-            const result = await model.generateContent(prompt);
-            return JSON.parse((await result.response).text()) as WaitingScreenContent;
+            const text = await callGeminiProxy(prompt, fbModel, true);
+            return JSON.parse(text) as WaitingScreenContent;
         } catch (fbErr) {
             console.warn(`Sub-AI (Flash) also failed:`, fbErr);
             return null;

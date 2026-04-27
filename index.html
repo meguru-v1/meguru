@@ -12,7 +12,15 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="version" content="1.2.1" />
-  <script src="registerSW.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/meguru/sw.js', { scope: '/meguru/' })
+          .then(function(reg) { console.log('[SW] Registered:', reg.scope); })
+          .catch(function(err) { console.warn('[SW] Registration failed:', err); });
+      });
+    }
+  </script>
   <meta name="theme-color" content="#ffffff" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -22,8 +30,8 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+JP:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Shippori+Mincho+B1:wght@400;500;600;700;800&display=swap"
     rel="stylesheet" />
   <title>Meguru - あなたのための、特別なよりみち</title>
-  <script type="module" crossorigin src="/meguru/assets/index-ta9x5Jeb.js"></script>
-  <link rel="stylesheet" crossorigin href="/meguru/assets/index-CS9o5vyb.css">
+  <script type="module" crossorigin src="/meguru/assets/index-BCRJJPOY.js"></script>
+  <link rel="stylesheet" crossorigin href="/meguru/assets/index-BIr4lBil.css">
 </head>
 
 <body>

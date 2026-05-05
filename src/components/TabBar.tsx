@@ -24,8 +24,14 @@ const TABS: TabConfig[] = [
 
 const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabChange, coursesCount, favoritesCount }) => {
     return (
-        <nav className="shrink-0 z-[600] bg-white border-t border-slate-100"
-            style={{ paddingBottom: 'max(4px, env(safe-area-inset-bottom, 0px))' }}>
+        <nav className="shrink-0 z-[600]"
+            style={{
+                background: 'var(--nav-bg)',
+                borderTop: '1px solid var(--nav-border)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                paddingBottom: 'max(4px, env(safe-area-inset-bottom, 0px))',
+            }}>
             <div className="flex items-stretch">
                 {TABS.map(tab => {
                     const isActive = activeTab === tab.id;
@@ -40,20 +46,25 @@ const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabChange, coursesCount, f
                             aria-label={tab.label}
                         >
                             {isActive && (
-                                <span className="absolute inset-x-4 top-0 h-[2px] rounded-b-full bg-slate-900"
-                                    style={{ animation: 'slideDownIndicator 0.2s ease-out' }} />
+                                <span className="absolute inset-x-4 top-0 h-[2px] rounded-b-full"
+                                    style={{
+                                        background: 'var(--wa-accent)',
+                                        animation: 'slideDownIndicator 0.2s ease-out',
+                                    }} />
                             )}
-                            <span className={`relative flex items-center justify-center w-10 h-7 rounded-lg transition-all duration-200
-                                ${isActive ? 'bg-slate-100' : ''}`}>
+                            <span className={`relative flex items-center justify-center w-10 h-7 rounded-lg transition-all duration-200`}
+                                style={isActive ? { background: 'rgba(196, 151, 47, 0.08)' } : {}}>
                                 <tab.Icon size={isActive ? 20 : 18} strokeWidth={isActive ? 2.5 : 1.5}
-                                    className={`transition-all duration-200 ${isActive ? 'text-slate-900' : 'text-slate-400'}`} />
+                                    style={{ color: isActive ? 'var(--wa-accent)' : 'var(--text-muted)', transition: 'all 0.2s' }} />
                                 {badge > 0 && (
-                                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center leading-none bg-amber-400 text-white">
+                                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center leading-none text-white"
+                                        style={{ background: 'var(--wa-accent)' }}>
                                         {badge > 99 ? '99+' : badge}
                                     </span>
                                 )}
                             </span>
-                            <span className={`text-[10px] font-semibold tracking-tight ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
+                            <span className="text-[10px] font-semibold tracking-tight"
+                                style={{ color: isActive ? 'var(--wa-accent)' : 'var(--text-muted)' }}>
                                 {tab.label}
                             </span>
                         </button>

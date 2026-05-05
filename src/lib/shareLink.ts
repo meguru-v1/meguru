@@ -6,7 +6,20 @@ const SHARE_PARAM = 'share';
 /** コースをURLに圧縮エンコードして返す */
 export function encodeCourseToUrl(course: Course): string {
     try {
-        const json = JSON.stringify(course);
+        // 【最適化】共有URLの短縮化のために、不要なデータ（画像URLや長文レビュー等）を削除する
+        const prunedCourse: Course = {
+            ...course,
+            spots: course.spots.map(spot => {
+                const { 
+                    photos, reviews, editorial_summary, tags, 
+                    user_ratings_total, rating, business_status, 
+                    ...keep 
+                } = spot as any;
+                return keep as Spot;
+            })
+        };
+
+        const json = JSON.stringify(prunedCourse);
         const compressed = LZString.compressToEncodedURIComponent(json);
         const base = `${window.location.origin}${window.location.pathname}`;
         return `${base}?${SHARE_PARAM}=${compressed}`;

@@ -34,7 +34,7 @@ const getCategoryStyle = (category: string) => {
 };
 
 // Route component connecting points via Directions API
-const DirectionsComponent = ({ spots, travelMode }: { spots: Spot[], travelMode: string }) => {
+const DirectionsComponent = ({ spots, travelMode, onDirectionsLoaded }: { spots: Spot[], travelMode: string, onDirectionsLoaded?: (res: google.maps.DirectionsResult) => void }) => {
     const map = useMap();
     const routesLibrary = useMapsLibrary('routes');
     const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService>();
@@ -49,7 +49,7 @@ const DirectionsComponent = ({ spots, travelMode }: { spots: Spot[], travelMode:
             map,
             suppressMarkers: true, // We draw our own AdvancedMarkers
             polylineOptions: {
-                strokeColor: '#0F172A',
+                strokeColor: '#3a3a3a',
                 strokeWeight: 4,
                 strokeOpacity: 0.8,
             }
@@ -57,6 +57,8 @@ const DirectionsComponent = ({ spots, travelMode }: { spots: Spot[], travelMode:
     }, [routesLibrary, map]);
 
     // Request directions
+    const coordsHash = spots.map(s => `${s.lat},${s.lon}`).join('|');
+    
     useEffect(() => {
         if (!directionsService || !directionsRenderer || spots.length < 2) return;
 
@@ -80,6 +82,9 @@ const DirectionsComponent = ({ spots, travelMode }: { spots: Spot[], travelMode:
         }).then((response: google.maps.DirectionsResult) => {
             directionsRenderer.setDirections(response);
             setRoutes(response.routes);
+            if (onDirectionsLoaded) {
+                onDirectionsLoaded(response);
+            }
         }).catch((e: Error) => {
             console.error('Directions routing failed:', e);
             // Fallback clear
@@ -87,7 +92,7 @@ const DirectionsComponent = ({ spots, travelMode }: { spots: Spot[], travelMode:
         });
 
         return () => { directionsRenderer.setDirections({ routes: [] } as any); }
-    }, [directionsService, directionsRenderer, spots, travelMode]);
+    }, [directionsService, directionsRenderer, coordsHash, travelMode]);
 
     return null;
 };
@@ -98,9 +103,10 @@ interface MapVisualizationProps {
     spots: Spot[];
     focusedSpot: Spot | null;
     travelMode?: string;
+    onDirectionsLoaded?: (result: google.maps.DirectionsResult) => void;
 }
 
-const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spots, focusedSpot, travelMode = "walk" }) => {
+const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spots, focusedSpot, travelMode = "walk", onDirectionsLoaded }) => {
     const defaultCenter = { lat: 34.9858, lng: 135.7588 }; // Kyoto default
     const mapCenter = center ? { lat: center.lat, lng: center.lon } : defaultCenter;
 
@@ -127,14 +133,14 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
     }, [map, focusedSpot, center]);
 
     return (
-        <div className="w-full h-full relative rounded-2xl overflow-hidden shadow-inner border border-slate-200">
+        <div className="w-full h-full relative rounded-2xl overflow-hidden shadow-inner" style={{ border: '1px solid var(--border-default)' }}>
             <Map
                 defaultZoom={14}
                 defaultCenter={mapCenter}
                 mapId="DEMO_MAP_ID" // Must have Map ID for AdvancedMarker!
                 gestureHandling={'greedy'}
                 disableDefaultUI={false}
-                className="w-full h-full z-0 bg-slate-50"
+                className="w-full h-full z-0"
             >
                 {/* AdvancedMarkers for each Spot */}
                 {spots.map((spot, index) => {
@@ -158,34 +164,34 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
                                 >
                                     <span style={{ fontSize: isFocused ? '18px' : '14px', lineHeight: 1 }}>{style.icon}</span>
                                 </Pin>
-                                <div className="absolute -top-2 -right-2 bg-slate-900 text-white font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm z-10">
+                                <div className="absolute -top-2 -right-2 font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm z-10" style={{ background: 'var(--wa-sumi)', color: 'white' }}>
                                     {index + 1}
                                 </div>
 
                                 {/* Info Popup Rendered as sibling in DOM over the marker */}
                                 {isFocused && (
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 p-3 z-50 pointer-events-auto">
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-xl shadow-xl p-3 z-50 pointer-events-auto" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}>
                                         <div className="flex items-center justify-between mb-1">
-                                            <span className="bg-slate-900 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                            <span className="text-white text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'var(--wa-sumi)' }}>
                                                 #{index + 1}
                                             </span>
-                                            <span className="text-[10px] uppercase font-bold text-slate-400">{spot.category}</span>
+                                            <span className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>{spot.category}</span>
                                         </div>
-                                        <h3 className="font-bold text-slate-800 text-sm mb-1 leading-tight">{spot.name}</h3>
+                                        <h3 className="font-bold text-sm mb-1 leading-tight font-serif" style={{ color: 'var(--text-primary)' }}>{spot.name}</h3>
 
                                         <div className="flex items-center gap-2 mb-2">
                                             {spot.rating && (
-                                                <span className="flex items-center text-xs text-amber-500 font-bold">
+                                                <span className="flex items-center text-xs font-bold" style={{ color: 'var(--wa-accent)' }}>
                                                     <span>★</span> {spot.rating}
                                                 </span>
                                             )}
                                             {spot.user_ratings_total != null && spot.user_ratings_total > 0 && (
-                                                <span className="text-[10px] text-slate-400">({spot.user_ratings_total})</span>
+                                                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>({spot.user_ratings_total})</span>
                                             )}
                                         </div>
 
                                         {(spot.tags.photo || (spot.photos && spot.photos.length > 0)) && (
-                                            <div className="w-full h-24 mb-2 rounded-lg overflow-hidden bg-slate-100">
+                                            <div className="w-full h-24 mb-2 rounded-lg overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
                                                 <img
                                                     src={spot.photos?.[0] ? `https://places.googleapis.com/v1/${spot.photos[0]}/media?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&maxWidthPx=400` : spot.tags.photo}
                                                     alt={spot.name}
@@ -195,7 +201,7 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
                                             </div>
                                         )}
                                         {spot.tags.description && (
-                                            <p className="text-[10px] text-slate-500 line-clamp-2 mb-1">{spot.tags.description}</p>
+                                            <p className="text-[10px] line-clamp-2 mb-1" style={{ color: 'var(--text-muted)' }}>{spot.tags.description}</p>
                                         )}
                                         {spot.tags.opening_hours && (
                                             <div className="text-[10px] text-green-600 font-medium bg-green-50 px-2 py-1 rounded inline-block">
@@ -207,7 +213,8 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
                                             href={`https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lon}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center justify-center gap-1.5 w-full mt-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold py-2 rounded-lg transition-all shadow-sm active:scale-95"
+                                            className="flex items-center justify-center gap-1.5 w-full mt-2 text-[10px] font-bold py-2 rounded-lg transition-all shadow-sm active:scale-95"
+                                            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
                                         >
                                             <span className="text-blue-500 font-extrabold">G</span> Googleマップで開く
                                         </a>
@@ -220,7 +227,7 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
                     );
                 })}
 
-                <DirectionsComponent spots={spots} travelMode={travelMode} />
+                <DirectionsComponent spots={spots} travelMode={travelMode} onDirectionsLoaded={onDirectionsLoaded} />
             </Map>
         </div>
     );

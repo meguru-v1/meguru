@@ -164,12 +164,12 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
     // 共通のサジェストドロップダウン
     const SuggestionDropdown = ({ inputType }: { inputType: 'query' | 'destination' }) => (
         activeInput === inputType && suggestions.length > 0 ? (
-            <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-scale-in max-h-60 overflow-y-auto">
+            <div className="absolute z-50 left-0 right-0 mt-1.5 rounded-2xl shadow-2xl overflow-hidden animate-scale-in max-h-60 overflow-y-auto" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}>
                 {suggestions.map(s => (
                     <button key={s.placeId} type="button" onClick={() => handleSelectSuggestion(s)}
-                        className="w-full flex flex-col items-start px-4 py-3 hover:bg-slate-50 active:bg-slate-100 transition-colors border-b border-slate-50 last:border-0 text-left min-h-[48px]">
-                        <span className="text-sm font-bold text-slate-800">{s.mainText}</span>
-                        <span className="text-[10px] text-slate-400 truncate w-full">{s.secondaryText}</span>
+                        className="w-full flex flex-col items-start px-4 py-3 transition-colors last:border-0 text-left min-h-[48px]" style={{ borderBottom: '1px solid var(--bg-secondary)' }}>
+                        <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{s.mainText}</span>
+                        <span className="text-[10px] truncate w-full" style={{ color: 'var(--text-muted)' }}>{s.secondaryText}</span>
                     </button>
                 ))}
             </div>
@@ -177,35 +177,38 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
     );
 
     return (
-        <div className="w-full flex flex-col bg-white min-h-screen">
+        <div className="w-full flex flex-col min-h-screen" style={{ background: 'var(--bg-primary)' }}>
             {/* ヘッダー */}
             <div className="text-center pt-10 pb-1 px-6 animate-fade-in safe-top">
                 <div className="inline-block mb-3 animate-float">
-                    <div className="w-11 h-11 mx-auto bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg">
-                        <Compass size={22} className="text-amber-400" />
+                    <div className="w-11 h-11 mx-auto rounded-full flex items-center justify-center" style={{ border: '1.5px solid var(--wa-accent)', boxShadow: '0 0 20px rgba(196,151,47,0.1)' }}>
+                        <Compass size={22} style={{ color: 'var(--wa-accent)' }} />
                     </div>
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-0.5 font-editorial lowercase">
-                    meguru
+                <h1 className="text-3xl font-bold tracking-wide mb-0.5 font-editorial" style={{ color: 'var(--text-primary)', letterSpacing: '0.1em' }}>
+                    Meguru
                 </h1>
-                <p className="text-slate-400 text-xs font-bold tracking-tight">あなたのための、特別なよりみち。</p>
+                <p className="text-xs font-medium" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>あなたのための、特別なよりみち。</p>
             </div>
 
             {/* ===== 3タブ: エリア | ルート | 今すぐ未知へ ===== */}
             <div className="px-4 mt-3 mb-3 animate-slide-up">
-                <div className="flex rounded-xl p-1 gap-0.5 bg-slate-100">
+                <div className="flex rounded-xl p-1 gap-0.5" style={{ background: 'var(--bg-secondary)' }}>
                     <button type="button" onClick={() => setSearchMode('area')}
                         className={`flex-1 py-2.5 rounded-lg text-[12px] font-bold transition-all duration-300
-                            ${searchMode === 'area' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                            ${searchMode === 'area' ? 'shadow-sm' : 'hover:opacity-70'}`}
+                        style={searchMode === 'area' ? { background: 'var(--bg-card)', color: 'var(--text-primary)' } : { color: 'var(--text-muted)' }}>
                         <Search size={12} className="inline mr-1 -mt-0.5" /> エリア
                     </button>
                     <button type="button" onClick={() => setSearchMode('route')}
                         className={`flex-1 py-2.5 rounded-lg text-[12px] font-bold transition-all duration-300
-                            ${searchMode === 'route' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                            ${searchMode === 'route' ? 'shadow-sm' : 'hover:opacity-70'}`}
+                        style={searchMode === 'route' ? { background: 'var(--bg-card)', color: 'var(--text-primary)' } : { color: 'var(--text-muted)' }}>
                         <ArrowRight size={12} className="inline mr-1 -mt-0.5" /> ルート
                     </button>
                     <button type="button" onClick={handleExploreNow} disabled={isSearching}
-                        className="flex-1 py-2.5 rounded-lg text-[12px] font-extrabold transition-all duration-300 bg-gradient-to-r from-amber-400 to-rose-400 text-white shadow-sm active:scale-95">
+                        className="flex-1 py-2.5 rounded-lg text-[12px] font-extrabold transition-all duration-300 text-white shadow-sm active:scale-95"
+                        style={{ background: 'linear-gradient(135deg, var(--wa-accent), var(--wa-shu))' }}>
                         <LocateFixed size={12} className="inline mr-1 -mt-0.5" /> 現在地
                     </button>
                 </div>
@@ -218,7 +221,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     {/* エリア検索の入力 */}
                     {searchMode === 'area' && (
                         <div className="space-y-2 animate-slide-up">
-                            <label htmlFor="area-query" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                            <label htmlFor="area-query" className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
                                 出発地点
                             </label>
                             <div className="relative">
@@ -228,7 +231,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                                     placeholder="例: 京都駅、浅草寺..." className="input-premium text-base min-h-[48px]" />
                                 {isLoadingSuggestions && activeInput === 'query' && (
                                     <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                        <Loader2 size={16} className="animate-spin text-slate-300" />
+                                        <Loader2 size={16} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
                                     </div>
                                 )}
                                 <SuggestionDropdown inputType="query" />
@@ -240,7 +243,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     {searchMode === 'route' && (
                         <div className="space-y-2 animate-slide-up">
                             <div className="relative">
-                                <label htmlFor="route-origin" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">出発地</label>
+                                <label htmlFor="route-origin" className="text-[11px] font-bold uppercase tracking-widest mb-1 block" style={{ color: 'var(--text-muted)' }}>出発地</label>
                                 <input id="route-origin" name="route-origin" type="text" value={query}
                                     onChange={(e) => { setQuery(e.target.value); setQueryPlaceId(''); fetchSuggestions(e.target.value, 'query'); }}
                                     onFocus={() => query.length >= 2 && fetchSuggestions(query, 'query')}
@@ -248,7 +251,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                                 <SuggestionDropdown inputType="query" />
                             </div>
                             <div className="flex items-center justify-center py-0.5">
-                                <ArrowDown size={14} className="text-slate-300" />
+                                <ArrowDown size={14} style={{ color: 'var(--text-muted)' }} />
                             </div>
                             <div className="relative">
                                 <label htmlFor="route-destination" className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-1 block">目的地</label>
@@ -263,7 +266,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
 
                     {/* ===== 探索モード選択（クイック/1日/連泊）===== */}
                     <div className="space-y-2 animate-slide-up">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                             <Clock size={12} /> 探索モード
                         </label>
                         <div className="grid grid-cols-3 gap-1.5">
@@ -271,11 +274,11 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                                 const isActive = exploreMode === mode.id;
                                 return (
                                     <button key={mode.id} type="button" onClick={() => handleExploreModeChange(mode.id)}
-                                        className={`flex flex-col items-center justify-center py-3 px-1 rounded-xl border-2 transition-all duration-300 active:scale-95 min-h-[72px]
-                                            ${isActive ? 'border-amber-400 bg-amber-50 text-slate-900 shadow-sm' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'}`}>
-                                        <mode.icon size={18} strokeWidth={isActive ? 2.5 : 1.5} className={isActive ? 'text-amber-500' : ''} />
-                                        <span className={`text-[11px] font-extrabold mt-1 ${isActive ? 'text-slate-900' : ''}`}>{mode.label}</span>
-                                        <span className="text-[9px] text-slate-400">{mode.sub}</span>
+                                        className={`flex flex-col items-center justify-center py-3 px-1 rounded-xl border-2 transition-all duration-300 active:scale-95 min-h-[72px]`}
+                                        style={isActive ? { borderColor: 'var(--wa-accent)', background: 'rgba(196,151,47,0.06)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' } : { borderColor: 'var(--border-default)', background: 'var(--bg-card)', color: 'var(--text-muted)' }}>
+                                        <mode.icon size={18} strokeWidth={isActive ? 2.5 : 1.5} style={isActive ? { color: 'var(--wa-accent)' } : {}} />
+                                        <span className={`text-[11px] font-extrabold mt-1`}>{mode.label}</span>
+                                        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{mode.sub}</span>
                                     </button>
                                 );
                             })}
@@ -283,25 +286,25 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     </div>
 
                     {/* 時間スライダー（モード連動） */}
-                    <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <label htmlFor="duration-slider" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <div className="space-y-2 animate-slide-up p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                        <label htmlFor="duration-slider" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                             <Clock size={12} /> よりみち時間
-                            <span className="ml-auto text-amber-500 font-extrabold text-sm normal-case">{formatDuration(duration)}</span>
+                            <span className="ml-auto font-extrabold text-sm normal-case" style={{ color: 'var(--wa-accent)' }}>{formatDuration(duration)}</span>
                         </label>
                         <input id="duration-slider" name="duration-slider" type="range"
                             min={currentExplore.minDuration} max={currentExplore.maxDuration} step={currentExplore.step}
                             value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full" />
-                        <div className="flex justify-between text-[10px] text-slate-300 font-medium">
+                        <div className="flex justify-between text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
                             <span>{formatDuration(currentExplore.minDuration)}</span>
                             <span>{formatDuration(currentExplore.maxDuration)}</span>
                         </div>
                     </div>
 
                     {/* スタート時刻（オプション） */}
-                    <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <label htmlFor="start-time" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <div className="space-y-2 animate-slide-up p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                        <label htmlFor="start-time" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                             <Clock size={12} /> 出発時刻
-                            <span className="ml-auto text-amber-500 font-extrabold text-sm normal-case">
+                            <span className="ml-auto font-extrabold text-sm normal-case" style={{ color: 'var(--wa-accent)' }}>
                                 {startTime || '自動（現在時刻）'}
                             </span>
                         </label>
@@ -311,12 +314,13 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                             type="time"
                             value={startTime}
                             onChange={(e) => setStartTime(e.target.value)}
-                            className="w-full rounded-lg px-3 py-2 text-sm bg-white border border-slate-100 focus:border-amber-400 focus:outline-none transition-colors min-h-[44px]"
+                            className="w-full rounded-lg px-3 py-2 text-sm min-h-[44px] focus:outline-none transition-colors"
+                            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                             placeholder="09:00"
                         />
                         {startTime && (
                             <button type="button" onClick={() => setStartTime('')}
-                                className="text-[10px] text-slate-400 hover:text-slate-600 font-medium transition-colors">
+                                className="text-[10px] font-medium transition-colors" style={{ color: 'var(--text-muted)' }}>
                                 × クリア（自動に戻す）
                             </button>
                         )}
@@ -324,15 +328,15 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
 
                     {/* エリア検索時のみ半径（モード連動） */}
                     {searchMode === 'area' && (
-                        <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <label htmlFor="area-radius" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <div className="space-y-2 animate-slide-up p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                            <label htmlFor="area-radius" className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                                 <MapPin size={12} /> 探索範囲
-                                <span className="ml-auto text-amber-500 font-extrabold text-sm normal-case">{radius} km</span>
+                                <span className="ml-auto font-extrabold text-sm normal-case" style={{ color: 'var(--wa-accent)' }}>{radius} km</span>
                             </label>
                             <input id="area-radius" name="area-radius" type="range"
                                 min={currentExplore.minRadius} max={currentExplore.maxRadius} step="0.5"
                                 value={radius} onChange={(e) => setRadius(parseFloat(e.target.value))} className="w-full" />
-                            <div className="flex justify-between text-[10px] text-slate-300 font-medium">
+                            <div className="flex justify-between text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
                                 <span>{currentExplore.minRadius}km</span>
                                 <span>{currentExplore.maxRadius}km</span>
                             </div>
@@ -340,15 +344,15 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     )}
 
                     {/* 移動方法 */}
-                    <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">移動方法</label>
+                    <div className="space-y-2 animate-slide-up p-3 rounded-xl" style={{ background: 'var(--bg-secondary)' }}>
+                        <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>移動方法</label>
                         <div className="grid grid-cols-4 gap-1.5">
                             {TRAVEL_MODES.map(mode => {
                                 const isActive = travelMode === mode.id;
                                 return (
                                     <button key={mode.id} type="button" onClick={() => setTravelMode(mode.id)}
-                                        className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg border-2 transition-all duration-300 active:scale-95 min-h-[48px]
-                                            ${isActive ? 'border-amber-400 bg-white text-slate-900 shadow-sm' : 'border-transparent bg-transparent text-slate-400 hover:text-slate-600'}`}>
+                                        className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg border-2 transition-all duration-300 active:scale-95 min-h-[48px]`}
+                                        style={isActive ? { borderColor: 'var(--wa-accent)', background: 'var(--bg-card)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' } : { borderColor: 'transparent', color: 'var(--text-muted)' }}>
                                         <mode.icon size={16} strokeWidth={isActive ? 2.5 : 1.5} />
                                         <span className="text-[10px] font-bold">{mode.label}</span>
                                     </button>
@@ -360,15 +364,15 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                     {/* パーソナライズ設定 */}
                     <div className="space-y-3">
                         {/* 気分 */}
-                        <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <div className="space-y-2 animate-slide-up p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                            <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                                 <Smile size={12} /> 今日の気分
                             </label>
                             <div className="flex flex-wrap gap-1.5">
                                 {['のんびり', 'アクティブ', 'ロマンチック', '知的探究'].map(m => (
                                     <button key={m} type="button" onClick={() => setMood(mood === m ? '' : m)}
-                                        className={`px-3 py-2 rounded-full text-[11px] font-bold transition-all min-h-[36px]
-                                            ${mood === m ? 'bg-slate-900 text-white shadow-md scale-105' : 'bg-white text-slate-500 border border-slate-100'}`}>
+                                        className={`px-3 py-2 rounded-full text-[11px] font-bold transition-all min-h-[36px]`}
+                                        style={mood === m ? { background: 'var(--wa-sumi)', color: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' } : { background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
                                         {m}
                                     </button>
                                 ))}
@@ -376,15 +380,15 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                         </div>
 
                         {/* 予算 */}
-                        <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <div className="space-y-2 animate-slide-up p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                            <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                                 <Banknote size={12} /> 予算感
                             </label>
                             <div className="flex flex-wrap gap-1.5">
                                 {['節約', '標準', 'リッチ'].map(b => (
                                     <button key={b} type="button" onClick={() => setBudget(budget === b ? '' : b)}
-                                        className={`px-4 py-2 rounded-full text-[11px] font-bold transition-all min-h-[36px]
-                                            ${budget === b ? 'bg-amber-500 text-white shadow-md scale-105' : 'bg-white text-slate-500 border border-slate-100'}`}>
+                                        className={`px-4 py-2 rounded-full text-[11px] font-bold transition-all min-h-[36px]`}
+                                        style={budget === b ? { background: 'var(--wa-accent)', color: 'white', boxShadow: '0 2px 8px rgba(196,151,47,0.3)' } : { background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
                                         {b}
                                     </button>
                                 ))}
@@ -392,15 +396,15 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                         </div>
 
                         {/* 人数 */}
-                        <div className="space-y-2 animate-slide-up bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <div className="space-y-2 animate-slide-up p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                            <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                                 <Users size={12} /> 誰と行く？
                             </label>
                             <div className="flex flex-wrap gap-1.5">
                                 {['一人旅', 'デート', '友達', '家族'].map(g => (
                                     <button key={g} type="button" onClick={() => setGroupSize(groupSize === g ? '' : g)}
-                                        className={`px-4 py-2 rounded-full text-[11px] font-bold transition-all min-h-[36px]
-                                            ${groupSize === g ? 'bg-indigo-500 text-white shadow-md scale-105' : 'bg-white text-slate-500 border border-slate-100'}`}>
+                                        className={`px-4 py-2 rounded-full text-[11px] font-bold transition-all min-h-[36px]`}
+                                        style={groupSize === g ? { background: '#6366F1', color: 'white', boxShadow: '0 2px 8px rgba(99,102,241,0.3)' } : { background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
                                         {g}
                                     </button>
                                 ))}
@@ -410,23 +414,23 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
 
                     {/* AIガイド（ペルソナ）選択 */}
                     <div className="space-y-2 animate-slide-up">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                             <Sparkles size={12} /> AIガイド
-                            {persona && <span className="ml-auto text-amber-500 normal-case">【{PERSONAS.find(p => p.id === persona)?.kanji}】選択中</span>}
+                            {persona && <span className="ml-auto normal-case" style={{ color: 'var(--wa-accent)' }}>【{PERSONAS.find(p => p.id === persona)?.kanji}】選択中</span>}
                         </label>
                         <div className="grid grid-cols-3 gap-1.5">
                             {PERSONAS.map(p => {
                                 const isActive = persona === p.id;
                                 return (
                                     <button key={p.id} type="button" onClick={() => setPersona(isActive ? undefined : p.id)}
-                                        className={`relative flex flex-col items-center justify-center py-3 rounded-xl border-2 transition-all duration-300 active:scale-95 overflow-hidden min-h-[72px]
-                                            ${isActive
-                                                ? 'border-transparent text-white shadow-lg scale-[1.02]'
-                                                : 'border-slate-100 bg-white text-slate-600 hover:border-slate-200'}`}>
+                                        className={`relative flex flex-col items-center justify-center py-3 rounded-xl border-2 transition-all duration-300 active:scale-95 overflow-hidden min-h-[72px]`}
+                                        style={isActive
+                                            ? { borderColor: 'transparent', color: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }
+                                            : { borderColor: 'var(--border-default)', background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
                                         {isActive && <div className={`absolute inset-0 bg-gradient-to-br ${p.color}`} />}
-                                        <span className={`relative text-xl font-black ${isActive ? 'text-white' : 'text-slate-800'}`}>{p.kanji}</span>
-                                        <span className={`relative text-[9px] font-bold mt-0.5 ${isActive ? 'text-white/90' : 'text-slate-400'}`}>{p.label}</span>
-                                        <span className={`relative text-[8px] mt-0.5 ${isActive ? 'text-white/70' : 'text-slate-300'}`}>{p.theme}</span>
+                                        <span className={`relative text-xl font-black ${isActive ? 'text-white' : ''}`} style={!isActive ? { color: 'var(--text-primary)' } : {}}>{p.kanji}</span>
+                                        <span className={`relative text-[9px] font-bold mt-0.5 ${isActive ? 'text-white/90' : ''}`} style={!isActive ? { color: 'var(--text-muted)' } : {}}>{p.label}</span>
+                                        <span className={`relative text-[8px] mt-0.5 ${isActive ? 'text-white/70' : ''}`} style={!isActive ? { color: 'var(--text-muted)' } : {}}>{p.theme}</span>
                                     </button>
                                 );
                             })}

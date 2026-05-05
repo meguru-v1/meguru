@@ -114,8 +114,8 @@ ${spotInfo}
                 {/* ヘッダー */}
                 <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-amber-400/10 flex items-center justify-center">
-                            <Sparkles size={16} className="text-amber-500" />
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(196,151,47,0.1)' }}>
+                            <Sparkles size={16} style={{ color: 'var(--wa-accent)' }} />
                         </div>
                         <div>
                             <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>AI旅ガイド</p>
@@ -134,24 +134,27 @@ ${spotInfo}
                     {messages.map((msg, i) => (
                         <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             {msg.role === 'ai' && (
-                                <div className="w-6 h-6 rounded-lg bg-amber-400 flex items-center justify-center mr-2 mt-1 shrink-0">
+                                <div className="w-6 h-6 rounded-lg flex items-center justify-center mr-2 mt-1 shrink-0" style={{ background: 'var(--wa-accent)' }}>
                                     <Sparkles size={12} className="text-white" />
                                 </div>
                             )}
                             <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                                 msg.role === 'user'
-                                    ? 'bg-slate-900 text-white rounded-tr-sm'
+                                    ? 'text-white rounded-tr-sm'
                                     : 'rounded-tl-sm'
                             }`} style={msg.role === 'ai' ? {
                                 background: 'var(--bg-secondary)',
                                 color: 'var(--text-primary)',
                                 border: '1px solid var(--border-default)',
-                            } : {}}>
+                            } : {
+                                background: 'var(--wa-sumi)',
+                                border: '1px solid var(--wa-sumi)',
+                            }}>
                                 {msg.loading ? (
                                     <div className="flex items-center gap-1.5">
                                         {[0,1,2].map(i => (
-                                            <div key={i} className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"
-                                                style={{ animationDelay: `${i * 0.15}s` }} />
+                                            <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce"
+                                                style={{ animationDelay: `${i * 0.15}s`, background: 'var(--wa-accent)' }} />
                                         ))}
                                     </div>
                                 ) : msg.text}
@@ -187,7 +190,8 @@ ${spotInfo}
                         style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1.5px solid var(--border-input)' }}
                     />
                     <button onClick={sendMessage} disabled={!input.trim() || isSending}
-                        className="w-10 h-10 rounded-xl bg-amber-400 flex items-center justify-center transition-all active:scale-90 disabled:opacity-40">
+                        className="w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 disabled:opacity-40"
+                        style={{ background: 'var(--wa-accent)' }}>
                         {isSending ? <Loader2 size={16} className="text-white animate-spin" /> : <Send size={16} className="text-white" />}
                     </button>
                 </div>

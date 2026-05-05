@@ -44,7 +44,7 @@ export default function SpotHeroImage({
     }, [viewMode, googlePhotoRef, lat, lng]);
 
     return (
-        <div className="relative w-full h-44 overflow-hidden bg-slate-100">
+        <div className="relative w-full h-44 overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
             {imgUrl && (
                 <img
                     key={imgUrl}
@@ -58,8 +58,8 @@ export default function SpotHeroImage({
             
             {/* 読み込み中のスケルトン */}
             {isLoading && (
-                <div className="absolute inset-0 bg-slate-200 animate-pulse flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-slate-300 border-t-amber-400 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 animate-pulse flex items-center justify-center" style={{ background: 'var(--bg-secondary)' }}>
+                    <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--wa-accent)' }}></div>
                 </div>
             )}
 
@@ -70,10 +70,12 @@ export default function SpotHeroImage({
             
             {/* ラベルバッジ */}
             <div className="absolute top-3 left-3 flex gap-2 flex-wrap">
-                <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold tracking-wider shadow-sm ${isFirst ? 'bg-amber-400 text-white' : isLast ? 'bg-slate-900 text-white' : 'bg-white/90 text-slate-700'}`}>
+                <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold tracking-wider shadow-sm text-white`}
+                    style={{ background: isFirst ? 'var(--wa-accent)' : isLast ? 'var(--wa-sumi)' : 'rgba(255,255,255,0.9)', color: (!isFirst && !isLast) ? 'var(--text-primary)' : 'white' }}>
                     {label}
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/80 backdrop-blur-sm shadow-sm text-slate-600">
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold backdrop-blur-sm shadow-sm"
+                    style={{ background: 'rgba(255,255,255,0.8)', color: 'var(--text-secondary)' }}>
                     {category}
                 </span>
                 {culturalProperty && (
@@ -95,14 +97,16 @@ export default function SpotHeroImage({
                 {googlePhotoRef && (
                     <button
                         onClick={(e) => { e.preventDefault(); setViewMode('photo'); }}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${viewMode === 'photo' ? 'bg-white text-slate-800 shadow-sm' : 'text-white/70 hover:text-white'}`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${viewMode === 'photo' ? 'shadow-sm' : 'text-white/70 hover:text-white'}`}
+                        style={viewMode === 'photo' ? { background: 'var(--bg-card)', color: 'var(--text-primary)' } : {}}
                     >
                         <Camera size={12} /> 写真
                     </button>
                 )}
                 <button
                     onClick={(e) => { e.preventDefault(); setViewMode('exterior'); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${viewMode === 'exterior' ? 'bg-white text-slate-800 shadow-sm' : 'text-white/70 hover:text-white'}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${viewMode === 'exterior' ? 'shadow-sm' : 'text-white/70 hover:text-white'}`}
+                    style={viewMode === 'exterior' ? { background: 'var(--bg-card)', color: 'var(--text-primary)' } : {}}
                 >
                     <Building size={12} /> 外観
                 </button>
@@ -110,9 +114,9 @@ export default function SpotHeroImage({
             
             {/* 写真上のスポット名 */}
             <div className="absolute bottom-3 left-4 right-4 z-10 pointer-events-none">
-                <h4 className="text-lg font-extrabold text-white leading-tight drop-shadow-md">{spotName}</h4>
+                <h4 className="text-lg font-bold font-serif text-white leading-tight drop-shadow-md">{spotName}</h4>
                 <div className="flex items-center gap-2 mt-1 drop-shadow">
-                    <span className="flex items-center text-[11px] text-amber-300 font-bold">
+                    <span className="flex items-center text-[11px] font-bold" style={{ color: 'var(--wa-accent-soft)' }}>
                         <Star size={11} className="fill-current mr-0.5" /> {rating || '-'}
                     </span>
                     <span className="text-[10px] text-white/80">({userRatings || 0}件)</span>

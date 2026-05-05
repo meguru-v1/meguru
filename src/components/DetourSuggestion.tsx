@@ -93,10 +93,10 @@ ${candidates.map(s => `- ${s.name}（${s.category}）`).join('\n')}
                 className="fixed right-4 z-[600] flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl font-bold text-sm transition-all active:scale-95"
                 style={{
                     bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
-                    background: 'linear-gradient(135deg, #f59e0b, #f97316)',
+                    background: 'linear-gradient(135deg, var(--wa-accent), var(--wa-shu))',
                     color: 'white',
                     animation: 'detourPop 0.4s cubic-bezier(0.16,1,0.3,1)',
-                    boxShadow: '0 4px 20px rgba(245,158,11,0.4)',
+                    boxShadow: '0 4px 20px rgba(196,151,47,0.4)',
                 }}
             >
                 <Footprints size={16} />
@@ -124,7 +124,7 @@ ${candidates.map(s => `- ${s.name}（${s.category}）`).join('\n')}
 
                         {loading && (
                             <div className="flex flex-col items-center py-8 gap-3">
-                                <Loader2 size={24} className="animate-spin text-amber-400" />
+                                <Loader2 size={24} className="animate-spin" style={{ color: 'var(--wa-accent)' }} />
                                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>周辺スポットを探しています...</p>
                             </div>
                         )}
@@ -135,8 +135,8 @@ ${candidates.map(s => `- ${s.name}（${s.category}）`).join('\n')}
                             {suggestions.map(({ spot, reason, walkMinutes }, i) => (
                                 <div key={i} className="flex items-center gap-3 p-3 rounded-2xl border transition-all"
                                     style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)' }}>
-                                    <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-                                        <MapPin size={16} className="text-amber-500" />
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(196,151,47,0.08)' }}>
+                                        <MapPin size={16} style={{ color: 'var(--wa-accent)' }} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{spot.name}</p>
@@ -144,7 +144,8 @@ ${candidates.map(s => `- ${s.name}（${s.category}）`).join('\n')}
                                     </div>
                                     <button
                                         onClick={() => { onAddDetour(spot); setIsOpen(false); }}
-                                        className="shrink-0 w-8 h-8 rounded-xl bg-amber-400 flex items-center justify-center transition-all active:scale-90"
+                                        className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90"
+                                        style={{ background: 'var(--wa-accent)' }}
                                     >
                                         <Plus size={14} className="text-white" />
                                     </button>

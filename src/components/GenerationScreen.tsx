@@ -228,17 +228,17 @@ export default function GenerationScreen({
     const displayStatus = statusText || statusMessages[currentStatusIdx];
 
     return (
-        <div className={`fixed inset-0 z-[9999] bg-white flex flex-col transition-all duration-700
-            ${isExiting ? 'opacity-0 scale-105' : 'opacity-100 scale-100'}`}>
+        <div className={`fixed inset-0 z-[9999] flex flex-col transition-all duration-700
+            ${isExiting ? 'opacity-0 scale-105' : 'opacity-100 scale-100'}`} style={{ background: 'var(--bg-primary)' }}>
 
             {/* ① 進捗ヘッダー */}
-            <div className="shrink-0">
-                <div className="h-1 bg-slate-100 w-full overflow-hidden">
+            <div className="shrink-0 relative z-10" style={{ background: 'var(--bg-primary)' }}>
+                <div className="h-[2px] w-full overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
                     <div
                         className="h-full transition-all duration-1000 ease-out rounded-r-full"
                         style={{
                             width: `${progress}%`,
-                            background: 'linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b)',
+                            background: 'linear-gradient(90deg, transparent, var(--wa-accent), var(--wa-shu))',
                             backgroundSize: '200% 100%',
                             animation: 'shimmer 2s linear infinite'
                         }}
@@ -246,12 +246,12 @@ export default function GenerationScreen({
                 </div>
                 <div className="px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${error ? 'bg-red-500' : 'bg-amber-400'}`} />
-                        <span className={`text-[11px] font-semibold tracking-wide ${error ? 'text-red-500' : 'text-slate-500'}`}>
+                        <div className={`w-2 h-2 rounded-full animate-pulse`} style={{ background: error ? 'var(--wa-shu)' : 'var(--wa-accent)' }} />
+                        <span className={`text-[11px] font-medium tracking-wide`} style={{ color: error ? 'var(--wa-shu)' : 'var(--text-muted)' }}>
                             {error ? `エラー: ${error}` : displayStatus}
                         </span>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-300">
+                    <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
                         {Math.round(progress)}%
                     </span>
                 </div>
@@ -288,16 +288,17 @@ export default function GenerationScreen({
                         </div>
                     ) : (
                         <div className="glass-gen-panel p-6 rounded-3xl max-w-sm w-full text-center">
-                            <MapPin className="w-8 h-8 text-amber-500 mx-auto mb-3 animate-pulse" />
-                            <p className="text-[10px] font-bold text-amber-600 tracking-[0.2em] uppercase mb-2">
+                            <MapPin className="w-8 h-8 mx-auto mb-3 animate-pulse" style={{ color: 'var(--wa-accent)' }} />
+                            <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-2" style={{ color: 'var(--wa-accent)' }}>
                                 {locationName} の旅
                             </p>
-                            <p className={`text-lg font-bold text-slate-800 leading-relaxed font-serif transition-all duration-500
-                                ${fadeForecast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
+                            <p className={`text-lg font-bold leading-relaxed font-serif transition-all duration-500
+                                ${fadeForecast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+                                style={{ color: 'var(--text-primary)' }}>
                                 {forecastCopies[currentForecastIdx]}
                             </p>
                             {/* 離れてもOKメッセージ */}
-                            <p className="text-[10px] text-slate-400 mt-3 font-medium">
+                            <p className="text-[10px] mt-3 font-medium" style={{ color: 'var(--text-muted)' }}>
                                 💡 別タブに移動しても大丈夫。完了したらお知らせします。
                             </p>
                             {/* サブAI到着インジケーター */}
@@ -320,43 +321,43 @@ export default function GenerationScreen({
                 {/* ③ アンケートオーバーレイ */}
                 {activeSurvey !== null && activeSurvey < surveyQuestions.length && (
                     <div className="absolute inset-0 flex items-center justify-center z-50"
-                        style={{ backdropFilter: 'blur(12px)', background: 'rgba(255,255,255,0.5)' }}>
+                        style={{ backdropFilter: 'blur(12px)', background: 'rgba(250,248,245,0.6)' }}>
                         <div className="max-w-xs w-full mx-6 animate-scale-in">
-                            <div className="bg-white rounded-3xl p-6 shadow-2xl border border-slate-100">
+                            <div className="rounded-3xl p-6 shadow-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <Sparkles size={14} className="text-amber-500" />
-                                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                                        Quick Question
+                                    <Sparkles size={14} style={{ color: 'var(--wa-accent)' }} />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                                        お伺い
                                     </span>
                                 </div>
-                                <p className="text-base font-bold text-slate-800 mb-5">
+                                <p className="text-base font-bold mb-5 font-serif" style={{ color: 'var(--text-primary)' }}>
                                     {surveyQuestions[activeSurvey]?.question}
                                 </p>
                                 <div className="space-y-2.5">
                                     {surveyQuestions[activeSurvey]?.options.map(opt => (
                                         <button key={opt.id} onClick={() => handleSurveyAnswer(opt.id)}
-                                            className="w-full py-3.5 px-4 rounded-2xl text-sm font-bold text-left
-                                                bg-slate-50 hover:bg-amber-50 hover:border-amber-200
-                                                border-2 border-transparent transition-all active:scale-95
-                                                flex items-center justify-between group">
+                                            className="w-full py-3.5 px-4 rounded-xl text-sm font-medium text-left
+                                                border transition-all active:scale-95
+                                                flex items-center justify-between group hover:shadow-sm"
+                                            style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
                                             <span>{opt.label}</span>
-                                            <ChevronRight size={14} className="text-slate-300 group-hover:text-amber-500 transition-colors" />
+                                            <ChevronRight size={14} className="transition-colors" style={{ color: 'var(--text-muted)' }} />
                                         </button>
                                     ))}
                                     <button onClick={() => handleSurveyAnswer("omakase")}
-                                        className="w-full py-3 px-4 rounded-2xl text-xs font-semibold
-                                            text-amber-600 bg-amber-50/60 hover:bg-amber-50
-                                            transition-all active:scale-95 flex items-center justify-center gap-1.5">
+                                        className="w-full py-3 px-4 rounded-xl text-xs font-semibold
+                                            transition-all active:scale-95 flex items-center justify-center gap-1.5 border border-transparent"
+                                        style={{ background: 'rgba(196,151,47,0.1)', color: 'var(--wa-accent)' }}>
                                         <Sparkles size={12} />
                                         AIにおまかせ
                                     </button>
                                 </div>
                                 <div className="mt-4 flex items-center justify-center gap-2">
-                                    <div className="h-1 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-amber-400 rounded-full transition-all duration-1000"
-                                            style={{ width: `${(surveyAutoCloseTimer / 15) * 100}%` }} />
+                                    <div className="h-[2px] flex-1 rounded-full overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
+                                        <div className="h-full rounded-full transition-all duration-1000"
+                                            style={{ width: `${(surveyAutoCloseTimer / 15) * 100}%`, background: 'var(--wa-accent)' }} />
                                     </div>
-                                    <span className="text-[9px] font-mono text-slate-300 shrink-0">
+                                    <span className="text-[9px] font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>
                                         {surveyAutoCloseTimer}s
                                     </span>
                                 </div>
@@ -367,15 +368,16 @@ export default function GenerationScreen({
             </div>
 
             {/* ④ 豆知識テロップ */}
-            <div className="shrink-0 px-6 py-4 border-t border-slate-100 bg-white/90 backdrop-blur-sm">
+            <div className="shrink-0 px-6 py-4" style={{ background: 'var(--nav-bg)', borderTop: '1px solid var(--border-default)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
                 <div className="flex items-center gap-2 mb-1">
-                    <MapPin size={10} className="text-amber-500" />
-                    <span className="text-[9px] font-extrabold text-slate-300 uppercase tracking-[0.15em]">
+                    <MapPin size={10} style={{ color: 'var(--wa-accent)' }} />
+                    <span className="text-[9px] font-extrabold uppercase tracking-[0.15em]" style={{ color: 'var(--text-muted)' }}>
                         Travel Tip
                     </span>
                 </div>
-                <p className={`text-xs text-slate-500 font-medium leading-relaxed transition-all duration-500
-                    ${fadeTip ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'}`}>
+                <p className={`text-xs font-medium leading-relaxed transition-all duration-500
+                    ${fadeTip ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'}`}
+                    style={{ color: 'var(--text-secondary)' }}>
                     {travelTips[currentTipIdx]}
                 </p>
             </div>

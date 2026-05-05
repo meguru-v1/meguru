@@ -174,7 +174,8 @@ export const generateSmartCourses = async (
     groupSize: string = "不明",
     userPreferenceContext: string = "",
     persona?: PersonaId,
-    exploreMode?: ExploreMode
+    exploreMode?: ExploreMode,
+    onProgress?: (partialCourses: Course[]) => void
 ): Promise<Course[]> => {
     // ===== #1: 候補品質フィルタ + #8: 距離ソート =====
     const qualityFiltered = candidates
@@ -195,17 +196,15 @@ export const generateSmartCourses = async (
         .slice(0, 60) // 最大60件に絞る
         .map(item => item.spot);
 
-    // ===== #2: トークン圧縮した候補リスト =====
+    // ===== #2: トークン圧縮した候補リスト (ダイエット化) =====
     const candidateList = qualityFiltered.map((s, i) => {
         const details = [
             s.category,
             s.rating ? `★${s.rating}` : null,
-            s.price_level ? `Price:${'\u00a5'.repeat(s.price_level)}` : null,
-            s.editorial_summary ? `Info:${s.editorial_summary.substring(0, 30)}` : null,
-            `Stay:${s.estimatedStayTime || getStayTimeByType(s.category)}min`
-        ].filter(Boolean).join(', ');
-        return `ID ${i}: ${s.name} (${details})`;
-    }).join('\n');
+            `Stay:${s.estimatedStayTime || getStayTimeByType(s.category)}m`
+        ].filter(Boolean).join(',');
+        return `${i}:${s.name}(${details})`;
+    }).join('|');
 
     const diningRule = getDiningRule(durationMinutes);
     const spotCountRule = getRecommendedSpotCount(durationMinutes);
@@ -232,14 +231,8 @@ export const generateSmartCourses = async (
     const themeInstructions = selectedThemes.map((theme: string, i: number) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
 
     // ヘルパー: 実際にAIを呼び出す内部関数
-    const callGeneration = async (num: number, existingTitles: string[] = []): Promise<any[]> => {
-        const exclusionPrompt = existingTitles.length > 0 
-            ? `\n**【重要：以下のテーマとは重複しない、全く新しい切り口で提案してください】**\n- ${existingTitles.join('\n- ')}`
-            : "";
-
-        const themeSlice = existingTitles.length > 0 
-            ? selectedThemes.slice(3).map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n')
-            : selectedThemes.slice(0, num).map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
+    const callGeneration = async (num: number, themeStartIndex: number): Promise<any[]> => {
+        const themeSlice = selectedThemes.slice(themeStartIndex, themeStartIndex + num).map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
 
         const promptTemplate = `
 You are a top-tier Japanese luxury travel curator.
@@ -248,7 +241,6 @@ ${personaPrompt}
 ${exploreModeTemplate}
 **【最重要ミッション】**
 あなたは世界最高峰のトラベルキュレーターです。提供された候補から、必ず **全く異なる${num}つのプラン** を作成してください。
-${exclusionPrompt}
 
 **【季節・時刻コンテキスト（最重要）】**
 ${getSeasonalPromptContext()}
@@ -368,60 +360,69 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
         }
     };
 
-    // 2段階生成: 3コース + 2コース
-    const firstSet = await callGeneration(3);
-    const firstTitles = firstSet.map(c => c.title);
-    const secondSet = await callGeneration(2, firstTitles);
-
-    const courses = [...firstSet, ...secondSet].slice(0, 5);
-
-    // UUID
+    // UUID生成ヘルパー
     const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
 
-    return courses.map((course: any) => {
-        const uniqueId = generateId();
-        const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
-            const original = qualityFiltered[Number(s.id)];
-            if (!original) return null;
-            return {
-                ...original,
-                stayTime: Number(s.stayTime) || 30,
-                aiDescription: s.aiDescription || s.recommendation_reason || "魅力的なスポットです",
-                must_see: s.must_see || null,
-                pro_tip: s.pro_tip || null,
-                trivia: s.trivia || undefined,
-                cultural_property: s.cultural_property || null
-            } as Spot;
-        }).filter((s: any): s is Spot => s !== null);
+    // コースデータをhydrateして整形する関数
+    const hydrateCourses = (rawCourses: any[]): Course[] => {
+        return rawCourses.map((course: any) => {
+            const uniqueId = generateId();
+            const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
+                const original = qualityFiltered[Number(s.id)];
+                if (!original) return null;
+                return {
+                    ...original,
+                    stayTime: Number(s.stayTime) || 30,
+                    aiDescription: s.aiDescription || s.recommendation_reason || "魅力的なスポットです",
+                    must_see: s.must_see || null,
+                    pro_tip: s.pro_tip || null,
+                    trivia: s.trivia || undefined,
+                    cultural_property: s.cultural_property || null
+                } as Spot;
+            }).filter((s: any): s is Spot => s !== null);
 
-        // Sorting/Travel time (already implemented in gemini.ts before, keeping logic)
-        if (hydratedSpots.length > 1) {
-            // 最近傍法でスポットをソート
-            const sorted: Spot[] = [hydratedSpots[0]];
-            const remaining = hydratedSpots.slice(1);
-            while (remaining.length > 0) {
-                const current = sorted[sorted.length - 1];
-                let nearestIdx = 0;
-                let nearestDist = Infinity;
-                for (let i = 0; i < remaining.length; i++) {
-                    const dx = (remaining[i].lat - current.lat) * 111000;
-                    const dy = (remaining[i].lon - current.lon) * 111000 * Math.cos(current.lat * Math.PI / 180);
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
+            if (hydratedSpots.length > 1) {
+                // 最近傍法でスポットをソート
+                const sorted: Spot[] = [hydratedSpots[0]];
+                const remaining = hydratedSpots.slice(1);
+                while (remaining.length > 0) {
+                    const current = sorted[sorted.length - 1];
+                    let nearestIdx = 0;
+                    let nearestDist = Infinity;
+                    for (let i = 0; i < remaining.length; i++) {
+                        const dx = (remaining[i].lat - current.lat) * 111000;
+                        const dy = (remaining[i].lon - current.lon) * 111000 * Math.cos(current.lat * Math.PI / 180);
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
+                    }
+                    if (nearestDist > 3000) {
+                        remaining.splice(nearestIdx, 1);
+                        continue;
+                    }
+                    const picked = remaining.splice(nearestIdx, 1)[0];
+                    if (picked) sorted.push(picked);
                 }
-                // 最近傍でも3km以上離れている場合はスキップ（遠すぎるルート防止）
-                if (nearestDist > 3000) {
-                    remaining.splice(nearestIdx, 1);
-                    continue;
-                }
-                const picked = remaining.splice(nearestIdx, 1)[0];
-                if (picked) sorted.push(picked);
+                return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: sorted, persona } as Course;
             }
-            // 移動時間はApp.tsx側でtravelModeに応じて計算するため、ここではソートのみ
-            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: sorted, persona } as Course;
-        }
-        return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: hydratedSpots, persona } as Course;
-    });
+            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: hydratedSpots, persona } as Course;
+        });
+    };
+
+    // 2段階生成を並列化（フル・パラレル処理）
+    let accumulatedCourses: Course[] = [];
+    const handleSetCompleted = (rawCourses: any[]) => {
+        const hydrated = hydrateCourses(rawCourses);
+        accumulatedCourses = [...accumulatedCourses, ...hydrated];
+        if (onProgress) onProgress([...accumulatedCourses]); // 新しい配列を渡して再描画を促す
+        return hydrated;
+    };
+
+    const firstSetPromise = callGeneration(3, 0).then(handleSetCompleted).catch(e => { console.error("Generation part 1 failed", e); return []; });
+    const secondSetPromise = callGeneration(2, 3).then(handleSetCompleted).catch(e => { console.error("Generation part 2 failed", e); return []; });
+
+    await Promise.all([firstSetPromise, secondSetPromise]);
+    
+    return accumulatedCourses.slice(0, 5);
 };
 
 export const remixCourse = async (

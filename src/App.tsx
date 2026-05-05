@@ -65,25 +65,40 @@ function App() {
         return () => window.removeEventListener('beforeunload', handler);
     }, [loading, isRemixing]);
 
-    // 【26】完了通知: 生成完了時にブラウザ通知を送信
-    const sendCompletionNotification = (title: string) => {
-        if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('Meguru - コース完成！', {
-                body: `「${title}」を含む${courses.length > 0 ? courses.length : ''}コースが完成しました。`,
-                icon: '/meguru/pwa-192x192.png',
-                tag: 'meguru-generation-complete'
-            });
+    // 【26】完了通知: ServiceWorker経由でブラウザ通知を送信
+    const sendCompletionNotification = async (title: string) => {
+        if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                reg.active?.postMessage({
+                    type: 'GENERATION_COMPLETE',
+                    title: 'Meguru - コース完成！',
+                    body: `「${title}」を含む${courses.length > 0 ? courses.length : ''}コースが完成しました。`,
+                    icon: '/meguru/pwa-192x192.png',
+                });
+            } catch (e) {
+                console.warn('SW notification failed:', e);
+            }
         }
     };
 
-    // 通知許可のリクエスト（初回のみ）
+    // 通知許可のリクエスト（アプリ起動時の最初のインタラクションで実行）
     useEffect(() => {
         if ('Notification' in window && Notification.permission === 'default') {
-            if (courses.length > 0 && !loading) {
+            const requestOnInteraction = () => {
                 Notification.requestPermission();
-            }
+                // 一度だけ実行したらリスナーを除去
+                document.removeEventListener('click', requestOnInteraction);
+                document.removeEventListener('touchstart', requestOnInteraction);
+            };
+            document.addEventListener('click', requestOnInteraction, { once: true });
+            document.addEventListener('touchstart', requestOnInteraction, { once: true });
+            return () => {
+                document.removeEventListener('click', requestOnInteraction);
+                document.removeEventListener('touchstart', requestOnInteraction);
+            };
         }
-    }, [courses.length, loading]);
+    }, []);
 
     // 共有URLからコース復元
     useEffect(() => {
@@ -252,44 +267,9 @@ function App() {
 
                 console.log("AI Generation Context:", { time: timeContext, weather: weatherContext, center: { midLat, midLon } });
 
-                // メインAIとサブAIを並列で呼び出し
-                const mainPromise = generateSmartCourses(
-                    candidates,
-                    { lat: midLat, lon: midLon },
-                    duration,
-                    timeContext,
-                    weatherContext,
-                    mood,
-                    budget,
-                    groupSize,
-                    getPreferenceContext(),
-                    persona,
-                    exploreMode
-                );
-
-                // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
-                setTimeout(() => {
-                    generateWaitingScreenContent(query, weatherContext, persona)
-                        .then(content => { if (content) setSubAiContent(content); })
-                        .catch(() => { /* フォールバックで対応 */ });
-                }, 200);
-
-                let generatedCourses: Course[] = [];
-                try {
-                    console.log("App: Awaiting mainPromise (generateSmartCourses)...");
-                    generatedCourses = await mainPromise;
-                    if (!generatedCourses || generatedCourses.length === 0) {
-                        throw new Error("AIがコース案を作成できませんでした。別の条件で試してみてください。");
-                    }
-                }
-                catch (e) {
-                    console.error("App: generateSmartCourses failed:", e);
-                    setError(e instanceof Error ? e.message : "AIコース生成中にエラーが発生しました。");
-                    throw e; 
-                }
-
+                // コース拡張ロジック（ルート検索用）
                 const routeTravelMode = travelMode || 'walk';
-                const enhancedCourses = generatedCourses.map(course => {
+                const enhanceRouteCourses = (rawCourses: Course[]) => rawCourses.map(course => {
                     let spots = [...course.spots];
 
                     // 【14】ルート発着固定: 出発地・目的地を配列の先頭・末尾に固定
@@ -342,6 +322,51 @@ function App() {
                     };
                 });
 
+                // メインAIとサブAIを並列で呼び出し
+                const mainPromise = generateSmartCourses(
+                    candidates,
+                    { lat: midLat, lon: midLon },
+                    duration,
+                    timeContext,
+                    weatherContext,
+                    mood,
+                    budget,
+                    groupSize,
+                    getPreferenceContext(),
+                    persona,
+                    exploreMode,
+                    (partialCourses) => {
+                        const enhanced = enhanceRouteCourses(partialCourses);
+                        setCourses(enhanced);
+                        if (enhanced.length > 0) {
+                            setShowGenScreen(false);
+                            setActiveTab('courses');
+                        }
+                    }
+                );
+
+                // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
+                setTimeout(() => {
+                    generateWaitingScreenContent(query, weatherContext, persona)
+                        .then(content => { if (content) setSubAiContent(content); })
+                        .catch(() => { /* フォールバックで対応 */ });
+                }, 200);
+
+                let generatedCourses: Course[] = [];
+                try {
+                    console.log("App: Awaiting mainPromise (generateSmartCourses)...");
+                    generatedCourses = await mainPromise;
+                    if (!generatedCourses || generatedCourses.length === 0) {
+                        throw new Error("AIがコース案を作成できませんでした。別の条件で試してみてください。");
+                    }
+                }
+                catch (e) {
+                    console.error("App: generateSmartCourses failed:", e);
+                    setError(e instanceof Error ? e.message : "AIコース生成中にエラーが発生しました。");
+                    throw e; 
+                }
+
+                const enhancedCourses = enhanceRouteCourses(generatedCourses);
                 setCourses(enhancedCourses);
                 if (enhancedCourses.length > 0) sendCompletionNotification(enhancedCourses[0].title);
                 setActiveTab('courses');
@@ -410,6 +435,24 @@ function App() {
                 const timeContext = startTime || `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
                 const weatherContext = await getCurrentWeather(startGeo.lat, startGeo.lon);
 
+                // コース拡張ロジック（エリア検索用）
+                const areaTravelMode = travelMode || 'walk';
+                const enhanceAreaCourses = (rawCourses: Course[]) => rawCourses.map(course => ({
+                    ...course,
+                    travelMode: areaTravelMode,
+                    spots: course.spots.map((spot, index, arr) => {
+                        if (index === 0) return { ...spot, travel_time_minutes: 0 };
+                        const prev = arr[index - 1];
+                        const dist = getDistance(
+                            { latitude: prev.lat, longitude: prev.lon },
+                            { latitude: spot.lat, longitude: spot.lon }
+                        );
+                        // speed: walk 80m/min, bike 250m/min (15km/h), transit/car 600m/min
+                        const speed = areaTravelMode === 'walk' ? 80 : areaTravelMode === 'bicycle' ? 250 : 600;
+                        return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
+                    })
+                }));
+
                 // メインAIとサブAIを並列で呼び出し
                 const mainPromise = generateSmartCourses(
                     candidates,
@@ -422,7 +465,15 @@ function App() {
                     groupSize,
                     getPreferenceContext(),
                     persona,
-                    exploreMode
+                    exploreMode,
+                    (partialCourses) => {
+                        const enhanced = enhanceAreaCourses(partialCourses);
+                        setCourses(enhanced);
+                        if (enhanced.length > 0) {
+                            setShowGenScreen(false);
+                            setActiveTab('courses');
+                        }
+                    }
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
@@ -448,23 +499,7 @@ function App() {
                     throw e; 
                 }
 
-                const areaTravelMode = travelMode || 'walk';
-                const enhancedCourses = generatedCourses.map(course => ({
-                    ...course,
-                    travelMode: areaTravelMode,
-                    spots: course.spots.map((spot, index, arr) => {
-                        if (index === 0) return { ...spot, travel_time_minutes: 0 };
-                        const prev = arr[index - 1];
-                        const dist = getDistance(
-                            { latitude: prev.lat, longitude: prev.lon },
-                            { latitude: spot.lat, longitude: spot.lon }
-                        );
-                        // speed: walk 80m/min, bike 250m/min (15km/h), transit/car 600m/min
-                        const speed = areaTravelMode === 'walk' ? 80 : areaTravelMode === 'bicycle' ? 250 : 600;
-                        return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
-                    })
-                }));
-
+                const enhancedCourses = enhanceAreaCourses(generatedCourses);
                 setCourses(enhancedCourses);
                 if (enhancedCourses.length > 0) sendCompletionNotification(enhancedCourses[0].title);
                 setActiveTab('courses');
@@ -570,6 +605,49 @@ function App() {
         </div>
     ) : null;
 
+    // ===== Directions API からのコールバック =====
+    const handleDirectionsLoaded = (result: google.maps.DirectionsResult) => {
+        if (!selectedCourse || !result.routes || result.routes.length === 0) return;
+
+        const route = result.routes[0];
+        let hasChanges = false;
+        let totalDistanceMeters = 0;
+        let totalTimeMinutes = 0;
+
+        const newSpots = selectedCourse.spots.map((spot, index) => {
+            if (index === 0) return { ...spot, travel_time_minutes: 0 };
+            
+            // leg は区間を表す。spots[index] に到達するための区間は legs[index - 1]
+            const leg = route.legs[index - 1];
+            if (!leg || !leg.duration || !leg.distance) return spot;
+
+            totalDistanceMeters += leg.distance.value;
+            const newTravelTime = Math.ceil(leg.duration.value / 60);
+            
+            if (spot.travel_time_minutes !== newTravelTime) {
+                hasChanges = true;
+            }
+            return { ...spot, travel_time_minutes: newTravelTime };
+        });
+
+        if (hasChanges) {
+            // スポットの滞在時間も含めた総時間を再計算
+            const stayTimeSum = newSpots.reduce((acc, spot) => acc + (spot.stayTime || spot.estimatedStayTime || 30), 0);
+            const moveTimeSum = newSpots.reduce((acc, spot) => acc + (spot.travel_time_minutes || 0), 0);
+            const totalDistanceKm = Number((totalDistanceMeters / 1000).toFixed(1));
+
+            const enhancedCourse = {
+                ...selectedCourse,
+                spots: newSpots,
+                totalTime: stayTimeSum + moveTimeSum,
+                totalDistance: totalDistanceKm
+            };
+
+            setSelectedCourse(enhancedCourse);
+            setCourses(prev => prev.map(c => c.id === enhancedCourse.id ? enhancedCourse : c));
+        }
+    };
+
     // ===== コースカード =====
     const CourseCard = ({ course, onClick, index }: { course: Course; onClick: () => void; index?: number }) => {
         const fav = isFavorite(course.id);
@@ -583,20 +661,20 @@ function App() {
                     </div>
                 )}
                 <div className="flex justify-between items-start mb-2 pr-10">
-                    <h4 className="font-bold text-base leading-tight text-slate-800 group-hover:text-amber-600 transition-colors">{course.title}</h4>
-                    <span className="text-[11px] font-mono bg-slate-100 px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shrink-0 text-slate-500">
+                    <h4 className="font-bold text-base leading-tight course-title transition-colors" style={{ color: 'var(--text-primary)' }}>{course.title}</h4>
+                    <span className="text-[11px] font-mono px-2.5 py-1 rounded-full whitespace-nowrap ml-2 shrink-0" style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
                         {course.totalTime}分
                     </span>
                 </div>
-                <p className="text-xs text-slate-400 mb-3.5 line-clamp-2 leading-relaxed">{course.description}</p>
-                <div className="flex items-center gap-3 text-[10px] text-slate-300 font-medium">
+                <p className="text-xs mb-3.5 line-clamp-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{course.description}</p>
+                <div className="flex items-center gap-3 text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
                     <span className="flex items-center gap-1"><MapPin size={10} /> {course.spots.length}スポット</span>
                     <span className="flex items-center gap-1"><Clock size={10} /> {course.totalTime}分</span>
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); fav ? removeFavorite(course.id) : addFavorite(course); }}
                     aria-label={fav ? 'お気に入りから削除' : 'お気に入りに追加'}
-                    className={`absolute bottom-4 right-4 w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90
-                        ${fav ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-50 text-slate-300 hover:text-rose-400 hover:bg-rose-50'}`}>
+                    className={`absolute bottom-4 right-4 w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90`}
+                    style={fav ? { background: 'rgba(197,61,67,0.08)', color: 'var(--wa-shu)' } : { background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
                     <Heart size={16} className={fav ? 'fill-current' : ''} />
                 </button>
             </div>
@@ -638,12 +716,12 @@ function App() {
                     {courses.length === 0 ? (
                         <div className="flex flex-col items-center justify-center gap-5 py-24 animate-fade-in">
                             <div className="w-20 h-20 rounded-3xl flex items-center justify-center"
-                                style={{ background: 'rgba(0,0,0,0.03)' }}>
-                                <Footprints size={36} className="text-slate-200" />
+                                style={{ background: 'var(--bg-muted)' }}>
+                                <Footprints size={36} style={{ color: 'var(--text-muted)' }} />
                             </div>
                             <div className="text-center">
-                                <p className="font-semibold text-slate-600 mb-1 text-base">まだコースがありません</p>
-                                <p className="text-sm text-slate-300">検索タブから場所を検索して<br />モデルコースを生成しましょう</p>
+                                <p className="font-semibold mb-1 text-base" style={{ color: 'var(--text-secondary)' }}>まだコースがありません</p>
+                                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>検索タブから場所を検索して<br />モデルコースを生成しましょう</p>
                             </div>
                             <button onClick={() => setActiveTab('search')} className="btn-primary flex items-center gap-2 py-3 px-6 text-sm">
                                 <Search size={16} /> 検索する
@@ -652,8 +730,8 @@ function App() {
                     ) : (
                         <>
                             <div className="flex items-center gap-2 mb-5 animate-fade-in">
-                                <Footprints size={20} className="text-slate-700" />
-                                <h2 className="font-bold text-slate-800 text-lg">おすすめコース ({courses.length})</h2>
+                                <Footprints size={20} style={{ color: 'var(--text-primary)' }} />
+                                <h2 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>おすすめコース ({courses.length})</h2>
                             </div>
                             {loading && statusPanel}
                             <div className="space-y-3">
@@ -835,20 +913,20 @@ function App() {
                                     {/* 移動情報（2番目以降に表示）*/}
                                     {(spot.travel_time_minutes ?? 0) > 0 && (
                                         <div className="flex items-center gap-2 py-2 px-3 mb-2">
-                                            <div className="flex-1 h-px bg-slate-200" />
-                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400">
+                                            <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                                            <div className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>
                                                 {selectedCourse.travelMode === 'car' ? <Car size={12} /> :
                                                     selectedCourse.travelMode === 'transit' ? <Train size={12} /> :
                                                         selectedCourse.travelMode === 'bicycle' ? <Bike size={12} /> :
                                                             <Footprints size={12} />}
                                                 {selectedCourse.travelMode === 'car' ? '車' : selectedCourse.travelMode === 'transit' ? '公共交通' : selectedCourse.travelMode === 'bicycle' ? '自転車' : '徒歩'}約{spot.travel_time_minutes}分
                                             </div>
-                                            <div className="flex-1 h-px bg-slate-200" />
+                                            <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                                         </div>
                                     )}
 
                                     {/* 雑誌風カード */}
-                                    <div className="rounded-2xl overflow-hidden border border-slate-100 bg-white shadow-sm hover:shadow-lg transition-all duration-300 group">
+                                    <div className="card-premium overflow-hidden group">
                                         <SpotHeroImage
                                             spotName={spot.name}
                                             googlePhotoRef={spot.photos?.[0]}
@@ -866,7 +944,7 @@ function App() {
                                         {/* テキストコンテンツ */}
                                         <div className="p-4 pt-2">
                                             {/* AI説明文 */}
-                                            <p className="spot-description text-slate-600 mb-3">
+                                            <p className="spot-description mb-3" style={{ color: 'var(--text-primary)' }}>
                                                 {spot.aiDescription || spot.tags.description || "詳細情報なし"}
                                             </p>
 
@@ -905,7 +983,8 @@ function App() {
                                             {/* Googleマップボタン */}
                                             <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`}
                                                 target="_blank" rel="noopener noreferrer"
-                                                className="flex items-center justify-center gap-1.5 w-full bg-slate-50 hover:bg-slate-100 text-slate-600 text-[11px] font-bold py-2.5 rounded-xl transition-all active:scale-95 mt-3 border border-slate-100">
+                                                className="flex items-center justify-center gap-1.5 w-full text-[11px] font-bold py-2.5 rounded-xl transition-all active:scale-95 mt-3 border"
+                                                style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>
                                                 <span className="text-blue-500 font-extrabold">G</span> Googleマップで見る
                                             </a>
                                         </div>
@@ -918,8 +997,9 @@ function App() {
                     {/* Googleマップ 全ルート一括転送ボタン */}
                     <a href={getGoogleMapsUrl(selectedCourse)}
                         target="_blank" rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 w-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white text-sm font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 mt-6 mb-2">
-                        <Navigation size={18} className="text-amber-400" />
+                        className="flex items-center justify-center gap-2 w-full text-white text-sm font-bold py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95 mt-6 mb-2"
+                        style={{ background: 'var(--wa-sumi)', border: '1px solid var(--border-default)' }}>
+                        <Navigation size={18} style={{ color: 'var(--wa-accent)' }} />
                         全ルートをGoogleマップでナビ
                     </a>
                 </div>
@@ -932,7 +1012,14 @@ function App() {
     // ==========================
     const mapView = (
         <div className="w-full h-full">
-            <MapVisualization center={center} radius={radius} spots={selectedCourse ? selectedCourse.spots : []} focusedSpot={focusedSpot} travelMode={selectedCourse?.travelMode} />
+            <MapVisualization 
+                center={center} 
+                radius={radius} 
+                spots={selectedCourse ? selectedCourse.spots : []} 
+                focusedSpot={focusedSpot} 
+                travelMode={selectedCourse?.travelMode} 
+                onDirectionsLoaded={handleDirectionsLoaded}
+            />
         </div>
     );
 

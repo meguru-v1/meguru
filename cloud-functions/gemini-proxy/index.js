@@ -122,10 +122,17 @@ functions.http("geminiProxy", async (req, res) => {
       ? { responseMimeType: "application/json" }
       : {};
 
-    const aiModel = genAI.getGenerativeModel({
-      model: selectedModel,
-      generationConfig,
-    });
+    const aiModel = genAI.getGenerativeModel(
+      {
+        model: selectedModel,
+        generationConfig,
+      },
+      {
+        customHeaders: {
+          Referer: "https://meguru-v1.github.io/",
+        },
+      }
+    );
 
     const result = await aiModel.generateContent(prompt);
     const text = (await result.response).text();

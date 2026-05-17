@@ -1,5 +1,35 @@
 import type { Spot, Course, PersonaId, ExploreMode } from '../types';
 import { getSeasonalPromptContext } from './seasonal';
+import type { WeatherTag } from './weather';
+
+// ===== 天候プロンプト構築 =====
+const buildWeatherDirective = (
+    weatherText: string,
+    tag?: WeatherTag,
+    tempC?: number | null
+): string => {
+    const tempLine = tempC !== null && tempC !== undefined ? `- 気温: ${tempC.toFixed(0)}°C\n` : '';
+    let rule = '';
+    switch (tag) {
+        case 'rainy':
+            rule = `【天候厳守ルール】雨天です。**屋外スポット（公園、展望台、屋外庭園、自然景勝地等）は原則として選ばないでください**。屋内スポット（美術館、博物館、水族館、カフェ、商業施設、寺院本堂、地下街など）を優先してください。やむを得ず屋外を含める場合は短時間で済むものに限定し、必ず屋内スポットと交互に配置してください。`;
+            break;
+        case 'snowy':
+            rule = `【天候厳守ルール】降雪中です。**長時間の屋外滞在は避けてください**。屋内施設（美術館、温泉、カフェ、商業施設）を中心に、雪景色を楽しめる場所（寺社、庭園など）も短時間で組み込んでください。`;
+            break;
+        case 'hot':
+            rule = `【天候厳守ルール】猛暑（30°C超）です。**炎天下の屋外を長時間歩かせない構成**にしてください。冷房のある屋内施設（美術館、カフェ、商業施設）を主軸にし、屋外は朝夕や日陰のある場所（神社の参道、緑陰の多い公園）に限定してください。`;
+            break;
+        case 'cold':
+            rule = `【天候厳守ルール】寒波（5°C未満）です。**屋内・温泉・温かい食事を中心**に構成してください。屋外スポットは滞在時間を短くし、休憩用のカフェや屋内施設を必ず合間に配置してください。`;
+            break;
+        case 'normal':
+        case 'unknown':
+        default:
+            rule = `天候は穏やかです。屋内外をバランス良く組み合わせてください。`;
+    }
+    return `\n**【現在の天候】**\n- 状況: ${weatherText}\n${tempLine}\n${rule}\n`;
+};
 
 // Cloud Functions エンドポイント（Gemini APIキーはサーバー側で管理）
 const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL as string || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
@@ -261,6 +291,63 @@ const parseTimeToMinutes = (timeStr: string): number => {
     return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 };
 
+// ===== 営業時間チェック =====
+// Google Places の weekdayDescriptions は日本語: "月曜日: 09:00～17:00" 等
+// dayOfWeek: 0=日, 1=月, ..., 6=土
+const WEEKDAY_NAMES = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'];
+
+interface OpenStatus {
+    status: 'open' | 'closed' | 'unknown';
+    label?: string; // ユーザー向け表示用 "09:00-17:00" "定休日" 等
+}
+
+/**
+ * 指定の曜日・時刻にスポットが営業中か判定する
+ * @param weekdayDescriptions Google Places の weekdayDescriptions
+ * @param dayOfWeek 0=日 ... 6=土
+ * @param visitStartMin 訪問開始時刻（深夜0時からの経過分）
+ * @param visitEndMin 訪問終了時刻（深夜0時からの経過分）
+ */
+const checkOpenStatus = (
+    weekdayDescriptions: string[] | undefined,
+    dayOfWeek: number,
+    visitStartMin: number,
+    visitEndMin: number
+): OpenStatus => {
+    if (!weekdayDescriptions || weekdayDescriptions.length === 0) {
+        return { status: 'unknown' };
+    }
+    const dayName = WEEKDAY_NAMES[dayOfWeek];
+    const line = weekdayDescriptions.find(d => d.includes(dayName));
+    if (!line) return { status: 'unknown' };
+
+    // 定休日判定
+    if (/定休日|休業|closed/i.test(line)) {
+        return { status: 'closed', label: '定休日' };
+    }
+    // 24時間営業
+    if (/24\s*時間|営業中：終日|open\s*24/i.test(line)) {
+        return { status: 'open', label: '24時間' };
+    }
+
+    // 時刻範囲を抽出: "09:00～17:00" "9:00 ~ 17:00" "09:00-17:00" 等
+    const ranges = [...line.matchAll(/(\d{1,2})[:：](\d{2})\s*[～~〜\-–—]\s*(\d{1,2})[:：](\d{2})/g)];
+    if (ranges.length === 0) return { status: 'unknown' };
+
+    for (const m of ranges) {
+        const openMin = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+        let closeMin = parseInt(m[3], 10) * 60 + parseInt(m[4], 10);
+        // 翌日跨ぎ（例: 18:00～02:00）
+        if (closeMin <= openMin) closeMin += 24 * 60;
+        // 訪問時間が営業時間に完全に含まれていればOK
+        if (visitStartMin >= openMin && visitEndMin <= closeMin) {
+            return { status: 'open', label: `${m[1]}:${m[2]}-${m[3]}:${m[4]}` };
+        }
+    }
+    // どの営業時間帯にも収まらない
+    return { status: 'closed', label: ranges.map(m => `${m[1]}:${m[2]}-${m[3]}:${m[4]}`).join(',') };
+};
+
 // カフェ専門判定（レストラン併設は除外）
 const isCafeOnly = (s: Spot): boolean => {
     const text = `${s.category || ''} ${((s.tags?.types as string[] | undefined) || []).join(' ')}`.toLowerCase();
@@ -361,11 +448,22 @@ export const generateSmartCourses = async (
     persona?: PersonaId,
     exploreMode?: ExploreMode,
     daysCount: number = 1,
-    onProgress?: (partialCourses: Course[]) => void
+    onProgress?: (partialCourses: Course[]) => void,
+    weatherTag?: WeatherTag,
+    temperatureC?: number | null
 ): Promise<Course[]> => {
+    const weatherDirective = buildWeatherDirective(weatherContext, weatherTag, temperatureC);
     const isMultiday = exploreMode === 'multiday' || daysCount > 1;
     const effectiveDays = isMultiday ? Math.max(2, daysCount) : 1;
     const perDayMinutes = isMultiday ? 780 : durationMinutes; // 連泊は1日13時間固定
+
+    // ===== 訪問予定の曜日・時刻を確定 =====
+    const visitDate = new Date();
+    const visitDayOfWeek = visitDate.getDay(); // 0=日 ... 6=土
+    const visitStartMin = parseTimeToMinutes(timeContext);
+    const visitEndMin = visitStartMin + (isMultiday ? perDayMinutes : durationMinutes);
+    const visitDayLabel = `${visitDate.getFullYear()}-${String(visitDate.getMonth() + 1).padStart(2, '0')}-${String(visitDate.getDate()).padStart(2, '0')}(${WEEKDAY_NAMES[visitDayOfWeek]})`;
+    const visitTimeLabel = `${Math.floor(visitStartMin / 60)}:${String(visitStartMin % 60).padStart(2, '0')}〜${Math.floor(visitEndMin / 60) % 24}:${String(visitEndMin % 60).padStart(2, '0')}`;
 
     // ===== 候補品質フィルタ（評価重み付きスコアリング）=====
     const qualityFiltered = candidates
@@ -388,11 +486,21 @@ export const generateSmartCourses = async (
         .map(item => item.spot);
 
     // ===== #2: トークン圧縮した候補リスト (ダイエット化) =====
+    // 連泊は曜日が複数あるためここでの可否判定は省略（unknown扱い）
     const candidateList = qualityFiltered.map((s, i) => {
+        const indoorTag = s.isIndoor === true ? '屋内' : s.isIndoor === false ? '屋外' : null;
+        let openTag: string | null = null;
+        if (!isMultiday) {
+            const status = checkOpenStatus(s.opening_hours, visitDayOfWeek, visitStartMin, visitEndMin);
+            if (status.status === 'closed') openTag = `❌${status.label || '訪問時刻外'}`;
+            else if (status.status === 'open') openTag = `✅${status.label || '営業中'}`;
+        }
         const details = [
             s.category,
             s.rating ? `★${s.rating}` : null,
-            `Stay:${s.estimatedStayTime || getStayTimeByType(s.category)}m`
+            `Stay:${s.estimatedStayTime || getStayTimeByType(s.category)}m`,
+            indoorTag,
+            openTag,
         ].filter(Boolean).join(',');
         return `${i}:${s.name}(${details})`;
     }).join('|');
@@ -437,7 +545,7 @@ export const generateSmartCourses = async (
         const multidayPrompt = `
 You are a world-class Japanese travel curator. Create **2 completely different ${effectiveDays}-day travel plans**.
 ${personaPrompt}
-
+${weatherDirective}
 **【最重要ルール】**
 1. プランAとプランBで **スポットを一切被らせない**
 2. 同じプラン内でも日ごとに **エリアを変える**（Day1とDay2で異なる地区）
@@ -457,6 +565,11 @@ ${planThemes[1].map((t, i) => `Day ${i+1}: ${t}`).join('\n')}
 
 **5. 文化財の判定:**
 スポットが国宝、重要文化財、世界遺産に該当する場合、"cultural_property"にその称号を記入（例: "国宝"）。該当しない場合はnull。
+
+**6. 営業時間への配慮（連泊一般則）:**
+- 美術館・博物館は月曜定休が多い → 月曜のDayには選ばない
+- 寺社の御朱印・拝観は16:00頃終了が多い → 夕方以降の時間帯には選ばない
+- 朝市・モーニング系カフェは午前中限定が多い → 午後のDayには選ばない
 
 **CANDIDATES:**
 ${candidateList}
@@ -579,6 +692,7 @@ You are a top-tier Japanese luxury travel curator.
 Your task is to create ${num} **COMPLETELY DISTINCT** plans for a **${durationMinutes} minute** trip.
 ${personaPrompt}
 ${exploreModeTemplate}
+${weatherDirective}
 **【最重要ミッション】**
 あなたは世界最高峰のトラベルキュレーターです。提供された候補から、必ず **全く異なる${num}つのプラン** を作成してください。
 
@@ -609,6 +723,11 @@ ${diningRule}
 
 **6. 構成と多様性:**
 ${themeSlice}
+
+**【訪問予定（営業時間判定の基準）】**
+- 日時: ${visitDayLabel} ${visitTimeLabel}
+- **❌バッジ付き候補（訪問時刻に閉店 or 定休日）は絶対に選ばないでください**。
+- ✅バッジは訪問時刻に営業中、バッジなしは営業情報不明（選んでも可）。
 
 **【出力形式】**
 - **JSONの「値」（タイトル、説明文、aiDescription、must_see、pro_tip、trivia）はすべて100%日本語**で出力してください。英語の混入は一切禁止です（固有名詞「Starbucks」等は例外）。

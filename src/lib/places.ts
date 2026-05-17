@@ -2,6 +2,35 @@ import { PlaceDetails, AutocompleteResult } from '../types';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+// ===== 屋内/屋外判定（天候連動用） =====
+const INDOOR_TYPES = new Set([
+    'museum', 'library', 'aquarium', 'art_gallery', 'shopping_mall',
+    'cafe', 'restaurant', 'book_store', 'spa', 'bowling_alley',
+    'movie_theater', 'bakery', 'bar', 'meal_takeaway', 'meal_delivery',
+    'clothing_store', 'convenience_store', 'supermarket', 'department_store',
+    'amusement_center', 'hindu_temple', 'hot_spring',
+]);
+
+const OUTDOOR_TYPES = new Set([
+    'park', 'tourist_attraction', 'natural_feature', 'campground',
+    'zoo', 'amusement_park', 'observation_deck', 'beach',
+]);
+
+/**
+ * Google Places の types 配列から 屋内/屋外 を推定する。
+ * - 屋内寄りtypesが含まれていれば true
+ * - 屋外寄りtypesが含まれていれば false
+ * - どちらにも該当しない or 両方該当 → null（不明）
+ */
+export function inferIsIndoor(types?: string[]): boolean | null {
+    if (!types || types.length === 0) return null;
+    const hasIndoor = types.some(t => INDOOR_TYPES.has(t));
+    const hasOutdoor = types.some(t => OUTDOOR_TYPES.has(t));
+    if (hasIndoor && !hasOutdoor) return true;
+    if (hasOutdoor && !hasIndoor) return false;
+    return null;
+}
+
 // ===== セッションキャッシュ（5分有効） =====
 const CACHE_TTL = 5 * 60 * 1000; // 5分
 const placesCache = new Map<string, { data: any; timestamp: number }>();

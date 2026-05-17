@@ -27,6 +27,7 @@ const EXPLORE_MODES: { id: ExploreMode; label: string; sub: string; icon: React.
 
 interface SearchInterfaceProps {
     onSearch: (params: SearchParams) => void;
+    headerSlot?: React.ReactNode;
 }
 
 const TRAVEL_MODES: { id: TravelMode; label: string; icon: React.ElementType }[] = [
@@ -36,7 +37,7 @@ const TRAVEL_MODES: { id: TravelMode; label: string; icon: React.ElementType }[]
     { id: 'car', label: '車', icon: Car },
 ];
 
-const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
+const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch, headerSlot }) => {
     const [searchMode, setSearchMode] = useState<SearchMode>('area');
     const [exploreMode, setExploreMode] = useState<ExploreMode>('quick');
     const [query, setQuery] = useState('');
@@ -190,6 +191,9 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                 </h1>
                 <p className="text-xs font-medium" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>あなたのための、特別なよりみち。</p>
             </div>
+
+            {/* 追加スロット（履歴セクション等） */}
+            {headerSlot}
 
             {/* ===== 3タブ: エリア | ルート | 今すぐ未知へ ===== */}
             <div className="px-4 mt-3 mb-3 animate-slide-up">

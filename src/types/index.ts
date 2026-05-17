@@ -39,6 +39,8 @@ export interface Spot {
     opening_hours?: string[];
     reviews?: string[];
     business_status?: string;
+    // 屋内/屋外判定 (天候連動用): true=屋内, false=屋外, null=不明
+    isIndoor?: boolean | null;
 }
 
 export interface PlaceDetails {

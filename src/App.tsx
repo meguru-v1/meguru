@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SearchInterface from './components/SearchInterface';
 import MapVisualization from './components/MapVisualization';
 import TabBar from './components/TabBar';
@@ -6,18 +6,22 @@ import GenerationScreen from './components/GenerationScreen';
 import SpotHeroImage from './components/SpotHeroImage';
 import AiChatSheet from './components/AiChatSheet';
 import DetourSuggestion from './components/DetourSuggestion';
+import HistorySection from './components/HistorySection';
+import SortableSpotList from './components/SortableSpotList';
 import { useFavorites } from './hooks/useFavorites';
 import { useNavigation } from './hooks/useNavigation';
-import { searchNearbySpots, searchRouteSpots, reverseGeocode, resolveLocation } from './lib/places';
+import { searchNearbySpots, searchRouteSpots, reverseGeocode, resolveLocation, inferIsIndoor } from './lib/places';
 import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
 import type { WaitingScreenContent } from './lib/gemini';
 import { decodeShareUrl, clearShareParam, encodeCourseToUrl, copyToClipboard } from './lib/shareLink';
-import { getCurrentWeather } from './lib/weather';
+import { getCurrentWeather, getCurrentWeatherDetailed } from './lib/weather';
+import { pushHistory } from './lib/history';
+import { computeRoute } from './lib/directions';
 import { getDistance } from 'geolib';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
     Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap, Send,
-    Share2, MessageCircle, CheckCircle2
+    Share2, MessageCircle, CheckCircle2, Route as RouteIcon, GripVertical
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId, TravelMode, ExploreMode } from './types';
 
@@ -41,12 +45,17 @@ function App() {
     const [activeDayIndex, setActiveDayIndex] = useState(0);
     const [showAiChat, setShowAiChat] = useState(false);
     const [shareToastVisible, setShareToastVisible] = useState(false);
+    const [recomputingRoute, setRecomputingRoute] = useState(false);
+    const [routeToastMsg, setRouteToastMsg] = useState<string | null>(null);
+    const swipeStartX = useRef<number | null>(null);
+    const swipeStartY = useRef<number | null>(null);
 
     const [lastSearchDuration, setLastSearchDuration] = useState(120);
     const [lastSearchMood, setLastSearchMood] = useState('不明');
     const [lastSearchBudget, setLastSearchBudget] = useState('不明');
     const [lastSearchGroupSize, setLastSearchGroupSize] = useState('不明');
     const [lastExploreMode, setLastExploreMode] = useState<ExploreMode | undefined>(undefined);
+    const [lastSearchQuery, setLastSearchQuery] = useState('');
 
     const [favTrimToastVisible, setFavTrimToastVisible] = useState(false);
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites(() => {
@@ -114,6 +123,14 @@ function App() {
             clearShareParam();
         }
     }, []);
+
+    // コース表示時に履歴へ自動push
+    useEffect(() => {
+        if (selectedCourse) {
+            const label = lastSearchQuery || selectedCourse.title || '名称未設定';
+            pushHistory(selectedCourse, label);
+        }
+    }, [selectedCourse?.id]);
 
     const handleShareCourse = async (course: Course) => {
         const url = encodeCourseToUrl(course);
@@ -187,6 +204,7 @@ function App() {
             setLastSearchBudget(budget || '不明');
             setLastSearchGroupSize(groupSize || '不明');
             setLastExploreMode(exploreMode);
+            setLastSearchQuery(query);
             setActiveDayIndex(0); // 連泊タブリセット
 
             if (searchMode === 'route' && destination) {
@@ -248,7 +266,8 @@ function App() {
                     photos: p.photo_reference ? [p.photo_reference] : [],
                     editorial_summary: p.editorial_summary,
                     opening_hours: p.opening_hours,
-                    reviews: p.reviews?.map(r => r.text) || []
+                    reviews: p.reviews?.map(r => r.text) || [],
+                    isIndoor: inferIsIndoor(p.types),
                 }));
 
                 if (allSpots.length < 3) throw new Error("ルート周辺に見どころとなるスポットがあまり見つかりませんでした。検索範囲や時間を大きくしてみてください。");
@@ -270,9 +289,10 @@ function App() {
 
                 const now = new Date();
                 const timeContext = startTime || `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
-                const weatherContext = await getCurrentWeather(midLat, midLon);
+                const weatherInfo = await getCurrentWeatherDetailed(midLat, midLon);
+                const weatherContext = weatherInfo.text;
 
-                console.log("AI Generation Context:", { time: timeContext, weather: weatherContext, center: { midLat, midLon } });
+                console.log("AI Generation Context:", { time: timeContext, weather: weatherContext, tag: weatherInfo.tag, center: { midLat, midLon } });
 
                 // コース拡張ロジック（ルート検索用）
                 const routeTravelMode = travelMode || 'walk';
@@ -350,7 +370,9 @@ function App() {
                             setShowGenScreen(false);
                             setActiveTab('courses');
                         }
-                    }
+                    },
+                    weatherInfo.tag,
+                    weatherInfo.temperatureC
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
@@ -419,7 +441,8 @@ function App() {
                     photos: p.photo_reference ? [p.photo_reference] : [],
                     editorial_summary: p.editorial_summary,
                     opening_hours: p.opening_hours,
-                    reviews: p.reviews?.map(r => r.text) || []
+                    reviews: p.reviews?.map(r => r.text) || [],
+                    isIndoor: inferIsIndoor(p.types),
                 }));
 
                 if (allSpots.length === 0) throw new Error("周辺に見どころとなるスポットが見つかりませんでした。別の場所や、検索範囲を広くして試してみてください。");
@@ -441,7 +464,8 @@ function App() {
 
                 const now = new Date();
                 const timeContext = startTime || `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
-                const weatherContext = await getCurrentWeather(startGeo.lat, startGeo.lon);
+                const weatherInfo = await getCurrentWeatherDetailed(startGeo.lat, startGeo.lon);
+                const weatherContext = weatherInfo.text;
 
                 // コース拡張ロジック（エリア検索用）
                 const areaTravelMode = travelMode || 'walk';
@@ -482,7 +506,9 @@ function App() {
                             setShowGenScreen(false);
                             setActiveTab('courses');
                         }
-                    }
+                    },
+                    weatherInfo.tag,
+                    weatherInfo.temperatureC
                 );
 
                 // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
@@ -703,12 +729,109 @@ function App() {
         return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&waypoints=${waypoints}&travelmode=${tmap}`;
     };
 
+    // 実移動時間で再計算（Routes API）
+    const handleRecomputeRoute = async () => {
+        if (!selectedCourse || selectedCourse.spots.length < 2) return;
+        setRecomputingRoute(true);
+        try {
+            const result = await computeRoute(selectedCourse.spots, selectedCourse.travelMode || 'walk');
+            if (!result) {
+                setRouteToastMsg('実移動時間の取得に失敗しました');
+                setTimeout(() => setRouteToastMsg(null), 2500);
+                return;
+            }
+            const newSpots = selectedCourse.spots.map((spot, i) => {
+                if (i === 0) return { ...spot, travel_time_minutes: 0 };
+                const leg = result.legs[i - 1];
+                return leg ? { ...spot, travel_time_minutes: leg.durationMin } : spot;
+            });
+            const stayTimeSum = newSpots.reduce((acc, s) => acc + (s.stayTime || s.estimatedStayTime || 30), 0);
+            const moveTimeSum = newSpots.reduce((acc, s) => acc + (s.travel_time_minutes || 0), 0);
+            const updated: Course = {
+                ...selectedCourse,
+                spots: newSpots,
+                totalTime: stayTimeSum + moveTimeSum,
+                totalDistance: Number((result.totalDistanceM / 1000).toFixed(1)),
+            };
+            setSelectedCourse(updated);
+            setCourses(prev => prev.map(c => c.id === updated.id ? updated : c));
+            setRouteToastMsg(`実移動時間で更新（合計 ${updated.totalTime}分 / ${updated.totalDistance}km）`);
+            setTimeout(() => setRouteToastMsg(null), 2500);
+        } finally {
+            setRecomputingRoute(false);
+        }
+    };
+
+    // スポットを並び替え（D&D後の確定）
+    const handleReorderSpots = (newSpots: Spot[]) => {
+        if (!selectedCourse) return;
+        // 移動時間を簡易再計算（直線距離 × 速度）
+        const tm = selectedCourse.travelMode || 'walk';
+        const speed = tm === 'walk' ? 80 : tm === 'bicycle' ? 250 : 600;
+        const reordered = newSpots.map((spot, index, arr) => {
+            if (index === 0) return { ...spot, travel_time_minutes: 0 };
+            const prev = arr[index - 1];
+            const dist = getDistance(
+                { latitude: prev.lat, longitude: prev.lon },
+                { latitude: spot.lat, longitude: spot.lon }
+            );
+            return { ...spot, travel_time_minutes: Math.max(1, Math.ceil(dist / speed)) };
+        });
+        const updated: Course = { ...selectedCourse, spots: reordered };
+        setSelectedCourse(updated);
+        setCourses(prev => prev.map(c => c.id === updated.id ? updated : c));
+    };
+
+    // 前後のコースに切替（スワイプ用）
+    const handleNavigateCourse = (direction: 'prev' | 'next') => {
+        if (!selectedCourse || courses.length < 2) return;
+        const idx = courses.findIndex(c => c.id === selectedCourse.id);
+        if (idx === -1) return;
+        const nextIdx = direction === 'next' ? idx + 1 : idx - 1;
+        if (nextIdx < 0 || nextIdx >= courses.length) return;
+        setSelectedCourse(courses[nextIdx]);
+        setFocusedSpot(null);
+    };
+
+    // ===== スワイプ検出 =====
+    const handleSwipeTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length !== 1) return;
+        swipeStartX.current = e.touches[0].clientX;
+        swipeStartY.current = e.touches[0].clientY;
+    };
+    const handleSwipeTouchEnd = (e: React.TouchEvent) => {
+        if (swipeStartX.current === null || swipeStartY.current === null) return;
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const dx = endX - swipeStartX.current;
+        const dy = endY - swipeStartY.current;
+        swipeStartX.current = null;
+        swipeStartY.current = null;
+        // 横方向が縦方向より明確に大きい、かつ閾値超え
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        if (dx < 0) handleNavigateCourse('next');
+        else handleNavigateCourse('prev');
+    };
+
+    const handleSelectHistory = (course: Course) => {
+        // 履歴から復元するコースはcoursesリストにも追加（タブ表示のため）
+        setCourses(prev => prev.some(c => c.id === course.id) ? prev : [course, ...prev]);
+        setSelectedCourse(course);
+        if (course.spots.length > 0) {
+            setCenter({ lat: course.spots[0].lat, lon: course.spots[0].lon });
+        }
+        setActiveTab('courses');
+    };
+
     // ==========================
     //  検索タブ
     // ==========================
     const searchView = (
         <div className="w-full flex flex-col">
-            <SearchInterface onSearch={handleSearch} />
+            <SearchInterface
+                onSearch={handleSearch}
+                headerSlot={<HistorySection onSelect={handleSelectHistory} refreshKey={selectedCourse?.id ? 1 : 0} />}
+            />
             {statusPanel}
         </div>
     );
@@ -791,7 +914,34 @@ function App() {
             )}
 
             {selectedCourse && (
-                <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-5 pb-20">
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-5 pb-20"
+                    onTouchStart={handleSwipeTouchStart}
+                    onTouchEnd={handleSwipeTouchEnd}>
+                    {/* コース切替インジケータ（複数コースあるとき） */}
+                    {courses.length > 1 && !selectedCourse.planId && (() => {
+                        const idx = courses.findIndex(c => c.id === selectedCourse.id);
+                        if (idx === -1) return null;
+                        return (
+                            <div className="flex items-center justify-between mb-3 text-[10px] font-bold animate-fade-in" style={{ color: 'var(--text-muted)' }}>
+                                <button onClick={() => handleNavigateCourse('prev')} disabled={idx === 0}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-md disabled:opacity-30 active:scale-95"
+                                    aria-label="前のコース">
+                                    <ArrowLeft size={12} /> 前
+                                </button>
+                                <div className="flex gap-1">
+                                    {courses.map((_, i) => (
+                                        <div key={i} className="w-1.5 h-1.5 rounded-full transition-all"
+                                            style={{ background: i === idx ? 'var(--wa-accent)' : 'var(--border-default)' }} />
+                                    ))}
+                                </div>
+                                <button onClick={() => handleNavigateCourse('next')} disabled={idx === courses.length - 1}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-md disabled:opacity-30 active:scale-95"
+                                    aria-label="次のコース">
+                                    次 <ArrowLeft size={12} className="rotate-180" />
+                                </button>
+                            </div>
+                        );
+                    })()}
                     {/* 連泊プラン: Day1/Day2タブ */}
                     {selectedCourse.planId && (() => {
                         const dayCourses = courses
@@ -897,11 +1047,18 @@ function App() {
                             </div>
                         )}
 
-                        {/* 地図で見るボタン */}
-                        <button onClick={() => setActiveTab('map')}
-                            className="flex items-center justify-center gap-2 w-full mt-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold transition-all active:scale-95">
-                            <MapIcon size={16} /> 地図で全体を見る
-                        </button>
+                        {/* 地図で見る / 実移動時間で再計算 */}
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                            <button onClick={() => setActiveTab('map')}
+                                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95">
+                                <MapIcon size={14} /> 地図で見る
+                            </button>
+                            <button onClick={handleRecomputeRoute} disabled={recomputingRoute}
+                                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95 disabled:opacity-50">
+                                {recomputingRoute ? <Loader2 size={14} className="animate-spin" /> : <RouteIcon size={14} />}
+                                {recomputingRoute ? '計算中...' : '実移動時間'}
+                            </button>
+                        </div>
                     </div>
 
 
@@ -953,15 +1110,17 @@ function App() {
                         )}
                     </div>
 
-                    {/* 雑誌風タイムライン */}
-                    <div className="space-y-6">
-                        {selectedCourse.spots.map((spot, index) => {
+                    {/* 雑誌風タイムライン（D&D並び替え対応） */}
+                    <SortableSpotList
+                        spots={selectedCourse.spots}
+                        onReorder={handleReorderSpots}
+                        renderSpot={(spot, index) => {
                             const isFirst = index === 0;
                             const isLast = index === selectedCourse.spots.length - 1;
                             const label = isFirst ? 'START' : isLast ? 'GOAL' : `SPOT ${index + 1}`;
 
                             return (
-                                <div key={spot.id} className="animate-slide-up" style={{ animationDelay: `${index * 0.08}s`, animationFillMode: 'backwards' }}>
+                                <div className="animate-slide-up" style={{ animationDelay: `${index * 0.08}s`, animationFillMode: 'backwards' }}>
                                     {/* 移動情報（2番目以降に表示）*/}
                                     {(spot.travel_time_minutes ?? 0) > 0 && (
                                         <div className="flex items-center gap-2 py-2 px-3 mb-2">
@@ -995,12 +1154,10 @@ function App() {
 
                                         {/* テキストコンテンツ */}
                                         <div className="p-4 pt-2">
-                                            {/* AI説明文 */}
                                             <p className="spot-description mb-3" style={{ color: 'var(--text-primary)' }}>
                                                 {spot.aiDescription || spot.tags.description || "詳細情報なし"}
                                             </p>
 
-                                            {/* 情報カード群 */}
                                             <div className="space-y-2">
                                                 {spot.must_see && (
                                                     <div className="insight-card must-see">
@@ -1032,7 +1189,6 @@ function App() {
                                                 <div className="mt-2 text-[10px] text-green-600 font-medium">{spot.tags.opening_hours}</div>
                                             )}
 
-                                            {/* Googleマップボタン */}
                                             <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.name)}`}
                                                 target="_blank" rel="noopener noreferrer"
                                                 className="flex items-center justify-center gap-1.5 w-full text-[11px] font-bold py-2.5 rounded-xl transition-all active:scale-95 mt-3 border"
@@ -1043,8 +1199,8 @@ function App() {
                                     </div>
                                 </div>
                             );
-                        })}
-                    </div>
+                        }}
+                    />
 
                     {/* Googleマップ 全ルート一括転送ボタン */}
                     <a href={getGoogleMapsUrl(selectedCourse)}
@@ -1205,6 +1361,15 @@ function App() {
                     style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', animation: 'fadeIn 0.3s ease' }}>
                     <CheckCircle2 size={16} className="text-emerald-400" />
                     URLをコピーしました！
+                </div>
+            )}
+
+            {/* ルート再計算トースト */}
+            {routeToastMsg && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[900] flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl font-bold text-sm text-white"
+                    style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', animation: 'fadeIn 0.3s ease' }}>
+                    <RouteIcon size={16} className="text-emerald-400" />
+                    {routeToastMsg}
                 </div>
             )}
 

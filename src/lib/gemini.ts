@@ -160,18 +160,22 @@ const getDiningRule = (durationMinutes: number) => {
 };
 
 const getRecommendedSpotCount = (durationMinutes: number) => {
-    if (durationMinutes <= 90) return `**2〜3件**`;
-    if (durationMinutes <= 180) return `**3〜4件**`;
-    if (durationMinutes <= 300) return `**4〜5件**`;
-    if (durationMinutes <= 480) return `**5〜7件**`;
+    if (durationMinutes <= 120) return `**1〜2件**`;
+    if (durationMinutes <= 240) return `**2〜3件**`;
+    if (durationMinutes <= 360) return `**3〜4件**`;
+    if (durationMinutes <= 480) return `**4〜5件**`;
+    if (durationMinutes <= 600) return `**5〜6件**`;
+    if (durationMinutes <= 720) return `**5〜7件**`;
     return `**6〜8件**`;
 };
 
 const getMinSpotCount = (durationMinutes: number): number => {
-    if (durationMinutes <= 90) return 2;
-    if (durationMinutes <= 180) return 3;
-    if (durationMinutes <= 300) return 4;
-    if (durationMinutes <= 480) return 5;
+    if (durationMinutes <= 120) return 1;
+    if (durationMinutes <= 240) return 2;
+    if (durationMinutes <= 360) return 3;
+    if (durationMinutes <= 480) return 4;
+    if (durationMinutes <= 600) return 5;
+    if (durationMinutes <= 720) return 5;
     return 6;
 };
 

@@ -21,14 +21,18 @@ const setCache = (key: string, data: any) => {
 };
 
 /**
- * テキスト検索でエリアの中心となる場所を探す
+ * テキスト検索でエリアの中心となる場所を探す（日本リージョンバイアス付き）
  */
-export async function searchAreaCenter(query: string): Promise<{ lat: number; lng: number; name: string } | null> {
+export async function searchAreaCenter(query: string, bias?: { lat: number; lng: number }): Promise<{ lat: number; lng: number; name: string } | null> {
     const url = `https://places.googleapis.com/v1/places:searchText`;
-    const data = {
+    const data: any = {
         textQuery: query,
-        languageCode: 'ja'
+        languageCode: 'ja',
+        regionCode: 'JP',
     };
+    if (bias) {
+        data.locationBias = { circle: { center: { latitude: bias.lat, longitude: bias.lng }, radius: 50000 } };
+    }
 
     try {
         const response = await fetch(url, {
@@ -42,7 +46,7 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
         });
 
         if (!response.ok) {
-            console.error(`Places API Error: ${response.status} ${response.statusText}`);
+            console.warn(`searchAreaCenter API ${response.status}:`, await response.text().catch(() => ''));
             return null;
         }
 
@@ -52,14 +56,94 @@ export async function searchAreaCenter(query: string): Promise<{ lat: number; ln
             return {
                 lat: place.location.latitude,
                 lng: place.location.longitude,
-                name: place.displayName.text,
+                name: place.displayName?.text || query,
             };
         }
         return null;
     } catch (e) {
-        console.error("Failed to search area center", e);
+        console.warn("searchAreaCenter exception:", e);
         return null;
     }
+}
+
+/**
+ * Geocoding API による住所→座標変換（フォールバック用）
+ */
+async function geocodeViaMapsApi(query: string): Promise<{ lat: number; lng: number; name: string } | null> {
+    try {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&language=ja&region=jp&key=${API_KEY}`;
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data.status === 'OK' && data.results?.length > 0) {
+            const r = data.results[0];
+            return {
+                lat: r.geometry.location.lat,
+                lng: r.geometry.location.lng,
+                name: (r.formatted_address || query).replace(/^日本[、,]\s*/, '').replace(/〒\d{3}-\d{4}\s*/, '').trim(),
+            };
+        }
+        return null;
+    } catch (e) {
+        console.warn("geocodeViaMapsApi exception:", e);
+        return null;
+    }
+}
+
+/**
+ * 場所解決: 複数戦略で必ず座標を見つける
+ * 1. placeId → 詳細取得
+ * 2. テキスト検索（日本バイアス）
+ * 3. Autocompleteの第1候補 → placeId取得
+ * 4. Geocoding API
+ * 5. 「日本」サフィックスで再検索
+ */
+export async function resolveLocation(
+    query: string,
+    placeId?: string,
+    bias?: { lat: number; lng: number }
+): Promise<{ lat: number; lng: number; name: string } | null> {
+    const trimmed = (query || '').trim();
+    if (!trimmed && !placeId) return null;
+
+    // Strategy 1: placeId
+    if (placeId) {
+        const r = await getPlaceLatLng(placeId);
+        if (r) return r;
+        console.warn(`[resolveLocation] placeId failed: ${placeId}`);
+    }
+
+    if (!trimmed) return null;
+
+    // Strategy 2: text search with regional bias
+    const r2 = await searchAreaCenter(trimmed, bias);
+    if (r2) return r2;
+
+    // Strategy 3: autocomplete → placeId
+    try {
+        const suggestions = await getAutocompleteSuggestions(trimmed, bias?.lat, bias?.lng);
+        if (suggestions.length > 0) {
+            const r3 = await getPlaceLatLng(suggestions[0].placeId);
+            if (r3) return r3;
+        }
+    } catch (e) {
+        console.warn('[resolveLocation] autocomplete fallback failed:', e);
+    }
+
+    // Strategy 4: Geocoding API
+    const r4 = await geocodeViaMapsApi(trimmed);
+    if (r4) return r4;
+
+    // Strategy 5: append Japan suffix
+    if (!/日本|japan/i.test(trimmed)) {
+        const r5 = await searchAreaCenter(`${trimmed} 日本`, bias);
+        if (r5) return r5;
+        const r5b = await geocodeViaMapsApi(`${trimmed}, Japan`);
+        if (r5b) return r5b;
+    }
+
+    console.warn(`[resolveLocation] All strategies exhausted for: "${trimmed}"`);
+    return null;
 }
 
 /**

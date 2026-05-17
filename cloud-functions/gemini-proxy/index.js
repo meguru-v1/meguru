@@ -5,6 +5,7 @@ import functions from "@google-cloud/functions-framework";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ALLOWED_ORIGINS = [
   "https://meguru-v1.github.io",
+  "https://meguru-rho.vercel.app",
   "http://localhost:5173",
   "http://localhost:4173",
 ];

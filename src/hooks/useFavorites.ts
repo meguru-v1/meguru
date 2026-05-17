@@ -13,15 +13,15 @@ const loadFavorites = (): Course[] => {
     }
 };
 
-const MAX_FAVORITES = 50; // 保存上限
+const MAX_FAVORITES = 50;
 
-const saveFavorites = (favorites: Course[]): void => {
+// trueを返したらQuotaExceededによるtrimが発生したことを示す
+const saveFavorites = (favorites: Course[]): boolean => {
     try {
-        // 上限を超えた場合、古い項目を自動削除
         const trimmed = favorites.slice(0, MAX_FAVORITES);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+        return false;
     } catch (e: any) {
-        // QuotaExceededError: 容量超過時は古い項目を削除してリトライ
         if (e?.name === 'QuotaExceededError' || e?.code === 22) {
             console.warn('localStorage quota exceeded. Trimming old favorites...');
             try {
@@ -30,9 +30,10 @@ const saveFavorites = (favorites: Course[]): void => {
             } catch {
                 console.error('Failed to save favorites even after trimming.');
             }
-        } else {
-            console.error('Failed to save favorites:', e);
+            return true;
         }
+        console.error('Failed to save favorites:', e);
+        return false;
     }
 };
 
@@ -43,17 +44,18 @@ interface UseFavoritesReturn {
     isFavorite: (courseId: string) => boolean;
 }
 
-export const useFavorites = (): UseFavoritesReturn => {
+export const useFavorites = (onQuotaTrimmed?: () => void): UseFavoritesReturn => {
     const [favorites, setFavorites] = useState<Course[]>(loadFavorites);
 
     const addFavorite = useCallback((course: Course) => {
         setFavorites(prev => {
             if (prev.some(f => f.id === course.id)) return prev;
             const updated = [{ ...course, savedAt: new Date().toISOString() }, ...prev];
-            saveFavorites(updated);
-            return updated;
+            const trimmed = saveFavorites(updated);
+            if (trimmed) onQuotaTrimmed?.();
+            return updated.slice(0, MAX_FAVORITES);
         });
-    }, []);
+    }, [onQuotaTrimmed]);
 
     const removeFavorite = useCallback((courseId: string) => {
         setFavorites(prev => {

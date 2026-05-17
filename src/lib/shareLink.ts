@@ -1,5 +1,5 @@
 import LZString from 'lz-string';
-import type { Course } from '../types';
+import type { Course, Spot } from '../types';
 
 const SHARE_PARAM = 'share';
 

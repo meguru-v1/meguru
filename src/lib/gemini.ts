@@ -3,6 +3,9 @@ import { getSeasonalPromptContext } from './seasonal';
 
 // Cloud Functions エンドポイント（Gemini APIキーはサーバー側で管理）
 const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL as string || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
+if (import.meta.env.DEV && !import.meta.env.VITE_GEMINI_PROXY_URL) {
+    console.warn('[Meguru] VITE_GEMINI_PROXY_URL not set — using fallback production endpoint.');
+}
 
 // Cloud Functions 経由でAI生成を実行
 const callGeminiProxy = async (prompt: string, model: string, jsonMode: boolean = false): Promise<string> => {

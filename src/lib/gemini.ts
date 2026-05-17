@@ -1,439 +1,28 @@
-import type { Spot, Course, PersonaId, ExploreMode } from '../types';
+import type { Spot, Course, PersonaId, ExploreMode, WeatherTag } from '../types';
 import { getSeasonalPromptContext } from './seasonal';
-import type { WeatherTag } from './weather';
+import {
+    callGeminiProxy,
+    sleep,
+    waitRateLimit,
+    stripThinkingBlock,
+    selectModel,
+    extractJsonString,
+} from './geminiApi';
+import { PERSONA_INSTRUCTIONS, getPersonaPrompt } from './personas';
+import { WEEKDAY_NAMES, parseTimeToMinutes, checkOpenStatus } from './openingHours';
+import { getStayTimeByType, buildSmartItinerary } from './routeAlgorithms';
+import {
+    buildWeatherDirective,
+    getExploreModeTemplate,
+    getDiningRule,
+    getRecommendedSpotCount,
+    getMinSpotCount,
+} from './geminiPrompts';
 
-// ===== 天候プロンプト構築 =====
-const buildWeatherDirective = (
-    weatherText: string,
-    tag?: WeatherTag,
-    tempC?: number | null
-): string => {
-    const tempLine = tempC !== null && tempC !== undefined ? `- 気温: ${tempC.toFixed(0)}°C\n` : '';
-    let rule = '';
-    switch (tag) {
-        case 'rainy':
-            rule = `【天候厳守ルール】雨天です。**屋外スポット（公園、展望台、屋外庭園、自然景勝地等）は原則として選ばないでください**。屋内スポット（美術館、博物館、水族館、カフェ、商業施設、寺院本堂、地下街など）を優先してください。やむを得ず屋外を含める場合は短時間で済むものに限定し、必ず屋内スポットと交互に配置してください。`;
-            break;
-        case 'snowy':
-            rule = `【天候厳守ルール】降雪中です。**長時間の屋外滞在は避けてください**。屋内施設（美術館、温泉、カフェ、商業施設）を中心に、雪景色を楽しめる場所（寺社、庭園など）も短時間で組み込んでください。`;
-            break;
-        case 'hot':
-            rule = `【天候厳守ルール】猛暑（30°C超）です。**炎天下の屋外を長時間歩かせない構成**にしてください。冷房のある屋内施設（美術館、カフェ、商業施設）を主軸にし、屋外は朝夕や日陰のある場所（神社の参道、緑陰の多い公園）に限定してください。`;
-            break;
-        case 'cold':
-            rule = `【天候厳守ルール】寒波（5°C未満）です。**屋内・温泉・温かい食事を中心**に構成してください。屋外スポットは滞在時間を短くし、休憩用のカフェや屋内施設を必ず合間に配置してください。`;
-            break;
-        case 'normal':
-        case 'unknown':
-        default:
-            rule = `天候は穏やかです。屋内外をバランス良く組み合わせてください。`;
-    }
-    return `\n**【現在の天候】**\n- 状況: ${weatherText}\n${tempLine}\n${rule}\n`;
-};
-
-// Cloud Functions エンドポイント（Gemini APIキーはサーバー側で管理）
-const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL as string || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
-if (import.meta.env.DEV && !import.meta.env.VITE_GEMINI_PROXY_URL) {
-    console.warn('[Meguru] VITE_GEMINI_PROXY_URL not set — using fallback production endpoint.');
-}
-
-// Cloud Functions 経由でAI生成を実行
-const callGeminiProxy = async (prompt: string, model: string, jsonMode: boolean = false): Promise<string> => {
-    const response = await fetch(PROXY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model, jsonMode }),
-    });
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        const err = new Error(errorData.error || `Proxy error: ${response.status}`) as any;
-        err.status = response.status;
-        throw err;
-    }
-    const data = await response.json();
-    return data.text;
-};
-
-
-// 待機用
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// <thinking>ブロックの除去（Gemini 2.5系が出力することがある）
-const stripThinkingBlock = (text: string): string => {
-    return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
-};
-
-// モデル別最終リクエスト時刻管理
-const lastRequestTimes: Record<string, number> = {
-    "gemini-2.5-flash-lite": 0,
-    "gemini-2.5-flash": 0
-};
-
-// レート制限待機用
-const waitRateLimit = async (modelName: string, intervalMs: number) => {
-    const now = Date.now();
-    const elapsed = now - (lastRequestTimes[modelName] || 0);
-    if (elapsed < intervalMs) {
-        const wait = intervalMs - elapsed;
-        console.log(`[RateLimit] Waiting ${wait}ms for model: ${modelName}`);
-        await sleep(wait);
-    }
-    lastRequestTimes[modelName] = Date.now();
-};
-
-// ===== ペルソナ定義 =====
-const PERSONA_INSTRUCTIONS: Record<PersonaId, { label: string; kanji: string; systemPrompt: string }> = {
-    miyabi: {
-        label: 'コンシェルジュ', kanji: '雅',
-        systemPrompt: `あなたは「雅のコンシェルジュ」です。伝統と格式を重んじる最高品質の案内人として振る舞ってください。
-語り口は上品で落ち着き、王道の名所の「知られざる一流の魅力」を丁寧に紐解きます。
-好む語彙: 「風格」「佇まい」「格別」「趣深い」「洗練」`
-    },
-    shiki: {
-        label: 'ストーリーテラー', kanji: '識',
-        systemPrompt: `あなたは「識のストーリーテラー」です。千年の記憶を紐解く歴史家として振る舞ってください。
-街の由来、伝説、歴史の裏側をドラマチックに語ります。石碑の一文字、地名の響きにすら物語を見出します。
-好む語彙: 「悠久」「礎」「刻まれた」「かつて」「伝承」`
-    },
-    ei: {
-        label: 'フォトグラファー', kanji: '映',
-        systemPrompt: `あなたは「映のフォトグラファー」です。一瞬の美を切り取る蒐集家として振る舞ってください。
-光の角度、構図、最高の撮影タイミングを具体的に提案します。「何時の光が最も美しいか」を常に意識します。
-好む語彙: 「斜光」「構図」「逆光」「黄金比」「シャッターチャンス」`
-    },
-    aji: {
-        label: 'エピキュリアン', kanji: '味',
-        systemPrompt: `あなたは「味のエピキュリアン」です。五感を刺激する美食の旅人として振る舞ってください。
-隠れた名店、地元民しか知らない味、その土地の食文化の深層を探求します。匂いと食感の描写を重視します。
-好む語彙: 「芳醇」「口福」「土地の記憶」「香ばしい」「滋味」`
-    },
-    sei: {
-        label: 'ナビゲーター', kanji: '静',
-        systemPrompt: `あなたは「静のナビゲーター」です。喧騒を離れ心を整える案内人として振る舞ってください。
-人混みを避け、静かな路地裏や寺院、隠れた公園で自分を見つめ直す旅を提案します。「呼吸が深くなる場所」を選びます。
-好む語彙: 「静寂」「木漏れ日」「一息」「余白」「調和」`
-    },
-    un: {
-        label: 'アドバイザー', kanji: '運',
-        systemPrompt: `あなたは「運のアドバイザー」です。福を呼び込むパワースポット専門家として振る舞ってください。
-運気が上がる神社仏閣、祈りの作法、良い気が流れる場所を専門にガイドします。心身を整える旅を提案します。
-好む語彙: 「御利益」「気脈」「浄化」「導き」「神徳」`
-    }
-};
-
-const getPersonaPrompt = (persona?: PersonaId): string => {
-    if (!persona || !PERSONA_INSTRUCTIONS[persona]) return '';
-    const p = PERSONA_INSTRUCTIONS[persona];
-    return `\n**【AIガイド・ペルソナ: 【${p.kanji}】${p.label}】**\n${p.systemPrompt}\n上記のペルソナの口調・視点・専門用語で、すべての説明文（aiDescription, must_see, pro_tip, trivia）を書いてください。\n`;
-};
-
-// ===== ジャンル別滞在時間推定 =====
-const getStayTimeByType = (category: string): number => {
-    const cat = (category || '').toLowerCase();
-    if (cat.includes('museum') || cat.includes('art_gallery') || cat.includes('aquarium') || cat.includes('zoo')) return 90;
-    if (cat.includes('park') || cat.includes('garden') || cat.includes('botanical')) return 60;
-    if (cat.includes('temple') || cat.includes('shrine') || cat.includes('church')) return 45;
-    if (cat.includes('castle') || cat.includes('palace') || cat.includes('monument')) return 60;
-    if (cat.includes('cafe') || cat.includes('bakery') || cat.includes('ice_cream')) return 30;
-    if (cat.includes('restaurant') || cat.includes('meal_delivery') || cat.includes('bar')) return 60;
-    if (cat.includes('store') || cat.includes('shop') || cat.includes('market') || cat.includes('mall')) return 40;
-    if (cat.includes('theater') || cat.includes('stadium') || cat.includes('cinema')) return 120;
-    if (cat.includes('spa') || cat.includes('onsen') || cat.includes('hot_spring')) return 90;
-    if (cat.includes('beach') || cat.includes('waterfall') || cat.includes('scenic')) return 45;
-    return 40; // デフォルト
-};
-
-// 【08】 3モード分離テンプレート
-const getExploreModeTemplate = (mode?: ExploreMode): string => {
-    switch (mode) {
-        case 'quick':
-            return `
-**【探索モード: クイック散策】**
-- 短時間で楽しめる軽いコースを作成してください。
-- スポット数は控えめに。移動距離を最小限にし、密度より「一つ一つをゆっくり味わう」ことを重視。
-- 重たい食事よりカフェや軽食を優先してください。`;
-        case 'fullday':
-            return `
-**【探索モード: 1日トラベル】**
-- 朝から夕方まで充実した1日プランを作成してください。
-- ランチは必ず1件含めること。午前・午後で異なるテーマの体験を織り交ぜてください。
-- 休憩スポット（カフェ等）を午後に1件入れてバランスを取ってください。`;
-        case 'multiday':
-            return `
-**【探索モード: 連泊プラン】**
-- 1日あたり約13時間（780分）の活動時間を想定してください。
-- 各日のスポットは同一エリア内（3km圏内）に集めてください。
-- 各日に明確なテーマを設けてください。
-- 日ごとにエリアを変え、効率的な移動を心がけてください。`;
-        default:
-            return '';
-    }
-};
-
-// 【07】 モデル動的選択
-const selectModel = (durationMinutes: number): string => {
-    // 3時間以下の散策 → flash-lite（高速・低コスト）
-    // それ以上 → flash（リッチなプロンプト処理能力）
-    return durationMinutes <= 180 ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
-};
-
-const getDiningRule = (durationMinutes: number) => {
-    if (durationMinutes <= 90) {
-        return `- **食事・カフェの制限**: 各コースにおいて **最大1件** まで。サクッと立ち寄れるカフェや軽食を含めてください。`;
-    } else if (durationMinutes <= 180) {
-        return `- **食事・カフェの制限**: 各コースにおいて **最大2件（必ず1件は含める）**。体験をメインに据えつつ、美味しい休憩スポットを確保。`;
-    } else if (durationMinutes <= 300) {
-        return `- **食事・カフェの制限**: 各コースにおいて **必ず1〜2件含める**。ランチとカフェなど、観光の合間に名物を楽しんで。`;
-    } else {
-        return `- **食事・カフェの制限**: 各コースにおいて **必ず2〜3件含める**。ランチやディナー、休憩カフェなど、長旅に見合った食事体験を。`;
-    }
-};
-
-const getRecommendedSpotCount = (durationMinutes: number) => {
-    if (durationMinutes <= 120) return `**1〜2件**`;
-    if (durationMinutes <= 240) return `**2〜3件**`;
-    if (durationMinutes <= 360) return `**3〜4件**`;
-    if (durationMinutes <= 480) return `**4〜5件**`;
-    if (durationMinutes <= 600) return `**5〜6件**`;
-    if (durationMinutes <= 720) return `**5〜7件**`;
-    return `**6〜8件**`;
-};
-
-const getMinSpotCount = (durationMinutes: number): number => {
-    if (durationMinutes <= 120) return 1;
-    if (durationMinutes <= 240) return 2;
-    if (durationMinutes <= 360) return 3;
-    if (durationMinutes <= 480) return 4;
-    if (durationMinutes <= 600) return 5;
-    if (durationMinutes <= 720) return 5;
-    return 6;
-};
-
-// 飲食スポット判定
-const isDining = (spot: Spot): boolean => {
-    const cat = (spot.category || '').toLowerCase();
-    const types = ((spot.tags?.types as string[] | undefined) || []).join(' ').toLowerCase();
-    return ['restaurant', 'cafe', 'bar', 'bakery', 'food', 'meal', 'coffee', 'bistro', 'izakaya', 'ramen', 'sushi'].some(
-        t => cat.includes(t) || types.includes(t)
-    );
-};
-
-// 連続食事スポット分離（最大10回試行）
-const separateConsecutiveMeals = (spots: Spot[]): Spot[] => {
-    const result = [...spots];
-    for (let iter = 0; iter < 10; iter++) {
-        let swapped = false;
-        for (let i = 0; i < result.length - 1; i++) {
-            if (isDining(result[i]) && isDining(result[i + 1])) {
-                const swapIdx = result.findIndex((s, j) => j > i + 1 && !isDining(s));
-                if (swapIdx !== -1) {
-                    [result[i + 1], result[swapIdx]] = [result[swapIdx], result[i + 1]];
-                    swapped = true;
-                    break;
-                }
-            }
-        }
-        if (!swapped) break;
-    }
-    return result;
-};
-
-// 最近傍法ソート（カットオフなし）
-const nearestNeighborSort = (spots: Spot[]): Spot[] => {
-    if (spots.length <= 1) return spots;
-    const sorted: Spot[] = [spots[0]];
-    const remaining = spots.slice(1);
-    while (remaining.length > 0) {
-        const current = sorted[sorted.length - 1];
-        let nearestIdx = 0, nearestDist = Infinity;
-        for (let i = 0; i < remaining.length; i++) {
-            const dx = (remaining[i].lat - current.lat) * 111000;
-            const dy = (remaining[i].lon - current.lon) * 111000 * Math.cos(current.lat * Math.PI / 180);
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
-        }
-        sorted.push(remaining.splice(nearestIdx, 1)[0]);
-    }
-    return sorted;
-};
-
-// 2-opt局所最適化（交差を解消して総移動距離を短縮）
-const twoOptImprove = (spots: Spot[], maxIter = 50): Spot[] => {
-    if (spots.length < 4) return spots;
-    const route = [...spots];
-    const distM = (a: Spot, b: Spot) => {
-        const dx = (a.lat - b.lat) * 111000;
-        const dy = (a.lon - b.lon) * 111000 * Math.cos(a.lat * Math.PI / 180);
-        return Math.sqrt(dx * dx + dy * dy);
-    };
-    let improved = true, iter = 0;
-    while (improved && iter++ < maxIter) {
-        improved = false;
-        for (let i = 0; i < route.length - 2; i++) {
-            for (let j = i + 2; j < route.length - 1; j++) {
-                const before = distM(route[i], route[i + 1]) + distM(route[j], route[j + 1]);
-                const after = distM(route[i], route[j]) + distM(route[i + 1], route[j + 1]);
-                if (after + 0.1 < before) {
-                    const reversed = route.slice(i + 1, j + 1).reverse();
-                    route.splice(i + 1, j - i, ...reversed);
-                    improved = true;
-                }
-            }
-        }
-    }
-    return route;
-};
-
-// 時刻文字列 "HH:MM" → 分（深夜0時からの経過分）
-const parseTimeToMinutes = (timeStr: string): number => {
-    const m = (timeStr || '').match(/(\d{1,2})[:：](\d{2})/);
-    if (!m) return 10 * 60; // デフォルト 10:00
-    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-};
-
-// ===== 営業時間チェック =====
-// Google Places の weekdayDescriptions は日本語: "月曜日: 09:00～17:00" 等
-// dayOfWeek: 0=日, 1=月, ..., 6=土
-const WEEKDAY_NAMES = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'];
-
-interface OpenStatus {
-    status: 'open' | 'closed' | 'unknown';
-    label?: string; // ユーザー向け表示用 "09:00-17:00" "定休日" 等
-}
-
-/**
- * 指定の曜日・時刻にスポットが営業中か判定する
- * @param weekdayDescriptions Google Places の weekdayDescriptions
- * @param dayOfWeek 0=日 ... 6=土
- * @param visitStartMin 訪問開始時刻（深夜0時からの経過分）
- * @param visitEndMin 訪問終了時刻（深夜0時からの経過分）
- */
-const checkOpenStatus = (
-    weekdayDescriptions: string[] | undefined,
-    dayOfWeek: number,
-    visitStartMin: number,
-    visitEndMin: number
-): OpenStatus => {
-    if (!weekdayDescriptions || weekdayDescriptions.length === 0) {
-        return { status: 'unknown' };
-    }
-    const dayName = WEEKDAY_NAMES[dayOfWeek];
-    const line = weekdayDescriptions.find(d => d.includes(dayName));
-    if (!line) return { status: 'unknown' };
-
-    // 定休日判定
-    if (/定休日|休業|closed/i.test(line)) {
-        return { status: 'closed', label: '定休日' };
-    }
-    // 24時間営業
-    if (/24\s*時間|営業中：終日|open\s*24/i.test(line)) {
-        return { status: 'open', label: '24時間' };
-    }
-
-    // 時刻範囲を抽出: "09:00～17:00" "9:00 ~ 17:00" "09:00-17:00" 等
-    const ranges = [...line.matchAll(/(\d{1,2})[:：](\d{2})\s*[～~〜\-–—]\s*(\d{1,2})[:：](\d{2})/g)];
-    if (ranges.length === 0) return { status: 'unknown' };
-
-    for (const m of ranges) {
-        const openMin = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-        let closeMin = parseInt(m[3], 10) * 60 + parseInt(m[4], 10);
-        // 翌日跨ぎ（例: 18:00～02:00）
-        if (closeMin <= openMin) closeMin += 24 * 60;
-        // 訪問時間が営業時間に完全に含まれていればOK
-        if (visitStartMin >= openMin && visitEndMin <= closeMin) {
-            return { status: 'open', label: `${m[1]}:${m[2]}-${m[3]}:${m[4]}` };
-        }
-    }
-    // どの営業時間帯にも収まらない
-    return { status: 'closed', label: ranges.map(m => `${m[1]}:${m[2]}-${m[3]}:${m[4]}`).join(',') };
-};
-
-// カフェ専門判定（レストラン併設は除外）
-const isCafeOnly = (s: Spot): boolean => {
-    const text = `${s.category || ''} ${((s.tags?.types as string[] | undefined) || []).join(' ')}`.toLowerCase();
-    return /cafe|bakery|coffee|tea_house/.test(text) && !/restaurant/.test(text);
-};
-
-// 評価×レビュー数による品質スコア
-const ratingScore = (s: Spot): number => (s.rating ?? 3.5) * Math.log(Math.max(s.user_ratings_total ?? 1, 1));
-
-/**
- * ABTR: Anchor-Based Time Routing
- * 食事を時刻アンカーで固定し、観光スポットを空間最適化で配置する。
- * - ランチ: 12:00〜13:30
- * - カフェ: ランチ+3h かつ 15:00以降
- * - ディナー: 18:30以降
- * 不要な食事スポットは自動でドロップする。
- */
-const buildSmartItinerary = (
-    spots: Spot[],
-    opts: { startTimeMin: number; durationMin: number }
-): Spot[] => {
-    if (spots.length <= 1) return spots;
-    const { startTimeMin, durationMin } = opts;
-    const endTimeMin = startTimeMin + durationMin;
-
-    // 1. 食事/観光に分類
-    const dining = spots.filter(isDining);
-    const sites = spots.filter(s => !isDining(s));
-
-    // 2. 時刻アンカー設定（クロックタイム基準）
-    const lunchTarget =
-        startTimeMin <= 13.5 * 60 && endTimeMin >= 12 * 60 && durationMin >= 120
-            ? Math.max(12 * 60, Math.min(13.5 * 60, startTimeMin + Math.max(120, Math.round(durationMin * 0.3))))
-            : null;
-
-    const dinnerTarget =
-        durationMin >= 420 && endTimeMin >= 19 * 60
-            ? Math.max(18.5 * 60, endTimeMin - 120)
-            : null;
-
-    let cafeTarget: number | null = null;
-    if (durationMin >= 180) {
-        const earliest = Math.max(15 * 60, (lunchTarget ?? startTimeMin) + 150);
-        const latest = (dinnerTarget ?? endTimeMin) - 40;
-        if (earliest <= latest && earliest > startTimeMin + 60) cafeTarget = earliest;
-    }
-
-    // 3. 食事候補を品質スコアでソート → 役割別に最適なものをピック
-    const sortedDining = [...dining].sort((a, b) => ratingScore(b) - ratingScore(a));
-    const takeBest = (arr: Spot[], pref?: (s: Spot) => boolean): Spot | null => {
-        if (arr.length === 0) return null;
-        if (pref) {
-            const idx = arr.findIndex(pref);
-            if (idx !== -1) return arr.splice(idx, 1)[0];
-        }
-        return arr.splice(0, 1)[0];
-    };
-    const lunch = lunchTarget !== null ? takeBest(sortedDining, s => !isCafeOnly(s)) : null;
-    const dinner = dinnerTarget !== null ? takeBest(sortedDining, s => !isCafeOnly(s)) : null;
-    const cafe = cafeTarget !== null ? takeBest(sortedDining, isCafeOnly) : null;
-    // 残りの食事スポットは破棄（食べ過ぎ防止）
-
-    // 4. 観光スポットを最近傍 + 2-opt で空間最適化
-    const orderedSites = twoOptImprove(nearestNeighborSort(sites));
-
-    // 5. 食事を目標時刻に挿入（累積時間ベース）
-    const AVG_TRAVEL_MIN = 15;
-    const insertAtTime = (list: Spot[], meal: Spot, targetTime: number): Spot[] => {
-        let cur = startTimeMin;
-        let insertIdx = list.length;
-        for (let i = 0; i < list.length; i++) {
-            const arrival = cur + AVG_TRAVEL_MIN;
-            if (arrival >= targetTime) { insertIdx = i; break; }
-            cur = arrival + (list[i].stayTime || getStayTimeByType(list[i].category));
-        }
-        return [...list.slice(0, insertIdx), meal, ...list.slice(insertIdx)];
-    };
-
-    let result = orderedSites;
-    if (lunch && lunchTarget !== null) result = insertAtTime(result, lunch, lunchTarget);
-    if (cafe && cafeTarget !== null) result = insertAtTime(result, cafe, cafeTarget);
-    if (dinner && dinnerTarget !== null) result = insertAtTime(result, dinner, dinnerTarget);
-
-    // 6. 連続食事の最終ガード
-    return separateConsecutiveMeals(result);
-};
+// UUID 生成
+const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Math.random().toString(36).substring(2, 15);
 
 export const generateSmartCourses = async (
     candidates: Spot[],
@@ -468,7 +57,7 @@ export const generateSmartCourses = async (
     // ===== 候補品質フィルタ（評価重み付きスコアリング）=====
     const qualityFiltered = candidates
         .filter(s => {
-            if ((s as any).business_status === 'CLOSED_PERMANENTLY') return false;
+            if ((s as Spot & { business_status?: string }).business_status === 'CLOSED_PERMANENTLY') return false;
             if (s.rating && s.rating < 3.5) return false;
             return true;
         })
@@ -527,7 +116,6 @@ export const generateSmartCourses = async (
     ];
 
     const selectedThemes = allThemes.sort(() => 0.5 - Math.random()).slice(0, 5);
-    const themeInstructions = selectedThemes.map((theme: string, i: number) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
 
     // ===== 連泊プラン生成パス =====
     if (isMultiday) {
@@ -607,8 +195,9 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                 await waitRateLimit(multidayModel, 2000);
                 mdText = await callGeminiProxy(multidayPrompt, multidayModel, attempt > 0);
                 break;
-            } catch (err: any) {
-                const is429 = err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED');
+            } catch (err) {
+                const e = err as Error & { status?: number };
+                const is429 = e?.status === 429 || e?.message?.includes('429') || e?.message?.includes('RESOURCE_EXHAUSTED');
                 if (is429 && attempt < MD_RETRIES) { await sleep(Math.min(4000 * Math.pow(2, attempt), 30000)); continue; }
                 if (attempt < MD_RETRIES) continue;
                 throw err;
@@ -617,24 +206,21 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 
         if (!mdText) return [];
 
-        let mdJson = stripThinkingBlock(mdText);
-        const mdMatch = mdJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, mdJson];
-        mdJson = mdMatch[1] || mdJson;
-        const fb = mdJson.indexOf('{'), lb = mdJson.lastIndexOf('}');
-        if (fb !== -1 && lb !== -1) mdJson = mdJson.substring(fb, lb + 1);
+        const mdJson = extractJsonString(mdText);
 
         try {
-            const mdData = JSON.parse(mdJson.replace(/,\s*([\]}])/g, '$1'));
-            const plans: any[] = mdData.plans || [];
+            const mdData = JSON.parse(mdJson);
+            const plans: Array<{ planIndex?: number; days?: Array<Record<string, unknown>> }> = mdData.plans || [];
             const allDayCourses: Course[] = [];
 
             // 連泊用: ID→名前フォールバック
-            const resolveMultiday = (s: any): Spot | undefined => {
+            const resolveMultiday = (s: { id?: unknown; name?: unknown }): Spot | undefined => {
                 const idNum = Number(s.id);
                 if (Number.isFinite(idNum) && qualityFiltered[idNum]) return qualityFiltered[idNum];
                 if (s.name && typeof s.name === 'string') {
-                    return qualityFiltered.find(c => c.name === s.name)
-                        ?? qualityFiltered.find(c => c.name.includes(s.name) || s.name.includes(c.name));
+                    const n = s.name;
+                    return qualityFiltered.find(c => c.name === n)
+                        ?? qualityFiltered.find(c => c.name.includes(n) || n.includes(c.name));
                 }
                 return undefined;
             };
@@ -642,32 +228,33 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
             for (const plan of plans) {
                 const planId = generateId();
                 for (const day of (plan.days || [])) {
-                    const hydratedSpots: Spot[] = (day.spots || []).map((s: any) => {
-                        const original = resolveMultiday(s);
+                    const d = day as { spots?: Array<Record<string, unknown>>; dayIndex?: number; title?: string; theme?: string; description?: string };
+                    const hydratedSpots: Spot[] = (d.spots || []).map((s) => {
+                        const original = resolveMultiday(s as { id?: unknown; name?: unknown });
                         if (!original) return null;
                         return {
                             ...original,
                             stayTime: Number(s.stayTime) || 45,
-                            aiDescription: s.aiDescription || "魅力的なスポットです",
-                            must_see: s.must_see || null,
-                            pro_tip: s.pro_tip || null,
-                            trivia: s.trivia || undefined,
-                            cultural_property: s.cultural_property || null,
+                            aiDescription: (s.aiDescription as string) || "魅力的なスポットです",
+                            must_see: (s.must_see as string) || null,
+                            pro_tip: (s.pro_tip as string) || null,
+                            trivia: (s.trivia as string) || undefined,
+                            cultural_property: (s.cultural_property as string) || null,
                         } as Spot;
-                    }).filter((s: any): s is Spot => s !== null);
+                    }).filter((s): s is Spot => s !== null);
 
                     // 連泊：Day1は実際の出発時刻、Day2以降は9:00開始と仮定
-                    const dayStartMin = (day.dayIndex ?? 0) === 0 ? parseTimeToMinutes(timeContext) : 9 * 60;
+                    const dayStartMin = (d.dayIndex ?? 0) === 0 ? parseTimeToMinutes(timeContext) : 9 * 60;
                     const dayOrdered = buildSmartItinerary(hydratedSpots, { startTimeMin: dayStartMin, durationMin: perDayMinutes });
                     allDayCourses.push({
                         id: generateId(),
-                        title: day.title || `Day ${(day.dayIndex ?? 0) + 1}`,
-                        theme: day.theme || '旅程',
-                        description: day.description || '',
+                        title: d.title || `Day ${(d.dayIndex ?? 0) + 1}`,
+                        theme: d.theme || '旅程',
+                        description: d.description || '',
                         totalTime: perDayMinutes,
                         spots: dayOrdered,
                         persona,
-                        dayIndex: day.dayIndex ?? 0,
+                        dayIndex: d.dayIndex ?? 0,
                         planId,
                         planIndex: plan.planIndex ?? 0,
                     } as Course);
@@ -684,7 +271,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
     // ===== 連泊パスここまで =====
 
     // ヘルパー: 実際にAIを呼び出す内部関数
-    const callGeneration = async (num: number, themeStartIndex: number): Promise<any[]> => {
+    const callGeneration = async (num: number, themeStartIndex: number): Promise<Array<Record<string, unknown>>> => {
         const themeSlice = selectedThemes.slice(themeStartIndex, themeStartIndex + num).map((theme, i) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
 
         const promptTemplate = `
@@ -780,8 +367,9 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                 const useJsonMode = attempt > 0;
                 text = await callGeminiProxy(promptTemplate, currentModel, useJsonMode);
                 break; // 成功したらループ脱出
-            } catch (err: any) {
-                const is429 = err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED');
+            } catch (err) {
+                const e = err as Error & { status?: number };
+                const is429 = e?.status === 429 || e?.message?.includes('429') || e?.message?.includes('RESOURCE_EXHAUSTED');
                 if (is429 && attempt < MAX_RETRIES) {
                     const backoffMs = Math.min(2000 * Math.pow(2, attempt), 30000);
                     console.warn(`[Gemini API] 429 Rate Limited. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
@@ -799,74 +387,69 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 
         if (!text) return [];
 
-        let jsonStr = stripThinkingBlock(text);
-        const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, jsonStr];
-        jsonStr = jsonMatch[1] || jsonStr;
-        const firstBrace = jsonStr.indexOf('{');
-        const firstBracket = jsonStr.indexOf('[');
-        const start = (firstBrace !== -1 && firstBracket !== -1) ? Math.min(firstBrace, firstBracket) : Math.max(firstBrace, firstBracket);
-        const lastBrace = jsonStr.lastIndexOf('}');
-        const lastBracket = jsonStr.lastIndexOf(']');
-        const end = Math.max(lastBrace, lastBracket);
-        if (start !== -1 && end !== -1 && start < end) {
-            jsonStr = jsonStr.substring(start, end + 1);
-        }
-        
+        const jsonStr = extractJsonString(text);
         try {
-            const data = JSON.parse(jsonStr.replace(/,\s*([\]}])/g, '$1'));
+            const data = JSON.parse(jsonStr);
             if (Array.isArray(data)) return data;
             if (data.courses && Array.isArray(data.courses)) return data.courses;
             console.warn('Gemini returned unusual JSON structure:', data);
             return [];
-        } catch (e) {
+        } catch {
             console.error('Gemini JSON Parse Error. Raw string:', jsonStr);
             return [];
         }
     };
 
-    // UUID生成ヘルパー
-    const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
-
     // ID→名前フォールバック付きスポット解決
-    const resolveOriginal = (s: any): Spot | undefined => {
+    const resolveOriginal = (s: { id?: unknown; name?: unknown }): Spot | undefined => {
         const idNum = Number(s.id);
         if (Number.isFinite(idNum) && qualityFiltered[idNum]) return qualityFiltered[idNum];
         if (s.name && typeof s.name === 'string') {
-            const exact = qualityFiltered.find(c => c.name === s.name);
+            const n = s.name;
+            const exact = qualityFiltered.find(c => c.name === n);
             if (exact) return exact;
-            const partial = qualityFiltered.find(c => c.name.includes(s.name) || s.name.includes(c.name));
+            const partial = qualityFiltered.find(c => c.name.includes(n) || n.includes(c.name));
             if (partial) return partial;
         }
         return undefined;
     };
 
     // コースデータをhydrateして整形する関数
-    const hydrateCourses = (rawCourses: any[]): Course[] => {
-        return rawCourses.map((course: any) => {
+    const hydrateCourses = (rawCourses: Array<Record<string, unknown>>): Course[] => {
+        return rawCourses.map((course) => {
             const uniqueId = generateId();
-            const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
-                const original = resolveOriginal(s);
+            const rawSpots = (course.spots as Array<Record<string, unknown>>) || [];
+            const hydratedSpots: Spot[] = rawSpots.map((s) => {
+                const original = resolveOriginal(s as { id?: unknown; name?: unknown });
                 if (!original) { console.warn(`[hydrate] Cannot resolve spot:`, s); return null; }
                 return {
                     ...original,
                     stayTime: Number(s.stayTime) || 30,
-                    aiDescription: s.aiDescription || s.recommendation_reason || "魅力的なスポットです",
-                    must_see: s.must_see || null,
-                    pro_tip: s.pro_tip || null,
-                    trivia: s.trivia || undefined,
-                    cultural_property: s.cultural_property || null
+                    aiDescription: (s.aiDescription as string) || (s.recommendation_reason as string) || "魅力的なスポットです",
+                    must_see: (s.must_see as string) || null,
+                    pro_tip: (s.pro_tip as string) || null,
+                    trivia: (s.trivia as string) || undefined,
+                    cultural_property: (s.cultural_property as string) || null,
                 } as Spot;
-            }).filter((s: any): s is Spot => s !== null);
+            }).filter((s): s is Spot => s !== null);
 
             const startMin = parseTimeToMinutes(timeContext);
             const orderedSpots = buildSmartItinerary(hydratedSpots, { startTimeMin: startMin, durationMin: durationMinutes });
-            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: orderedSpots, persona } as Course;
+            return {
+                id: uniqueId,
+                title: course.title as string,
+                theme: course.theme as string,
+                description: course.description as string,
+                totalTime: durationMinutes,
+                spots: orderedSpots,
+                persona,
+            } as Course;
         });
     };
 
     // 2段階生成を並列化（フル・パラレル処理）
     let accumulatedCourses: Course[] = [];
-    const handleSetCompleted = (rawCourses: any[]) => {
+    const handleSetCompleted = (rawCourses: Array<Record<string, unknown>>) => {
         const hydrated = hydrateCourses(rawCourses);
         accumulatedCourses = [...accumulatedCourses, ...hydrated];
         if (onProgress) onProgress([...accumulatedCourses]); // 新しい配列を渡して再描画を促す
@@ -877,7 +460,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
     const secondSetPromise = callGeneration(2, 3).then(handleSetCompleted).catch(e => { console.error("Generation part 2 failed", e); return []; });
 
     await Promise.all([firstSetPromise, secondSetPromise]);
-    
+
     return accumulatedCourses.slice(0, 5);
 };
 
@@ -905,7 +488,6 @@ export const remixCourse = async (
     }).join('\n');
 
     const diningRule = getDiningRule(durationMinutes);
-    const spotCountRule = getRecommendedSpotCount(durationMinutes);
 
     const prompt = `
 You are a top-tier Japanese luxury travel curator.
@@ -940,9 +522,9 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
   "description": "雑誌風の日本語イントロ",
   "theme": "カテゴリー名（例: 歴史散策、グルメ巡り、自然と癒し）",
   "spots": [
-    { 
-      "id": 0, 
-      "stayTime": MINS, 
+    {
+      "id": 0,
+      "stayTime": MINS,
       "aiDescription": "その場所の魅力を情感豊かに語る（日本語、末尾は「。」）",
       "must_see": "必見ポイント（末尾は「。」）",
       "pro_tip": "旅のヒント（末尾は「。」）",
@@ -969,8 +551,9 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
             const useJsonMode = attempt > 0;
             text = await callGeminiProxy(prompt, currentModel, useJsonMode);
             break;
-        } catch (err: any) {
-            const is429 = err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED');
+        } catch (err) {
+            const e = err as Error & { status?: number };
+            const is429 = e?.status === 429 || e?.message?.includes('429') || e?.message?.includes('RESOURCE_EXHAUSTED');
             if (is429 && attempt < MAX_RETRIES) {
                 const backoffMs = Math.min(2000 * Math.pow(2, attempt), 30000);
                 console.warn(`[Remix] 429 Rate Limited. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
@@ -988,48 +571,33 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
     if (!text) throw new Error("AIによるリミックスに失敗しました。時間をおいて再度お試しください。");
 
     try {
-        let jsonStr = stripThinkingBlock(text);
-        const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-            jsonStr = jsonMatch[1];
-        } else {
-            const firstBrace = jsonStr.indexOf('{');
-            const firstBracket = jsonStr.indexOf('[');
-            const start = (firstBrace !== -1 && firstBracket !== -1) ? Math.min(firstBrace, firstBracket) : Math.max(firstBrace, firstBracket);
-            const lastBrace = jsonStr.lastIndexOf('}');
-            const lastBracket = jsonStr.lastIndexOf(']');
-            const end = Math.max(lastBrace, lastBracket);
-            if (start !== -1 && end !== -1 && start < end) {
-                jsonStr = jsonStr.substring(start, end + 1);
-            }
-        }
-        jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1'); 
-
+        const jsonStr = extractJsonString(text);
         let data;
         try {
             data = JSON.parse(jsonStr);
-        } catch (e) {
+        } catch {
             console.error('Gemini JSON Parse Error in Remix. Raw string:', jsonStr);
             return null;
         }
-        
-        const hydratedSpots = (data.spots || []).map((s: any) => {
+
+        const rawSpots = (data.spots as Array<Record<string, unknown>>) || [];
+        const hydratedSpots = rawSpots.map((s) => {
             const original = candidates[Number(s.id)];
             if (!original) return null;
-            return { 
-                ...original, 
-                stayTime: Number(s.stayTime) || 30, 
-                aiDescription: s.aiDescription || "リミックスされたスポットです",
-                must_see: s.must_see || original.must_see || null,
-                pro_tip: s.pro_tip || original.pro_tip || null,
-                trivia: s.trivia || original.trivia || ""
+            return {
+                ...original,
+                stayTime: Number(s.stayTime) || 30,
+                aiDescription: (s.aiDescription as string) || "リミックスされたスポットです",
+                must_see: (s.must_see as string) || original.must_see || null,
+                pro_tip: (s.pro_tip as string) || original.pro_tip || null,
+                trivia: (s.trivia as string) || original.trivia || ""
             } as Spot;
-        }).filter((s: any): s is Spot => s !== null);
+        }).filter((s): s is Spot => s !== null);
 
         if (hydratedSpots.length === 0) throw new Error("有効なスポットが生成されませんでした。");
 
         return {
-            id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+            id: generateId(),
             title: data.title || originalCourse.title + " (Remix)",
             description: data.description || "",
             totalTime: durationMinutes,
@@ -1086,14 +654,14 @@ JSON ONLY.`;
     try {
         await waitRateLimit(modelName, 5000);
         const text = await callGeminiProxy(prompt, modelName, true);
-        return JSON.parse(text) as WaitingScreenContent;
+        return JSON.parse(stripThinkingBlock(text)) as WaitingScreenContent;
     } catch (err) {
         console.warn(`Sub-AI (Flash-Lite) failed, trying Flash:`, err);
         try {
             const fbModel = "gemini-2.5-flash";
             await waitRateLimit(fbModel, 7000);
             const text = await callGeminiProxy(prompt, fbModel, true);
-            return JSON.parse(text) as WaitingScreenContent;
+            return JSON.parse(stripThinkingBlock(text)) as WaitingScreenContent;
         } catch (fbErr) {
             console.warn(`Sub-AI (Flash) also failed:`, fbErr);
             return null;

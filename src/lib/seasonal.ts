@@ -2,8 +2,8 @@ import Holidays from 'date-holidays';
 
 const hd = new Holidays('JP');
 
-export type TimeOfDay = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night';
-export type Season = '春' | '夏' | '秋' | '冬';
+import type { TimeOfDay, Season } from '../types';
+export type { TimeOfDay, Season };
 
 export function getTimeOfDay(hour = new Date().getHours()): TimeOfDay {
     if (hour < 5) return 'night';

@@ -9,16 +9,8 @@ const TRAVEL_MODE_MAP: Record<TravelMode, string> = {
     transit: 'TRANSIT',
 };
 
-export interface RouteLegResult {
-    durationMin: number;
-    distanceM: number;
-}
-
-export interface RouteComputeResult {
-    legs: RouteLegResult[];
-    totalDurationMin: number;
-    totalDistanceM: number;
-}
+import type { RouteLegResult, RouteComputeResult } from '../types';
+export type { RouteLegResult, RouteComputeResult };
 
 /**
  * Routes API (v2) でスポット列の実移動時間・距離を計算する。

@@ -119,3 +119,45 @@ export interface TabItem {
     label: string;
     icon: string; // lucide icon name
 }
+
+// ===== 天候 =====
+export type WeatherTag = 'rainy' | 'snowy' | 'hot' | 'cold' | 'normal' | 'unknown';
+
+export interface WeatherInfo {
+    text: string;        // 「快晴」「雨」など人間向け表現
+    tag: WeatherTag;     // AI判断用タグ
+    temperatureC: number | null;
+}
+
+// ===== 季節・時間帯 =====
+export type TimeOfDay = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night';
+export type Season = '春' | '夏' | '秋' | '冬';
+
+// ===== 履歴 =====
+export interface HistoryEntry {
+    id: string;
+    course: Course;
+    query: string;
+    viewedAt: number;
+    thumbnailUrl?: string;
+}
+
+export interface HistoryStore {
+    version: 1;
+    entries: HistoryEntry[];
+}
+
+// ===== ルート計算 (Routes API) =====
+export interface RouteLegResult {
+    durationMin: number;
+    distanceM: number;
+}
+
+export interface RouteComputeResult {
+    legs: RouteLegResult[];
+    totalDurationMin: number;
+    totalDistanceM: number;
+}
+
+// ===== ナビゲーション =====
+export type NavStatus = 'idle' | 'active' | 'arrived_all';

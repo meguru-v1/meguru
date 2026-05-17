@@ -3,7 +3,7 @@ import {
     Search, MapPin, Clock, Navigation, ArrowRight, Car, Footprints, Bike, Train, ArrowDown,
     Smile, Banknote, Users, Sparkles, Loader2, Compass, LocateFixed, Zap, Sun, CalendarDays
 } from 'lucide-react';
-import type { SearchParams, SearchMode, TravelMode, AutocompleteResult, PersonaId } from '../types';
+import type { SearchParams, SearchMode, TravelMode, AutocompleteResult, PersonaId, ExploreMode } from '../types';
 import { getAutocompleteSuggestions } from '../lib/places';
 
 // ===== ペルソナ定義 =====
@@ -17,8 +17,6 @@ const PERSONAS: { id: PersonaId; kanji: string; label: string; theme: string; co
 ];
 
 // ===== 探索モード定義 =====
-type ExploreMode = 'quick' | 'fullday' | 'multiday';
-
 const EXPLORE_MODES: { id: ExploreMode; label: string; sub: string; icon: React.ElementType; minDuration: number; maxDuration: number; defaultDuration: number; minRadius: number; maxRadius: number; defaultRadius: number; step: number }[] = [
     { id: 'quick',    label: 'クイック散策', sub: '1〜5時間', icon: Zap,          minDuration: 60,  maxDuration: 300,  defaultDuration: 120,  minRadius: 0.5, maxRadius: 2,  defaultRadius: 1,   step: 30 },
     { id: 'fullday',  label: '1日トラベル',  sub: '6〜12時間', icon: Sun,          minDuration: 360, maxDuration: 720,  defaultDuration: 480,  minRadius: 2,   maxRadius: 7,  defaultRadius: 3.5, step: 30 },

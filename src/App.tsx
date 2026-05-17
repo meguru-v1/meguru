@@ -8,7 +8,7 @@ import AiChatSheet from './components/AiChatSheet';
 import DetourSuggestion from './components/DetourSuggestion';
 import { useFavorites } from './hooks/useFavorites';
 import { useNavigation } from './hooks/useNavigation';
-import { searchAreaCenter, searchNearbySpots, searchRouteSpots, getPlaceLatLng, reverseGeocode } from './lib/places';
+import { searchNearbySpots, searchRouteSpots, reverseGeocode, resolveLocation } from './lib/places';
 import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
 import type { WaitingScreenContent } from './lib/gemini';
 import { decodeShareUrl, clearShareParam, encodeCourseToUrl, copyToClipboard } from './lib/shareLink';
@@ -150,19 +150,22 @@ function App() {
         return `よく好むカテゴリ: ${typesStr}\n好みの場所の説明例: ${favoriteDescriptions.slice(0, 3).join(' / ')}`;
     };
 
-    // ===== ジオコード関数 =====
+    // ===== ジオコード関数（多段フォールバック）=====
     const geocode = async (q: string, placeId?: string): Promise<{ lat: number; lon: number; name: string } | null> => {
+        // ブラウザ位置をバイアスとして利用
+        let bias: { lat: number; lng: number } | undefined;
         try {
-            // Place ID があれば優先的に詳細座標を取得 (高精度)
-            if (placeId) {
-                const res = await getPlaceLatLng(placeId);
-                if (res) return { lat: res.lat, lon: res.lng, name: res.name };
-            }
-            // なければ従来のテキスト検索
-            const res = await searchAreaCenter(q);
-            if (res) return { lat: res.lat, lon: res.lng, name: res.name };
+            await new Promise<void>((resolve) => {
+                if (!navigator.geolocation) return resolve();
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => { bias = { lat: pos.coords.latitude, lng: pos.coords.longitude }; resolve(); },
+                    () => resolve(),
+                    { enableHighAccuracy: false, timeout: 1500, maximumAge: 300000 }
+                );
+            });
         } catch { /* ignore */ }
-        return null;
+        const res = await resolveLocation(q, placeId, bias);
+        return res ? { lat: res.lat, lon: res.lng, name: res.name } : null;
     };
 
     // ===== 検索ハンドラ =====
@@ -393,7 +396,7 @@ function App() {
                 } else {
                     startGeo = await geocode(query, queryPlaceId);
                 }
-                if (!startGeo) throw new Error("場所が見つかりませんでした。");
+                if (!startGeo) throw new Error(`「${query}」が見つかりませんでした。スペルや表記を見直すか、より具体的な地名（例:「京都駅」）でお試しください。`);
 
                 setCenter({ lat: startGeo.lat, lon: startGeo.lon });
                 setRadius(r);

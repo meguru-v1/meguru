@@ -21,7 +21,7 @@ import { getDistance } from 'geolib';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
     Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap, Send,
-    Share2, MessageCircle, CheckCircle2, Route as RouteIcon, GripVertical
+    Share2, MessageCircle, CheckCircle2, Route as RouteIcon
 } from 'lucide-react';
 import type { Course, Spot, SearchParams, TabId, TravelMode, ExploreMode } from './types';
 
@@ -782,9 +782,10 @@ function App() {
         setCourses(prev => prev.map(c => c.id === updated.id ? updated : c));
     };
 
-    // 前後のコースに切替（スワイプ用）
+    // 前後のコースに切替（スワイプ用）。連泊プラン中はDay1/Day2タブが優先のためスキップ
     const handleNavigateCourse = (direction: 'prev' | 'next') => {
         if (!selectedCourse || courses.length < 2) return;
+        if (selectedCourse.planId) return; // 連泊プランはタブで切替
         const idx = courses.findIndex(c => c.id === selectedCourse.id);
         if (idx === -1) return;
         const nextIdx = direction === 'next' ? idx + 1 : idx - 1;

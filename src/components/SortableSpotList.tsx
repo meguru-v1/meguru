@@ -40,15 +40,15 @@ const SortableItem: React.FC<SortableItemProps> = ({ spot, children }) => {
 
     return (
         <div ref={setNodeRef} style={style}>
-            {/* ドラッグハンドル: 左上に配置、touch-actionを明示 */}
+            {/* ドラッグハンドル: カード上部の細いバー（hero画像のUIと被らない） */}
             <div
                 {...attributes}
                 {...listeners}
-                className="absolute top-2 left-2 z-30 w-8 h-8 flex items-center justify-center rounded-full shadow-md cursor-grab active:cursor-grabbing"
-                style={{ background: 'rgba(255,255,255,0.85)', touchAction: 'none' }}
+                className="w-full flex items-center justify-center py-1.5 rounded-t-xl cursor-grab active:cursor-grabbing transition-colors hover:bg-slate-100"
+                style={{ background: 'var(--bg-secondary)', touchAction: 'none' }}
                 aria-label="ドラッグして並び替え"
             >
-                <GripVertical size={14} style={{ color: 'var(--text-secondary)' }} />
+                <GripVertical size={14} style={{ color: 'var(--text-muted)', transform: 'rotate(90deg)' }} />
             </div>
             {children}
         </div>

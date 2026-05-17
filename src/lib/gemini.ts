@@ -166,6 +166,35 @@ const getRecommendedSpotCount = (durationMinutes: number) => {
     return `**4〜5件**`;
 };
 
+// 飲食スポット判定
+const isDining = (spot: Spot): boolean => {
+    const cat = (spot.category || '').toLowerCase();
+    const types = ((spot.tags?.types as string[] | undefined) || []).join(' ').toLowerCase();
+    return ['restaurant', 'cafe', 'bar', 'bakery', 'food', 'meal', 'coffee', 'bistro', 'izakaya', 'ramen', 'sushi'].some(
+        t => cat.includes(t) || types.includes(t)
+    );
+};
+
+// 連続食事スポット分離（最大10回試行）
+const separateConsecutiveMeals = (spots: Spot[]): Spot[] => {
+    const result = [...spots];
+    for (let iter = 0; iter < 10; iter++) {
+        let swapped = false;
+        for (let i = 0; i < result.length - 1; i++) {
+            if (isDining(result[i]) && isDining(result[i + 1])) {
+                const swapIdx = result.findIndex((s, j) => j > i + 1 && !isDining(s));
+                if (swapIdx !== -1) {
+                    [result[i + 1], result[swapIdx]] = [result[swapIdx], result[i + 1]];
+                    swapped = true;
+                    break;
+                }
+            }
+        }
+        if (!swapped) break;
+    }
+    return result;
+};
+
 // 最近傍法ソート（カットオフなし）
 const nearestNeighborSort = (spots: Spot[]): Spot[] => {
     if (spots.length <= 1) return spots;
@@ -328,7 +357,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
         const MD_RETRIES = 2;
         for (let attempt = 0; attempt <= MD_RETRIES; attempt++) {
             try {
-                await waitRateLimit(multidayModel, 5000);
+                await waitRateLimit(multidayModel, 2000);
                 mdText = await callGeminiProxy(multidayPrompt, multidayModel, attempt > 0);
                 break;
             } catch (err: any) {
@@ -375,7 +404,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                         theme: day.theme || '旅程',
                         description: day.description || '',
                         totalTime: perDayMinutes,
-                        spots: nearestNeighborSort(hydratedSpots),
+                        spots: separateConsecutiveMeals(nearestNeighborSort(hydratedSpots)),
                         persona,
                         dayIndex: day.dayIndex ?? 0,
                         planId,
@@ -414,6 +443,13 @@ ${getSeasonalPromptContext()}
 **2. 体験・観光の主役化と飲食制限:**
 ${diningRule}
 - 食べてばかりのプランにならないよう、公園、神社仏閣、名所、美術館などの**「体験・景色」をコースの主役に**してください。
+
+**【食事タイミングの厳格ルール（最重要）】**
+- 開始時刻: ${timeContext}
+- ランチは旅程の40〜50%地点（${timeContext}が10:00開始なら12:00〜13:00頃）に1か所配置すること
+- カフェ休憩はランチの約2〜3時間後に配置すること
+- **食事スポット2か所を連続して配置することは絶対禁止**（食事→食事はNG、食事→観光→食事はOK）
+- 食事スポットの直前・直後には必ず観光・体験スポットを配置すること
 
 **3. 自然なペース配分 (Natural Pacing):**
 - スポット数の「上限」は設定しません。代わりに、「各スポットの推定滞在時間（Stayフィールド参照）」＋「スポット間の移動時間（徒歩15分程度を想定）」を積み上げて、合計が **${durationMinutes}分** に自然に収まるスポット数を選んでください。
@@ -475,7 +511,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
                 const currentModel = attempt === 0 ? modelName : "gemini-2.5-flash";
-                await waitRateLimit(currentModel, 5000);
+                await waitRateLimit(currentModel, 2000);
                 const useJsonMode = attempt > 0;
                 text = await callGeminiProxy(promptTemplate, currentModel, useJsonMode);
                 break; // 成功したらループ脱出
@@ -544,7 +580,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                 } as Spot;
             }).filter((s: any): s is Spot => s !== null);
 
-            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: nearestNeighborSort(hydratedSpots), persona } as Course;
+            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: separateConsecutiveMeals(nearestNeighborSort(hydratedSpots)), persona } as Course;
         });
     };
 
@@ -649,7 +685,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
             const currentModel = attempt === 0 ? modelName : "gemini-2.5-flash";
-            await waitRateLimit(currentModel, 5000);
+            await waitRateLimit(currentModel, 2000);
             const useJsonMode = attempt > 0;
             text = await callGeminiProxy(prompt, currentModel, useJsonMode);
             break;

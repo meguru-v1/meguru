@@ -227,55 +227,69 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
 }
 
 /**
- * ルート検索用に複数エリアのプレイスを取得する（出発地、目的地、その中間など計5点）
+ * 点Pからラインセグメント(A→B)への最短距離をメートルで返す
+ */
+function distanceToSegmentM(
+    P: { lat: number; lng: number },
+    A: { lat: number; lng: number },
+    B: { lat: number; lng: number }
+): number {
+    const cosLat = Math.cos(A.lat * Math.PI / 180);
+    const ax = 0, ay = 0;
+    const bx = (B.lat - A.lat) * 111000;
+    const by = (B.lng - A.lng) * 111000 * cosLat;
+    const px = (P.lat - A.lat) * 111000;
+    const py = (P.lng - A.lng) * 111000 * cosLat;
+    const len2 = bx * bx + by * by;
+    if (len2 === 0) return Math.sqrt(px * px + py * py);
+    const t = Math.max(0, Math.min(1, (px * bx + py * by) / len2));
+    const qx = ax + t * bx;
+    const qy = ay + t * by;
+    return Math.sqrt((px - qx) ** 2 + (py - qy) ** 2);
+}
+
+/**
+ * ルート検索用に複数エリアのプレイスを取得し、ルート沿いのスポットに絞り込む
  */
 export async function searchRouteSpots(originObj: { lat: number, lng: number }, destObj: { lat: number, lng: number }, radiusMeters: number): Promise<PlaceDetails[]> {
-    // 【22】距離に応じた動的サンプリング
     const dx = (originObj.lat - destObj.lat) * 111000;
     const dy = (originObj.lng - destObj.lng) * 111000 * Math.cos(originObj.lat * Math.PI / 180);
     const directDist = Math.sqrt(dx * dx + dy * dy);
 
-    let points: { lat: number, lng: number }[];
-    if (directDist < 2000) {
-        // 2km未満: 3点（始点・中間・終点）
-        points = [
-            originObj,
-            { lat: (originObj.lat + destObj.lat) / 2, lng: (originObj.lng + destObj.lng) / 2 },
-            destObj
-        ];
-    } else if (directDist < 5000) {
-        // 2-5km: 4点
-        points = [
-            originObj,
-            { lat: originObj.lat * 0.67 + destObj.lat * 0.33, lng: originObj.lng * 0.67 + destObj.lng * 0.33 },
-            { lat: originObj.lat * 0.33 + destObj.lat * 0.67, lng: originObj.lng * 0.33 + destObj.lng * 0.67 },
-            destObj
-        ];
-    } else {
-        // 5km以上: 5点
-        points = [
-            originObj,
-            { lat: originObj.lat * 0.75 + destObj.lat * 0.25, lng: originObj.lng * 0.75 + destObj.lng * 0.25 },
-            { lat: (originObj.lat + destObj.lat) / 2, lng: (originObj.lng + destObj.lng) / 2 },
-            { lat: originObj.lat * 0.25 + destObj.lat * 0.75, lng: originObj.lng * 0.25 + destObj.lng * 0.75 },
-            destObj
-        ];
-    }
+    // サンプル点数を距離に応じて決定
+    const numPoints = directDist < 2000 ? 3 : directDist < 5000 ? 4 : 6;
+    const points: { lat: number, lng: number }[] = Array.from({ length: numPoints }, (_, i) => {
+        const t = i / (numPoints - 1);
+        return {
+            lat: originObj.lat * (1 - t) + destObj.lat * t,
+            lng: originObj.lng * (1 - t) + destObj.lng * t,
+        };
+    });
 
     console.log(`Route search: ${points.length} sample points (distance: ${(directDist / 1000).toFixed(1)}km)`);
 
     const results = await Promise.all(
-        points.map(p => searchNearbySpots(p.lat, p.lng, radiusMeters, { maxStage: 2 })) // 【23】 ルート検索はStage2まで
+        points.map(p => searchNearbySpots(p.lat, p.lng, radiusMeters, { maxStage: 2 }))
     );
 
     const map = new Map<string, PlaceDetails>();
     results.flat().forEach(spot => {
-        if (!map.has(spot.place_id)) {
-            map.set(spot.place_id, spot);
-        }
+        if (!map.has(spot.place_id)) map.set(spot.place_id, spot);
     });
 
-    return Array.from(map.values());
+    // コリドーフィルタ: ルート直線から外れたスポットを除去
+    const corridorWidthM = Math.min(radiusMeters * 0.8, 1200);
+    const filtered = Array.from(map.values()).filter(spot => {
+        const dist = distanceToSegmentM(
+            { lat: spot.lat, lng: spot.lng },
+            { lat: originObj.lat, lng: originObj.lng },
+            { lat: destObj.lat, lng: destObj.lng }
+        );
+        return dist <= corridorWidthM;
+    });
+
+    console.log(`Route corridor filter: ${map.size} → ${filtered.length} spots (corridor: ${corridorWidthM.toFixed(0)}m)`);
+    return filtered.length >= 3 ? filtered : Array.from(map.values()); // フィルタ後が少なすぎたら全件返す
 }
 /**
  * 入力テキストから場所の候補を取得する (Autocomplete)

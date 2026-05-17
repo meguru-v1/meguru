@@ -1,10 +1,5 @@
-export type WeatherTag = 'rainy' | 'snowy' | 'hot' | 'cold' | 'normal' | 'unknown';
-
-export interface WeatherInfo {
-    text: string;        // 「快晴」「雨」など人間向け表現
-    tag: WeatherTag;     // AI判断用タグ
-    temperatureC: number | null;
-}
+import type { WeatherTag, WeatherInfo } from '../types';
+export type { WeatherTag, WeatherInfo };
 
 export async function getCurrentWeather(lat: number, lon: number): Promise<string> {
     const info = await getCurrentWeatherDetailed(lat, lon);

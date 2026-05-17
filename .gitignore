@@ -39,3 +39,6 @@ _cleanup_backup/
 
 # Cloud Functions local deps
 cloud-functions/*/node_modules/
+
+# Serena MCP (semantic code indexing cache)
+.serena/

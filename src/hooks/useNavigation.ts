@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getDistance } from 'geolib';
-import type { Spot } from '../types';
-
-export type NavStatus = 'idle' | 'active' | 'arrived_all';
+import type { Spot, NavStatus } from '../types';
+export type { NavStatus };
 
 interface NavState {
     status: NavStatus;

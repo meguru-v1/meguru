@@ -1,20 +1,8 @@
-import type { Course } from '../types';
+import type { Course, HistoryEntry, HistoryStore } from '../types';
+export type { HistoryEntry };
 
 const STORAGE_KEY = 'meguru:history:v1';
 const MAX_ENTRIES = 20;
-
-export interface HistoryEntry {
-    id: string;
-    course: Course;
-    query: string;
-    viewedAt: number;
-    thumbnailUrl?: string;
-}
-
-interface HistoryStore {
-    version: 1;
-    entries: HistoryEntry[];
-}
 
 const safeRead = (): HistoryStore => {
     try {

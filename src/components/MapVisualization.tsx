@@ -107,7 +107,7 @@ interface MapVisualizationProps {
 }
 
 const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spots, focusedSpot, travelMode = "walk", onDirectionsLoaded }) => {
-    const defaultCenter = { lat: 34.9858, lng: 135.7588 }; // Kyoto default
+    const defaultCenter = { lat: 35.6762, lng: 139.6503 }; // Tokyo default
     const mapCenter = center ? { lat: center.lat, lng: center.lon } : defaultCenter;
 
     // We keep track of popup state internally for custom markers
@@ -181,7 +181,7 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
 
                                         <div className="flex items-center gap-2 mb-2">
                                             {spot.rating && (
-                                                <span className="flex items-center text-xs font-bold" style={{ color: 'var(--wa-accent)' }}>
+                                                <span className="flex items-center text-xs font-bold" style={{ color: '#F59E0B' }}>
                                                     <span>★</span> {spot.rating}
                                                 </span>
                                             )}

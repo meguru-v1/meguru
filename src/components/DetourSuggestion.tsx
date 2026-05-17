@@ -5,6 +5,9 @@ import { searchNearbySpots } from '../lib/places';
 
 const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL as string
     || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
+if (import.meta.env.DEV && !import.meta.env.VITE_GEMINI_PROXY_URL) {
+    console.warn('[Meguru] VITE_GEMINI_PROXY_URL not set — using fallback production endpoint.');
+}
 
 interface DetourSuggestionProps {
     currentPosition: { lat: number; lng: number } | null;
@@ -68,7 +71,9 @@ ${candidates.map(s => `- ${s.name}（${s.category}）`).join('\n')}
             );
 
             const result: DetourSpot[] = parsed.map(p => {
-                const spot = candidates.find(c => c.name === p.name) || candidates[0];
+                const spot = candidates.find(c => c.name === p.name)
+                    ?? candidates.find(c => c.name.includes(p.name) || p.name.includes(c.name))
+                    ?? candidates[0];
                 return { spot, reason: p.reason, walkMinutes: p.walkMinutes };
             }).filter(Boolean);
 

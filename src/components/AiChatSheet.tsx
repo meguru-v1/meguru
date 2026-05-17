@@ -4,6 +4,9 @@ import type { Course, Spot } from '../types';
 
 const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL as string
     || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
+if (import.meta.env.DEV && !import.meta.env.VITE_GEMINI_PROXY_URL) {
+    console.warn('[Meguru] VITE_GEMINI_PROXY_URL not set — using fallback production endpoint.');
+}
 
 interface Message {
     role: 'user' | 'ai';
@@ -24,17 +27,35 @@ export default function AiChatSheet({ isOpen, onClose, course, focusedSpot }: Ai
     const [isSending, setIsSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const chatHistoryRef = useRef<Map<string | undefined, Message[]>>(new Map());
+    const currentCourseIdRef = useRef<string | undefined>(undefined);
 
-    // 初回メッセージ
+    // オープン時に履歴を復元、または初回メッセージを設定
     useEffect(() => {
-        if (isOpen && messages.length === 0) {
-            const spot = focusedSpot || course?.spots[0];
-            const greeting = spot
-                ? `こんにちは！私はAI旅ガイドです。「${spot.name}」について、または「${course?.title}」コースのことなら何でも聞いてください！`
-                : `こんにちは！AI旅ガイドです。このコースについて何でもお気軽に質問どうぞ。`;
-            setMessages([{ role: 'ai', text: greeting }]);
+        if (!isOpen) return;
+        const key = course?.id;
+        const saved = chatHistoryRef.current.get(key);
+        if (saved && saved.length > 0) {
+            setMessages(saved);
+            currentCourseIdRef.current = key;
+            return;
         }
-    }, [isOpen]);
+        const spot = focusedSpot || course?.spots[0];
+        const greeting = spot
+            ? `こんにちは！私はAI旅ガイドです。「${spot.name}」について、または「${course?.title}」コースのことなら何でも聞いてください！`
+            : `こんにちは！AI旅ガイドです。このコースについて何でもお気軽に質問どうぞ。`;
+        const initial: Message[] = [{ role: 'ai', text: greeting }];
+        setMessages(initial);
+        chatHistoryRef.current.set(key, initial);
+        currentCourseIdRef.current = key;
+    }, [isOpen, course?.id]);
+
+    // メッセージ更新時に履歴を保存
+    useEffect(() => {
+        if (messages.length > 0) {
+            chatHistoryRef.current.set(currentCourseIdRef.current, messages);
+        }
+    }, [messages]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,8 +82,8 @@ ${spotInfo}
 ・場所の歴史・穴場情報・ベストな時間帯・食べ物・アクセス・混雑などに詳しいです。`;
     }, [course, focusedSpot]);
 
-    const sendMessage = async () => {
-        const text = input.trim();
+    const sendMessage = async (overrideText?: string) => {
+        const text = (overrideText ?? input).trim();
         if (!text || isSending) return;
         setInput('');
         setIsSending(true);
@@ -168,7 +189,7 @@ ${spotInfo}
                 {messages.length === 1 && (
                     <div className="shrink-0 px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide">
                         {['歴史を教えて', 'ベストな時間は？', '周辺のランチ', '混雑状況は？'].map(q => (
-                            <button key={q} onClick={() => { setInput(q); setTimeout(sendMessage, 0); }}
+                            <button key={q} onClick={() => sendMessage(q)}
                                 className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-colors"
                                 style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>
                                 {q}

@@ -48,7 +48,11 @@ function App() {
     const [lastSearchGroupSize, setLastSearchGroupSize] = useState('不明');
     const [lastExploreMode, setLastExploreMode] = useState<ExploreMode | undefined>(undefined);
 
-    const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
+    const [favTrimToastVisible, setFavTrimToastVisible] = useState(false);
+    const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites(() => {
+        setFavTrimToastVisible(true);
+        setTimeout(() => setFavTrimToastVisible(false), 3000);
+    });
 
     const navSpots = selectedCourse?.spots ?? [];
     const { nav, startNavigation, stopNavigation, goToSpot } = useNavigation(navSpots);
@@ -74,7 +78,7 @@ function App() {
                     type: 'GENERATION_COMPLETE',
                     title: 'Meguru - コース完成！',
                     body: `「${title}」を含む${courses.length > 0 ? courses.length : ''}コースが完成しました。`,
-                    icon: '/meguru/pwa-192x192.png',
+                    icon: '/pwa-192x192.png',
                 });
             } catch (e) {
                 console.warn('SW notification failed:', e);
@@ -494,9 +498,7 @@ function App() {
                 catch (e) {
                     console.error("App: generateSmartCourses failed (Area):", e);
                     setError(e instanceof Error ? e.message : "AIコース生成中にエラーが発生しました。");
-                    // エラーを画面で見せるために10秒間待機してから閉じる
-                    await new Promise(r => setTimeout(r, 10000));
-                    throw e; 
+                    throw e;
                 }
 
                 const enhancedCourses = enhanceAreaCourses(generatedCourses);
@@ -733,11 +735,17 @@ function App() {
                                 <Footprints size={20} style={{ color: 'var(--text-primary)' }} />
                                 <h2 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>おすすめコース ({courses.length})</h2>
                             </div>
-                            {loading && statusPanel}
+                            {loading && courses.length === 0 && statusPanel}
                             <div className="space-y-3">
                                 {courses.map((course, i) => (
                                     <CourseCard key={course.id} course={course} onClick={() => handleSelectCourse(course)} index={i} />
                                 ))}
+                                {loading && courses.length > 0 && (
+                                    <div className="relative p-6 flex flex-col items-center justify-center gap-3 animate-pulse rounded-2xl" style={{ border: '2px dashed var(--border-default)', background: 'var(--bg-secondary)' }}>
+                                        <Loader2 size={24} className="animate-spin" style={{ color: 'var(--wa-accent)' }} />
+                                        <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>残りのプランを生成中です...</span>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}
@@ -868,7 +876,7 @@ function App() {
                             ].map(btn => (
                                 <button key={btn.id} onClick={() => handleRemix(btn.label)} disabled={isRemixing}
                                     className={`px-3 py-2 rounded-xl text-[10px] font-bold transition-all active:scale-95 flex items-center gap-1.5 ${btn.color} ${isRemixing ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                    {isRemixing && btn.label.includes(btn.label) ? <Loader2 size={10} className="animate-spin" /> : null}
+                                    {isRemixing ? <Loader2 size={10} className="animate-spin" /> : null}
                                     {btn.label}
                                 </button>
                             ))}
@@ -1153,6 +1161,15 @@ function App() {
                     style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', animation: 'fadeIn 0.3s ease' }}>
                     <CheckCircle2 size={16} className="text-emerald-400" />
                     URLをコピーしました！
+                </div>
+            )}
+
+            {/* お気に入り容量超過トースト */}
+            {favTrimToastVisible && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[900] flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl font-bold text-sm text-white"
+                    style={{ background: 'linear-gradient(135deg, #b45309, #92400e)', animation: 'fadeIn 0.3s ease' }}>
+                    <AlertCircle size={16} className="text-amber-300" />
+                    容量超過のため古いお気に入りを削除しました
                 </div>
             )}
         </div>

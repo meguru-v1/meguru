@@ -404,7 +404,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
                                 {['一人旅', 'デート', '友達', '家族'].map(g => (
                                     <button key={g} type="button" onClick={() => setGroupSize(groupSize === g ? '' : g)}
                                         className={`px-4 py-2 rounded-full text-[11px] font-bold transition-all min-h-[36px]`}
-                                        style={groupSize === g ? { background: '#6366F1', color: 'white', boxShadow: '0 2px 8px rgba(99,102,241,0.3)' } : { background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
+                                        style={groupSize === g ? { background: 'var(--wa-ai)', color: 'white', boxShadow: '0 2px 8px rgba(44,74,124,0.3)' } : { background: 'var(--bg-card)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
                                         {g}
                                     </button>
                                 ))}

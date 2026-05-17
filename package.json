@@ -2,7 +2,7 @@
   "name": "meguru",
   "private": true,
   "version": "1.0.0",
-  "homepage": "https://meguru-v1.github.io/meguru/",
+  "homepage": "/",
   "type": "module",
   "scripts": {
     "dev": "vite",

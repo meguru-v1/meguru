@@ -116,7 +116,7 @@ export default function SpotHeroImage({
             <div className="absolute bottom-3 left-4 right-4 z-10 pointer-events-none">
                 <h4 className="text-lg font-bold font-serif text-white leading-tight drop-shadow-md">{spotName}</h4>
                 <div className="flex items-center gap-2 mt-1 drop-shadow">
-                    <span className="flex items-center text-[11px] font-bold" style={{ color: 'var(--wa-accent-soft)' }}>
+                    <span className="flex items-center text-[11px] font-bold" style={{ color: '#F59E0B' }}>
                         <Star size={11} className="fill-current mr-0.5" /> {rating || '-'}
                     </span>
                     <span className="text-[10px] text-white/80">({userRatings || 0}件)</span>

@@ -12,6 +12,8 @@ interface NavState {
     headingToNext: number | null;  // degrees
 }
 
+const ARRIVAL_THRESHOLD_M = 60;
+
 export function useNavigation(spots: Spot[]) {
     const [nav, setNav] = useState<NavState>({
         status: 'idle',
@@ -21,8 +23,6 @@ export function useNavigation(spots: Spot[]) {
         headingToNext: null,
     });
     const watchIdRef = useRef<number | null>(null);
-
-    const ARRIVAL_THRESHOLD_M = 60; // 60m以内で到着判定
 
     const stopNavigation = useCallback(() => {
         if (watchIdRef.current !== null) {
@@ -59,7 +59,7 @@ export function useNavigation(spots: Spot[]) {
                         if ('Notification' in window && Notification.permission === 'granted') {
                             new Notification(`📍 到着！`, {
                                 body: `「${targetSpot.name}」に到着しました！`,
-                                icon: '/meguru/pwa-192x192.png',
+                                icon: '/pwa-192x192.png',
                                 tag: 'meguru-arrival',
                             });
                         }

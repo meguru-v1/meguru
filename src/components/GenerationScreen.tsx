@@ -36,13 +36,16 @@ const FALLBACK_TIPS = [
     "🍜 ラーメン店は11時台に並ぶと待ち時間が短め"
 ];
 
+// 和の風景フォールバック画像（Unsplash 京都・桜・神社など）
 const FALLBACK_IMAGES = [
-    "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80",
-    "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80",
-    "https://images.unsplash.com/photo-1528164344705-47542687000d?w=800&q=80",
-    "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=800&q=80",
-    "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?w=800&q=80",
-    "https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=800&q=80",
+    "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=1200&q=85", // 鳥居
+    "https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=1200&q=85", // 京都の路地
+    "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1200&q=85", // 富士山
+    "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=1200&q=85", // 桜
+    "https://images.unsplash.com/photo-1528164344705-47542687000d?w=1200&q=85", // 寺
+    "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?w=1200&q=85", // 紅葉
+    "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=1200&q=85", // 竹林
+    "https://images.unsplash.com/photo-1565687981296-535f09db714e?w=1200&q=85", // 茶室
 ];
 
 interface GenerationScreenProps {
@@ -64,10 +67,17 @@ export default function GenerationScreen({
     imageUrls,
     error
 }: GenerationScreenProps) {
+    const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
     const slideshowImages = React.useMemo(() => {
-        const base = imageUrls && imageUrls.length > 0 ? imageUrls : FALLBACK_IMAGES;
-        return [...base].sort(() => Math.random() - 0.5).slice(0, 8);
+        // Google Places の写真URLは失敗することがあるので、フォールバックも常に混ぜる
+        const places = imageUrls && imageUrls.length > 0 ? imageUrls : [];
+        const combined = [...places, ...FALLBACK_IMAGES];
+        return [...combined].sort(() => Math.random() - 0.5).slice(0, 10);
     }, [imageUrls]);
+
+    const validImages = slideshowImages.filter(url => !failedImages.has(url));
+    const displayImages = validImages.length > 0 ? validImages : FALLBACK_IMAGES;
 
     const statusMessages = subAiContent?.status_texts?.length ? subAiContent.status_texts : FALLBACK_STATUS;
     const forecastCopies = subAiContent?.forecast_copies?.length ? subAiContent.forecast_copies : FALLBACK_FORECASTS;
@@ -114,12 +124,12 @@ export default function GenerationScreen({
         const imageTimer = setInterval(() => {
             setFadeImage(false);
             setTimeout(() => {
-                setCurrentImageIdx(prev => (prev + 1) % slideshowImages.length);
+                setCurrentImageIdx(prev => (prev + 1) % displayImages.length);
                 setFadeImage(true);
             }, 600);
         }, 5000);
         return () => clearInterval(imageTimer);
-    }, [slideshowImages.length]);
+    }, [displayImages.length]);
 
     useEffect(() => {
         const forecastTimer = setInterval(() => {
@@ -186,14 +196,23 @@ export default function GenerationScreen({
 
             {/* メインビジュアル */}
             <div className="flex-1 relative overflow-hidden">
-                <div className="absolute inset-0">
-                    <img
-                        src={slideshowImages[currentImageIdx % slideshowImages.length]}
-                        alt="destination"
-                        className={`w-full h-full object-cover transition-all duration-[1500ms] ease-out
-                            ${fadeImage ? 'opacity-100 scale-110' : 'opacity-0 scale-100'}`}
-                        style={{ animation: fadeImage ? 'kenBurns 5s ease-out forwards' : 'none' }}
-                    />
+                <div className="absolute inset-0" style={{
+                    background: `linear-gradient(135deg, #f7f3eb 0%, #e8dcc4 50%, #d4c19c 100%)`
+                }}>
+                    {displayImages[currentImageIdx % displayImages.length] && (
+                        <img
+                            key={displayImages[currentImageIdx % displayImages.length]}
+                            src={displayImages[currentImageIdx % displayImages.length]}
+                            alt="destination"
+                            className={`w-full h-full object-cover transition-all duration-[1500ms] ease-out
+                                ${fadeImage ? 'opacity-100 scale-110' : 'opacity-0 scale-100'}`}
+                            style={{ animation: fadeImage ? 'kenBurns 5s ease-out forwards' : 'none' }}
+                            onError={(e) => {
+                                const failed = (e.currentTarget as HTMLImageElement).src;
+                                setFailedImages(prev => new Set(prev).add(failed));
+                            }}
+                        />
+                    )}
                     <div className="absolute inset-0" style={{
                         background: 'linear-gradient(to bottom, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.1) 30%, rgba(0,0,0,0.2) 70%, rgba(0,0,0,0.6) 100%)'
                     }} />

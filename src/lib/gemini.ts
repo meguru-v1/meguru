@@ -160,10 +160,19 @@ const getDiningRule = (durationMinutes: number) => {
 };
 
 const getRecommendedSpotCount = (durationMinutes: number) => {
-    if (durationMinutes <= 90) return `**1〜2件**`;
-    if (durationMinutes <= 180) return `**2〜3件**`;
-    if (durationMinutes <= 300) return `**3〜4件**`;
-    return `**4〜5件**`;
+    if (durationMinutes <= 90) return `**2〜3件**`;
+    if (durationMinutes <= 180) return `**3〜4件**`;
+    if (durationMinutes <= 300) return `**4〜5件**`;
+    if (durationMinutes <= 480) return `**5〜7件**`;
+    return `**6〜8件**`;
+};
+
+const getMinSpotCount = (durationMinutes: number): number => {
+    if (durationMinutes <= 90) return 2;
+    if (durationMinutes <= 180) return 3;
+    if (durationMinutes <= 300) return 4;
+    if (durationMinutes <= 480) return 5;
+    return 6;
 };
 
 // 飲食スポット判定
@@ -502,11 +511,22 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
             const plans: any[] = mdData.plans || [];
             const allDayCourses: Course[] = [];
 
+            // 連泊用: ID→名前フォールバック
+            const resolveMultiday = (s: any): Spot | undefined => {
+                const idNum = Number(s.id);
+                if (Number.isFinite(idNum) && qualityFiltered[idNum]) return qualityFiltered[idNum];
+                if (s.name && typeof s.name === 'string') {
+                    return qualityFiltered.find(c => c.name === s.name)
+                        ?? qualityFiltered.find(c => c.name.includes(s.name) || s.name.includes(c.name));
+                }
+                return undefined;
+            };
+
             for (const plan of plans) {
                 const planId = generateId();
                 for (const day of (plan.days || [])) {
                     const hydratedSpots: Spot[] = (day.spots || []).map((s: any) => {
-                        const original = qualityFiltered[Number(s.id)];
+                        const original = resolveMultiday(s);
                         if (!original) return null;
                         return {
                             ...original,
@@ -570,9 +590,11 @@ ${diningRule}
 - 食事スポットを選ぶ際は **「ランチ向きのレストラン」「カフェ休憩向きのカフェ」「ディナー向きの店」** を意識して、目的が明確なものを選定してください。
 - **配置順序（並び順）の指定は不要です**。順序とタイミングは自動でクロックタイム最適化されます。AIはスポットの「選定」のみに集中してください。
 
-**3. 自然なペース配分 (Natural Pacing):**
-- スポット数の「上限」は設定しません。代わりに、「各スポットの推定滞在時間（Stayフィールド参照）」＋「スポット間の移動時間（徒歩15分程度を想定）」を積み上げて、合計が **${durationMinutes}分** に自然に収まるスポット数を選んでください。
-- 無理に詰め込まず、各スポットで余裕を持って楽しめるペースで構成してください。
+**3. スポット数（厳格な絶対ルール）:**
+- 推奨: ${spotCountRule}（食事スポットを含む全体）
+- **最低 ${getMinSpotCount(durationMinutes)}件 は必ず確保すること。これより少ないコースは絶対禁止です。**
+- 「各スポットの推定滞在時間（Stay）」＋「移動時間（徒歩15分程度）」を積み上げて${durationMinutes}分に収めつつ、最低数は妥協しないこと。
+- 余裕があれば上限まで増やしてよい。短時間でも体験密度を確保すること。
 
 **4. 魅力的な命名と具体的な解説:**
 - **タイトル**: 雑誌の特集のように、詩的でキャッチーな日本語タイトルにしてください。
@@ -606,9 +628,10 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
       "theme": "Theme Name",
       "description": "Mag-style intro",
       "spots": [
-        { 
-          "id": 0, 
-          "stayTime": MINS, 
+        {
+          "id": 0,
+          "name": "候補リストの正確なスポット名（idと同じ位置のもの）",
+          "stayTime": MINS,
           "travel_time_minutes": MINS,
           "aiDescription": "五感を使った具体的な魅力描写（定型文禁止）",
           "must_see": "必見ポイント",
@@ -681,13 +704,26 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
     // UUID生成ヘルパー
     const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
 
+    // ID→名前フォールバック付きスポット解決
+    const resolveOriginal = (s: any): Spot | undefined => {
+        const idNum = Number(s.id);
+        if (Number.isFinite(idNum) && qualityFiltered[idNum]) return qualityFiltered[idNum];
+        if (s.name && typeof s.name === 'string') {
+            const exact = qualityFiltered.find(c => c.name === s.name);
+            if (exact) return exact;
+            const partial = qualityFiltered.find(c => c.name.includes(s.name) || s.name.includes(c.name));
+            if (partial) return partial;
+        }
+        return undefined;
+    };
+
     // コースデータをhydrateして整形する関数
     const hydrateCourses = (rawCourses: any[]): Course[] => {
         return rawCourses.map((course: any) => {
             const uniqueId = generateId();
             const hydratedSpots: Spot[] = (course.spots || []).map((s: any) => {
-                const original = qualityFiltered[Number(s.id)];
-                if (!original) return null;
+                const original = resolveOriginal(s);
+                if (!original) { console.warn(`[hydrate] Cannot resolve spot:`, s); return null; }
                 return {
                     ...original,
                     stayTime: Number(s.stayTime) || 30,

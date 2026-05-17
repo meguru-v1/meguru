@@ -32,9 +32,12 @@ export default function SpotHeroImage({
     const [viewMode, setViewMode] = useState<'photo' | 'exterior'>(googlePhotoRef ? 'photo' : 'exterior');
     const [imgUrl, setImgUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
+    const [triedFallback, setTriedFallback] = useState(false);
 
     useEffect(() => {
         setIsLoading(true);
+        setHasError(false);
         if (viewMode === 'photo' && googlePhotoRef) {
             setImgUrl(`https://places.googleapis.com/v1/${googlePhotoRef}/media?maxWidthPx=1200&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
         } else {
@@ -43,9 +46,20 @@ export default function SpotHeroImage({
         }
     }, [viewMode, googlePhotoRef, lat, lng]);
 
+    // 画像エラー時: 写真モードならストリートビューにフォールバック → それも失敗なら和柄プレースホルダ
+    const handleError = () => {
+        if (viewMode === 'photo' && !triedFallback) {
+            setTriedFallback(true);
+            setViewMode('exterior');
+        } else {
+            setHasError(true);
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="relative w-full h-44 overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
-            {imgUrl && (
+            {imgUrl && !hasError && (
                 <img
                     key={imgUrl}
                     src={imgUrl}
@@ -53,11 +67,26 @@ export default function SpotHeroImage({
                     className={`w-full h-full object-cover transition-all duration-700 ${isLoading ? 'opacity-0 scale-105' : 'opacity-100 group-hover:scale-105'}`}
                     loading="lazy"
                     onLoad={() => setIsLoading(false)}
+                    onError={handleError}
                 />
             )}
-            
+
+            {/* 和柄プレースホルダ（画像取得失敗時） */}
+            {hasError && (
+                <div className="absolute inset-0 flex items-center justify-center"
+                    style={{
+                        background: `linear-gradient(135deg, #f7f3eb 0%, #e8dcc4 50%, #d4c19c 100%)`,
+                        backgroundImage: `radial-gradient(circle at 20% 30%, rgba(196,151,47,0.15) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(166,121,75,0.12) 0%, transparent 50%)`
+                    }}>
+                    <div className="text-center">
+                        <div className="text-5xl mb-1 opacity-30 font-serif" style={{ color: 'var(--wa-sumi)' }}>◯</div>
+                        <p className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50" style={{ color: 'var(--wa-sumi)' }}>侘 寂</p>
+                    </div>
+                </div>
+            )}
+
             {/* 読み込み中のスケルトン */}
-            {isLoading && (
+            {isLoading && !hasError && (
                 <div className="absolute inset-0 animate-pulse flex items-center justify-center" style={{ background: 'var(--bg-secondary)' }}>
                     <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--wa-accent)' }}></div>
                 </div>

@@ -214,6 +214,127 @@ const nearestNeighborSort = (spots: Spot[]): Spot[] => {
     return sorted;
 };
 
+// 2-opt局所最適化（交差を解消して総移動距離を短縮）
+const twoOptImprove = (spots: Spot[], maxIter = 50): Spot[] => {
+    if (spots.length < 4) return spots;
+    const route = [...spots];
+    const distM = (a: Spot, b: Spot) => {
+        const dx = (a.lat - b.lat) * 111000;
+        const dy = (a.lon - b.lon) * 111000 * Math.cos(a.lat * Math.PI / 180);
+        return Math.sqrt(dx * dx + dy * dy);
+    };
+    let improved = true, iter = 0;
+    while (improved && iter++ < maxIter) {
+        improved = false;
+        for (let i = 0; i < route.length - 2; i++) {
+            for (let j = i + 2; j < route.length - 1; j++) {
+                const before = distM(route[i], route[i + 1]) + distM(route[j], route[j + 1]);
+                const after = distM(route[i], route[j]) + distM(route[i + 1], route[j + 1]);
+                if (after + 0.1 < before) {
+                    const reversed = route.slice(i + 1, j + 1).reverse();
+                    route.splice(i + 1, j - i, ...reversed);
+                    improved = true;
+                }
+            }
+        }
+    }
+    return route;
+};
+
+// 時刻文字列 "HH:MM" → 分（深夜0時からの経過分）
+const parseTimeToMinutes = (timeStr: string): number => {
+    const m = (timeStr || '').match(/(\d{1,2})[:：](\d{2})/);
+    if (!m) return 10 * 60; // デフォルト 10:00
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+};
+
+// カフェ専門判定（レストラン併設は除外）
+const isCafeOnly = (s: Spot): boolean => {
+    const text = `${s.category || ''} ${((s.tags?.types as string[] | undefined) || []).join(' ')}`.toLowerCase();
+    return /cafe|bakery|coffee|tea_house/.test(text) && !/restaurant/.test(text);
+};
+
+// 評価×レビュー数による品質スコア
+const ratingScore = (s: Spot): number => (s.rating ?? 3.5) * Math.log(Math.max(s.user_ratings_total ?? 1, 1));
+
+/**
+ * ABTR: Anchor-Based Time Routing
+ * 食事を時刻アンカーで固定し、観光スポットを空間最適化で配置する。
+ * - ランチ: 12:00〜13:30
+ * - カフェ: ランチ+3h かつ 15:00以降
+ * - ディナー: 18:30以降
+ * 不要な食事スポットは自動でドロップする。
+ */
+const buildSmartItinerary = (
+    spots: Spot[],
+    opts: { startTimeMin: number; durationMin: number }
+): Spot[] => {
+    if (spots.length <= 1) return spots;
+    const { startTimeMin, durationMin } = opts;
+    const endTimeMin = startTimeMin + durationMin;
+
+    // 1. 食事/観光に分類
+    const dining = spots.filter(isDining);
+    const sites = spots.filter(s => !isDining(s));
+
+    // 2. 時刻アンカー設定（クロックタイム基準）
+    const lunchTarget =
+        startTimeMin <= 13.5 * 60 && endTimeMin >= 12 * 60 && durationMin >= 120
+            ? Math.max(12 * 60, Math.min(13.5 * 60, startTimeMin + Math.max(120, Math.round(durationMin * 0.3))))
+            : null;
+
+    const dinnerTarget =
+        durationMin >= 420 && endTimeMin >= 19 * 60
+            ? Math.max(18.5 * 60, endTimeMin - 120)
+            : null;
+
+    let cafeTarget: number | null = null;
+    if (durationMin >= 180) {
+        const earliest = Math.max(15 * 60, (lunchTarget ?? startTimeMin) + 150);
+        const latest = (dinnerTarget ?? endTimeMin) - 40;
+        if (earliest <= latest && earliest > startTimeMin + 60) cafeTarget = earliest;
+    }
+
+    // 3. 食事候補を品質スコアでソート → 役割別に最適なものをピック
+    const sortedDining = [...dining].sort((a, b) => ratingScore(b) - ratingScore(a));
+    const takeBest = (arr: Spot[], pref?: (s: Spot) => boolean): Spot | null => {
+        if (arr.length === 0) return null;
+        if (pref) {
+            const idx = arr.findIndex(pref);
+            if (idx !== -1) return arr.splice(idx, 1)[0];
+        }
+        return arr.splice(0, 1)[0];
+    };
+    const lunch = lunchTarget !== null ? takeBest(sortedDining, s => !isCafeOnly(s)) : null;
+    const dinner = dinnerTarget !== null ? takeBest(sortedDining, s => !isCafeOnly(s)) : null;
+    const cafe = cafeTarget !== null ? takeBest(sortedDining, isCafeOnly) : null;
+    // 残りの食事スポットは破棄（食べ過ぎ防止）
+
+    // 4. 観光スポットを最近傍 + 2-opt で空間最適化
+    const orderedSites = twoOptImprove(nearestNeighborSort(sites));
+
+    // 5. 食事を目標時刻に挿入（累積時間ベース）
+    const AVG_TRAVEL_MIN = 15;
+    const insertAtTime = (list: Spot[], meal: Spot, targetTime: number): Spot[] => {
+        let cur = startTimeMin;
+        let insertIdx = list.length;
+        for (let i = 0; i < list.length; i++) {
+            const arrival = cur + AVG_TRAVEL_MIN;
+            if (arrival >= targetTime) { insertIdx = i; break; }
+            cur = arrival + (list[i].stayTime || getStayTimeByType(list[i].category));
+        }
+        return [...list.slice(0, insertIdx), meal, ...list.slice(insertIdx)];
+    };
+
+    let result = orderedSites;
+    if (lunch && lunchTarget !== null) result = insertAtTime(result, lunch, lunchTarget);
+    if (cafe && cafeTarget !== null) result = insertAtTime(result, cafe, cafeTarget);
+    if (dinner && dinnerTarget !== null) result = insertAtTime(result, dinner, dinnerTarget);
+
+    // 6. 連続食事の最終ガード
+    return separateConsecutiveMeals(result);
+};
+
 export const generateSmartCourses = async (
     candidates: Spot[],
     center: { lat: number; lon: number },
@@ -398,13 +519,16 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                         } as Spot;
                     }).filter((s: any): s is Spot => s !== null);
 
+                    // 連泊：Day1は実際の出発時刻、Day2以降は9:00開始と仮定
+                    const dayStartMin = (day.dayIndex ?? 0) === 0 ? parseTimeToMinutes(timeContext) : 9 * 60;
+                    const dayOrdered = buildSmartItinerary(hydratedSpots, { startTimeMin: dayStartMin, durationMin: perDayMinutes });
                     allDayCourses.push({
                         id: generateId(),
                         title: day.title || `Day ${(day.dayIndex ?? 0) + 1}`,
                         theme: day.theme || '旅程',
                         description: day.description || '',
                         totalTime: perDayMinutes,
-                        spots: separateConsecutiveMeals(nearestNeighborSort(hydratedSpots)),
+                        spots: dayOrdered,
                         persona,
                         dayIndex: day.dayIndex ?? 0,
                         planId,
@@ -440,16 +564,11 @@ ${getSeasonalPromptContext()}
 **1. コースの完全な独立性と重複排除 (極めて重要):**
 - **${num}つのコース間で、スポットを被らせることは絶対に禁止です。**
 
-**2. 体験・観光の主役化と飲食制限:**
+**2. 体験・観光の主役化と飲食選定ルール:**
 ${diningRule}
 - 食べてばかりのプランにならないよう、公園、神社仏閣、名所、美術館などの**「体験・景色」をコースの主役に**してください。
-
-**【食事タイミングの厳格ルール（最重要）】**
-- 開始時刻: ${timeContext}
-- ランチは旅程の40〜50%地点（${timeContext}が10:00開始なら12:00〜13:00頃）に1か所配置すること
-- カフェ休憩はランチの約2〜3時間後に配置すること
-- **食事スポット2か所を連続して配置することは絶対禁止**（食事→食事はNG、食事→観光→食事はOK）
-- 食事スポットの直前・直後には必ず観光・体験スポットを配置すること
+- 食事スポットを選ぶ際は **「ランチ向きのレストラン」「カフェ休憩向きのカフェ」「ディナー向きの店」** を意識して、目的が明確なものを選定してください。
+- **配置順序（並び順）の指定は不要です**。順序とタイミングは自動でクロックタイム最適化されます。AIはスポットの「選定」のみに集中してください。
 
 **3. 自然なペース配分 (Natural Pacing):**
 - スポット数の「上限」は設定しません。代わりに、「各スポットの推定滞在時間（Stayフィールド参照）」＋「スポット間の移動時間（徒歩15分程度を想定）」を積み上げて、合計が **${durationMinutes}分** に自然に収まるスポット数を選んでください。
@@ -580,7 +699,9 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                 } as Spot;
             }).filter((s: any): s is Spot => s !== null);
 
-            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: separateConsecutiveMeals(nearestNeighborSort(hydratedSpots)), persona } as Course;
+            const startMin = parseTimeToMinutes(timeContext);
+            const orderedSpots = buildSmartItinerary(hydratedSpots, { startTimeMin: startMin, durationMin: durationMinutes });
+            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: orderedSpots, persona } as Course;
         });
     };
 

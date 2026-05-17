@@ -176,7 +176,7 @@ function App() {
         setStatus('場所を検索中...');
 
         try {
-            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId, persona, startTime, exploreMode } = params;
+            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId, persona, startTime, exploreMode, daysCount } = params;
             
             // リミックス用に条件を保存
             setLastSearchDuration(duration);
@@ -339,6 +339,7 @@ function App() {
                     getPreferenceContext(),
                     persona,
                     exploreMode,
+                    daysCount ?? 1,
                     (partialCourses) => {
                         const enhanced = enhanceRouteCourses(partialCourses);
                         setCourses(enhanced);
@@ -470,6 +471,7 @@ function App() {
                     getPreferenceContext(),
                     persona,
                     exploreMode,
+                    daysCount ?? 1,
                     (partialCourses) => {
                         const enhanced = enhanceAreaCourses(partialCourses);
                         setCourses(enhanced);
@@ -737,9 +739,42 @@ function App() {
                             </div>
                             {loading && courses.length === 0 && statusPanel}
                             <div className="space-y-3">
-                                {courses.map((course, i) => (
-                                    <CourseCard key={course.id} course={course} onClick={() => handleSelectCourse(course)} index={i} />
-                                ))}
+                                {(() => {
+                                    const isMultidayPlan = courses.some(c => c.planIndex !== undefined);
+                                    if (isMultidayPlan) {
+                                        // 連泊プラン: Day1コースをプランカードとして表示
+                                        const planCards = courses
+                                            .filter(c => c.dayIndex === 0)
+                                            .sort((a, b) => (a.planIndex ?? 0) - (b.planIndex ?? 0));
+                                        return planCards.map((planDay1, i) => {
+                                            const planLabel = planDay1.planIndex === 0 ? 'プランA' : 'プランB';
+                                            const allDays = courses
+                                                .filter(c => c.planId === planDay1.planId)
+                                                .sort((a, b) => (a.dayIndex ?? 0) - (b.dayIndex ?? 0));
+                                            const totalDays = allDays.length;
+                                            return (
+                                                <div key={planDay1.id} onClick={() => handleSelectCourse(planDay1)}
+                                                    className="card-premium relative p-5 cursor-pointer group active:scale-[0.98] animate-slide-up"
+                                                    style={{ animationDelay: `${i * 0.06}s`, animationFillMode: 'backwards' }}>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <div className="tag-badge"><Sparkles size={10} /> {totalDays === 2 ? '1泊2日' : '2泊3日'}</div>
+                                                        <span className="text-xs font-extrabold" style={{ color: 'var(--wa-accent)' }}>{planLabel}</span>
+                                                    </div>
+                                                    <h4 className="font-bold text-base leading-tight mb-1" style={{ color: 'var(--text-primary)' }}>{planDay1.title}</h4>
+                                                    {allDays[1] && <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Day 2: {allDays[1].title}</p>}
+                                                    <p className="text-xs mb-3 line-clamp-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{planDay1.description}</p>
+                                                    <div className="flex items-center gap-3 text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                                                        <span className="flex items-center gap-1"><Clock size={10} /> 各日{planDay1.totalTime}分</span>
+                                                        <span className="flex items-center gap-1"><MapPin size={10} /> Day1: {planDay1.spots.length}スポット</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        });
+                                    }
+                                    return courses.map((course, i) => (
+                                        <CourseCard key={course.id} course={course} onClick={() => handleSelectCourse(course)} index={i} />
+                                    ));
+                                })()}
                                 {loading && courses.length > 0 && (
                                     <div className="relative p-6 flex flex-col items-center justify-center gap-3 animate-pulse rounded-2xl" style={{ border: '2px dashed var(--border-default)', background: 'var(--bg-secondary)' }}>
                                         <Loader2 size={24} className="animate-spin" style={{ color: 'var(--wa-accent)' }} />
@@ -754,19 +789,25 @@ function App() {
 
             {selectedCourse && (
                 <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-5 pb-20">
-                    {/* 【03】連泊タブ: multiday コースの日別切り替え */}
-                    {selectedCourse.spots.some(s => (s as any).dayIndex !== undefined) && (() => {
-                        const days = [...new Set(selectedCourse.spots.map(s => (s as any).dayIndex ?? 0))];
-                        if (days.length <= 1) return null;
+                    {/* 連泊プラン: Day1/Day2タブ */}
+                    {selectedCourse.planId && (() => {
+                        const dayCourses = courses
+                            .filter(c => c.planId === selectedCourse.planId)
+                            .sort((a, b) => (a.dayIndex ?? 0) - (b.dayIndex ?? 0));
+                        if (dayCourses.length <= 1) return null;
+                        const planLabel = selectedCourse.planIndex === 0 ? 'プランA' : 'プランB';
                         return (
-                            <div className="flex gap-1.5 mb-4 animate-fade-in">
-                                {days.sort().map(d => (
-                                    <button key={d} onClick={() => setActiveDayIndex(d)}
-                                        className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all min-h-[44px]
-                                            ${activeDayIndex === d ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                                        Day {d + 1}
-                                    </button>
-                                ))}
+                            <div className="mb-4 animate-fade-in">
+                                <div className="text-[10px] font-extrabold mb-2 tracking-widest uppercase" style={{ color: 'var(--wa-accent)' }}>{planLabel}</div>
+                                <div className="flex gap-1.5">
+                                    {dayCourses.map(dc => (
+                                        <button key={dc.id} onClick={() => setSelectedCourse(dc)}
+                                            className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all min-h-[44px]
+                                                ${selectedCourse.id === dc.id ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                            Day {(dc.dayIndex ?? 0) + 1}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         );
                     })()}

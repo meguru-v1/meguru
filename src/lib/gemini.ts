@@ -131,9 +131,9 @@ const getExploreModeTemplate = (mode?: ExploreMode): string => {
         case 'multiday':
             return `
 **【探索モード: 連泊プラン】**
-- 複数日にわたる壮大な旅程を作成してください。
-- 1日あたり8〜10時間の活動時間を想定し、各日に明確なテーマを設けてください。
-- 各日の最初と最後はホテル/宿泊施設周辺に戻れる配慮をしてください。
+- 1日あたり約13時間（780分）の活動時間を想定してください。
+- 各日のスポットは同一エリア内（3km圏内）に集めてください。
+- 各日に明確なテーマを設けてください。
 - 日ごとにエリアを変え、効率的な移動を心がけてください。`;
         default:
             return '';
@@ -166,6 +166,25 @@ const getRecommendedSpotCount = (durationMinutes: number) => {
     return `**4〜5件**`;
 };
 
+// 最近傍法ソート（カットオフなし）
+const nearestNeighborSort = (spots: Spot[]): Spot[] => {
+    if (spots.length <= 1) return spots;
+    const sorted: Spot[] = [spots[0]];
+    const remaining = spots.slice(1);
+    while (remaining.length > 0) {
+        const current = sorted[sorted.length - 1];
+        let nearestIdx = 0, nearestDist = Infinity;
+        for (let i = 0; i < remaining.length; i++) {
+            const dx = (remaining[i].lat - current.lat) * 111000;
+            const dy = (remaining[i].lon - current.lon) * 111000 * Math.cos(current.lat * Math.PI / 180);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
+        }
+        sorted.push(remaining.splice(nearestIdx, 1)[0]);
+    }
+    return sorted;
+};
+
 export const generateSmartCourses = async (
     candidates: Spot[],
     center: { lat: number; lon: number },
@@ -178,25 +197,31 @@ export const generateSmartCourses = async (
     userPreferenceContext: string = "",
     persona?: PersonaId,
     exploreMode?: ExploreMode,
+    daysCount: number = 1,
     onProgress?: (partialCourses: Course[]) => void
 ): Promise<Course[]> => {
-    // ===== #1: 候補品質フィルタ + #8: 距離ソート =====
+    const isMultiday = exploreMode === 'multiday' || daysCount > 1;
+    const effectiveDays = isMultiday ? Math.max(2, daysCount) : 1;
+    const perDayMinutes = isMultiday ? 780 : durationMinutes; // 連泊は1日13時間固定
+
+    // ===== 候補品質フィルタ（評価重み付きスコアリング）=====
     const qualityFiltered = candidates
         .filter(s => {
-            // 閉業済みを除外
             if ((s as any).business_status === 'CLOSED_PERMANENTLY') return false;
-            // 評価がある場合、★3.5未満を除外（評価なしは許可）
             if (s.rating && s.rating < 3.5) return false;
             return true;
         })
         .map(s => {
-            // 中心からの距離を計算
             const dx = (s.lat - center.lat) * 111000;
             const dy = (s.lon - center.lon) * 111000 * Math.cos(center.lat * Math.PI / 180);
-            return { spot: s, dist: Math.sqrt(dx * dx + dy * dy) };
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            // 高評価スポットを距離ペナルティより優先
+            const ratingBonus = (s.rating ?? 3.5) * 400;
+            const popularityBonus = Math.min(s.user_ratings_total ?? 0, 5000) * 0.04;
+            return { spot: s, score: dist - ratingBonus - popularityBonus };
         })
-        .sort((a, b) => a.dist - b.dist) // 近い順
-        .slice(0, 60) // 最大60件に絞る
+        .sort((a, b) => a.score - b.score)
+        .slice(0, isMultiday ? 80 : 60)
         .map(item => item.spot);
 
     // ===== #2: トークン圧縮した候補リスト (ダイエット化) =====
@@ -232,6 +257,141 @@ export const generateSmartCourses = async (
 
     const selectedThemes = allThemes.sort(() => 0.5 - Math.random()).slice(0, 5);
     const themeInstructions = selectedThemes.map((theme: string, i: number) => `   Course ${i + 1}: Based strictly on theme "${theme}"`).join('\n');
+
+    // ===== 連泊プラン生成パス =====
+    if (isMultiday) {
+        const perDaySpots = '5〜8';
+        const planThemes = effectiveDays === 2
+            ? [
+                ["🏯 古都の王道：歴史と文化の深掘り", "🌿 自然と癒し：隠れた名所へ"],
+                ["🎨 アートとグルメ：五感の旅", "🌊 水辺と新発見：フォトジェニックスポット"]
+              ]
+            : [
+                ["🏯 歴史と文化", "🌿 自然と癒し", "🍜 グルメと下町"],
+                ["🎨 アートと感性", "🌊 水辺と絶景", "⛩️ 神社仏閣と開運"]
+              ];
+
+        const multidayPrompt = `
+You are a world-class Japanese travel curator. Create **2 completely different ${effectiveDays}-day travel plans**.
+${personaPrompt}
+
+**【最重要ルール】**
+1. プランAとプランBで **スポットを一切被らせない**
+2. 同じプラン内でも日ごとに **エリアを変える**（Day1とDay2で異なる地区）
+3. 各日のスポットは **互いに3km圏内** に集める（移動効率のため）
+4. 各日必ずランチスポットを1件含む
+5. 1日あたり **${perDayMinutes}分（約${Math.round(perDayMinutes/60)}時間）** に収める
+6. スポット数：1日あたり ${perDaySpots}件
+
+**【季節・時刻コンテキスト】**
+${getSeasonalPromptContext()}
+
+**【プランAの日別テーマ（厳守）】**
+${planThemes[0].map((t, i) => `Day ${i+1}: ${t}`).join('\n')}
+
+**【プランBの日別テーマ（厳守）】**
+${planThemes[1].map((t, i) => `Day ${i+1}: ${t}`).join('\n')}
+
+**5. 文化財の判定:**
+スポットが国宝、重要文化財、世界遺産に該当する場合、"cultural_property"にその称号を記入（例: "国宝"）。該当しない場合はnull。
+
+**CANDIDATES:**
+${candidateList}
+
+**SYSTEM INFO:**
+- Mood: ${mood}, Budget: ${budget}, People: ${groupSize}
+- Context: ${timeContext}
+${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
+
+**OUTPUT SCHEMA (JSON only, 2 plans × ${effectiveDays} days):**
+{
+  "plans": [
+    {
+      "planIndex": 0,
+      "days": [
+        {
+          "dayIndex": 0,
+          "title": "Day 1: 詩的タイトル",
+          "theme": "カテゴリー名",
+          "description": "雑誌風の紹介文（2〜3文）",
+          "spots": [{"id": 0, "stayTime": 60, "aiDescription": "五感描写（3〜4文、末尾。）", "must_see": "必見ポイント。", "pro_tip": "旅のヒント。", "trivia": "面白い小ネタ。", "cultural_property": null}]
+        }
+      ]
+    },
+    { "planIndex": 1, "days": [...] }
+  ]
+}
+すべての値（title, description, aiDescription等）は100%日本語で出力。JSONキーは英語のまま。`;
+
+        const multidayModel = 'gemini-2.5-flash';
+        let mdText: string | undefined;
+        const MD_RETRIES = 2;
+        for (let attempt = 0; attempt <= MD_RETRIES; attempt++) {
+            try {
+                await waitRateLimit(multidayModel, 5000);
+                mdText = await callGeminiProxy(multidayPrompt, multidayModel, attempt > 0);
+                break;
+            } catch (err: any) {
+                const is429 = err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED');
+                if (is429 && attempt < MD_RETRIES) { await sleep(Math.min(4000 * Math.pow(2, attempt), 30000)); continue; }
+                if (attempt < MD_RETRIES) continue;
+                throw err;
+            }
+        }
+
+        if (!mdText) return [];
+
+        let mdJson = stripThinkingBlock(mdText);
+        const mdMatch = mdJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, mdJson];
+        mdJson = mdMatch[1] || mdJson;
+        const fb = mdJson.indexOf('{'), lb = mdJson.lastIndexOf('}');
+        if (fb !== -1 && lb !== -1) mdJson = mdJson.substring(fb, lb + 1);
+
+        try {
+            const mdData = JSON.parse(mdJson.replace(/,\s*([\]}])/g, '$1'));
+            const plans: any[] = mdData.plans || [];
+            const allDayCourses: Course[] = [];
+
+            for (const plan of plans) {
+                const planId = generateId();
+                for (const day of (plan.days || [])) {
+                    const hydratedSpots: Spot[] = (day.spots || []).map((s: any) => {
+                        const original = qualityFiltered[Number(s.id)];
+                        if (!original) return null;
+                        return {
+                            ...original,
+                            stayTime: Number(s.stayTime) || 45,
+                            aiDescription: s.aiDescription || "魅力的なスポットです",
+                            must_see: s.must_see || null,
+                            pro_tip: s.pro_tip || null,
+                            trivia: s.trivia || undefined,
+                            cultural_property: s.cultural_property || null,
+                        } as Spot;
+                    }).filter((s: any): s is Spot => s !== null);
+
+                    allDayCourses.push({
+                        id: generateId(),
+                        title: day.title || `Day ${(day.dayIndex ?? 0) + 1}`,
+                        theme: day.theme || '旅程',
+                        description: day.description || '',
+                        totalTime: perDayMinutes,
+                        spots: nearestNeighborSort(hydratedSpots),
+                        persona,
+                        dayIndex: day.dayIndex ?? 0,
+                        planId,
+                        planIndex: plan.planIndex ?? 0,
+                    } as Course);
+                }
+            }
+
+            if (onProgress) onProgress(allDayCourses);
+            return allDayCourses;
+        } catch (e) {
+            console.error('Multiday JSON parse error:', e);
+            return [];
+        }
+    }
+    // ===== 連泊パスここまで =====
 
     // ヘルパー: 実際にAIを呼び出す内部関数
     const callGeneration = async (num: number, themeStartIndex: number): Promise<any[]> => {
@@ -384,30 +544,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
                 } as Spot;
             }).filter((s: any): s is Spot => s !== null);
 
-            if (hydratedSpots.length > 1) {
-                // 最近傍法でスポットをソート
-                const sorted: Spot[] = [hydratedSpots[0]];
-                const remaining = hydratedSpots.slice(1);
-                while (remaining.length > 0) {
-                    const current = sorted[sorted.length - 1];
-                    let nearestIdx = 0;
-                    let nearestDist = Infinity;
-                    for (let i = 0; i < remaining.length; i++) {
-                        const dx = (remaining[i].lat - current.lat) * 111000;
-                        const dy = (remaining[i].lon - current.lon) * 111000 * Math.cos(current.lat * Math.PI / 180);
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
-                    }
-                    if (nearestDist > 3000) {
-                        remaining.splice(nearestIdx, 1);
-                        continue;
-                    }
-                    const picked = remaining.splice(nearestIdx, 1)[0];
-                    if (picked) sorted.push(picked);
-                }
-                return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: sorted, persona } as Course;
-            }
-            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: hydratedSpots, persona } as Course;
+            return { id: uniqueId, title: course.title, theme: course.theme, description: course.description, totalTime: durationMinutes, spots: nearestNeighborSort(hydratedSpots), persona } as Course;
         });
     };
 

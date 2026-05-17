@@ -70,6 +70,8 @@ export interface Course {
     savedAt?: string; // お気に入り保存日時 (ISO 8601)
     persona?: PersonaId; // どのガイドが案内したコースか
     dayIndex?: number;   // 連泊プランの何日目か (0-based)
+    planId?: string;     // 連泊プランのグループID
+    planIndex?: number;  // 0=プランA, 1=プランB
 }
 
 export type SearchMode = 'area' | 'route';

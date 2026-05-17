@@ -22,7 +22,7 @@ type ExploreMode = 'quick' | 'fullday' | 'multiday';
 const EXPLORE_MODES: { id: ExploreMode; label: string; sub: string; icon: React.ElementType; minDuration: number; maxDuration: number; defaultDuration: number; minRadius: number; maxRadius: number; defaultRadius: number; step: number }[] = [
     { id: 'quick',    label: 'クイック散策', sub: '1〜5時間', icon: Zap,          minDuration: 60,  maxDuration: 300,  defaultDuration: 120,  minRadius: 0.5, maxRadius: 2,  defaultRadius: 1,   step: 30 },
     { id: 'fullday',  label: '1日トラベル',  sub: '6〜12時間', icon: Sun,          minDuration: 360, maxDuration: 720,  defaultDuration: 480,  minRadius: 2,   maxRadius: 7,  defaultRadius: 3.5, step: 30 },
-    { id: 'multiday', label: '連泊プラン',   sub: '2〜3日',    icon: CalendarDays, minDuration: 720, maxDuration: 2160, defaultDuration: 1440, minRadius: 5,   maxRadius: 15, defaultRadius: 8,   step: 60 },
+    { id: 'multiday', label: '連泊プラン',   sub: '2〜3日',    icon: CalendarDays, minDuration: 780, maxDuration: 2340, defaultDuration: 1560, minRadius: 5,   maxRadius: 15, defaultRadius: 8,   step: 780 },
 ];
 
 interface SearchInterfaceProps {
@@ -117,7 +117,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
             budget: budget || undefined,
             groupSize: groupSize || undefined,
             persona,
-            daysCount: exploreMode === 'multiday' ? Math.round(duration / 720) : undefined,
+            daysCount: exploreMode === 'multiday' ? Math.max(2, Math.round(duration / 780)) : undefined,
             startTime: startTime || undefined,
             exploreMode,
         });
@@ -155,7 +155,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch }) => {
         const h = Math.floor(mins / 60);
         const m = mins % 60;
         if (exploreMode === 'multiday') {
-            const days = Math.round(mins / 720);
+            const days = Math.max(2, Math.round(mins / 780));
             return `${days}日間（${h}時間）`;
         }
         return m > 0 ? `${h}時間${m}分` : `${h}時間`;

@@ -18,6 +18,7 @@ import type { WaitingScreenContent } from './lib/gemini';
 import { decodeShareUrl, clearShareParam, encodeCourseToUrl, copyToClipboard } from './lib/shareLink';
 import { getCurrentWeather, getCurrentWeatherDetailed } from './lib/weather';
 import { pushHistory, getHistory } from './lib/history';
+import { buildPlacePhotoUrl } from './lib/safeUrl';
 import { buildPreferenceContext } from './lib/preferences';
 import { pickReplacementSpot, pickInsertionSpot } from './lib/spotPicker';
 import { computeRoute } from './lib/directions';
@@ -217,9 +218,8 @@ function App() {
 
                 // --- 待ち画面（GenerationScreen）用画像の取得 ---
                 const googleUrls = candidates
-                    .map(c => c.photos?.[0])
-                    .filter(Boolean)
-                    .map(ref => `https://places.googleapis.com/v1/${ref}/media?maxWidthPx=1600&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
+                    .map(c => buildPlacePhotoUrl(c.photos?.[0], 1600))
+                    .filter((u): u is string => !!u);
                 
                 setGenerationImages(googleUrls.slice(0, 10));
 
@@ -367,9 +367,8 @@ function App() {
 
                 // --- 待ち画面（GenerationScreen）用画像の取得 ---
                 const googleUrls = candidates
-                    .map(c => c.photos?.[0])
-                    .filter(Boolean)
-                    .map(ref => `https://places.googleapis.com/v1/${ref}/media?maxWidthPx=1600&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
+                    .map(c => buildPlacePhotoUrl(c.photos?.[0], 1600))
+                    .filter((u): u is string => !!u);
                 
                 setGenerationImages(googleUrls.slice(0, 10));
 

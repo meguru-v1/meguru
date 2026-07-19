@@ -139,7 +139,11 @@ export interface HistoryEntry {
     course: Course;
     query: string;
     viewedAt: number;
-    thumbnailUrl?: string;
+    /**
+     * Places の photo reference のみを保存する。
+     * APIキーを含む完成URLは localStorage に残さず、描画時に組み立てる。
+     */
+    thumbnailRef?: string;
 }
 
 export interface HistoryStore {

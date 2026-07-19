@@ -1,6 +1,7 @@
 import { PlaceDetails, AutocompleteResult } from '../types';
+import { apiPost, apiGet } from './apiClient';
 
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+// Google APIキーはサーバー側プロキシのみが保持する（このファイルからキーは参照しない）
 
 // ===== 屋内/屋外判定（天候連動用） =====
 const INDOOR_TYPES = new Set([
@@ -53,33 +54,12 @@ const setCache = (key: string, data: any) => {
  * テキスト検索でエリアの中心となる場所を探す（日本リージョンバイアス付き）
  */
 export async function searchAreaCenter(query: string, bias?: { lat: number; lng: number }): Promise<{ lat: number; lng: number; name: string } | null> {
-    const url = `https://places.googleapis.com/v1/places:searchText`;
-    const data: any = {
-        textQuery: query,
-        languageCode: 'ja',
-        regionCode: 'JP',
-    };
-    if (bias) {
-        data.locationBias = { circle: { center: { latitude: bias.lat, longitude: bias.lng }, radius: 50000 } };
-    }
-
     try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'places.location,places.displayName,places.id',
-            },
-            body: JSON.stringify(data),
+        const result = await apiPost<{ places?: any[] }>('/places/searchText', {
+            textQuery: query,
+            bias: bias ? { lat: bias.lat, lng: bias.lng } : undefined,
         });
 
-        if (!response.ok) {
-            console.warn(`searchAreaCenter API ${response.status}:`, await response.text().catch(() => ''));
-            return null;
-        }
-
-        const result = await response.json();
         if (result.places && result.places.length > 0) {
             const place = result.places[0];
             return {
@@ -100,11 +80,8 @@ export async function searchAreaCenter(query: string, bias?: { lat: number; lng:
  */
 async function geocodeViaMapsApi(query: string): Promise<{ lat: number; lng: number; name: string } | null> {
     try {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&language=ja&region=jp&key=${API_KEY}`;
-        const response = await fetch(url);
-        if (!response.ok) return null;
-        const data = await response.json();
-        if (data.status === 'OK' && data.results?.length > 0) {
+        const data = await apiGet<{ status?: string; results?: any[] }>('/geocode', { address: query });
+        if (data.status === 'OK' && data.results?.length) {
             const r = data.results[0];
             return {
                 lat: r.geometry.location.lat,
@@ -185,8 +162,6 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     const cached = getCached(cacheKey);
     if (cached) return cached;
 
-    const url = `https://places.googleapis.com/v1/places:searchNearby`;
-
     // 1. カテゴリの拡充とグループ化 (APIの20件制限を回避するため分割して検索)
     // 注意: searchNearby (New) では shrine, temple などの Table B タイプはサポートされていないため除外
     const attractionTypes = ['tourist_attraction', 'observation_deck'];
@@ -201,35 +176,18 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
     
     // スポット取得用内部関数
     const fetchData = async (currentRadius: number, types: string[]) => {
-        const data = {
-            maxResultCount: 20, 
-            locationRestriction: {
-                circle: {
-                    center: { latitude: lat, longitude: lng },
-                    radius: currentRadius,
-                }
-            },
-            includedTypes: types,
-            languageCode: 'ja'
-        };
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos,places.editorialSummary,places.priceLevel,places.businessStatus',
-            },
-            body: JSON.stringify(data),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Places API Error (${response.status}):`, errorText);
+        try {
+            const result = await apiPost<{ places?: any[] }>('/places/searchNearby', {
+                center: { lat, lng },
+                radius: currentRadius,
+                includedTypes: types,
+                maxResultCount: 20,
+            });
+            return result.places || [];
+        } catch (e) {
+            console.error('Places searchNearby failed:', e);
             return [];
         }
-        const result = await response.json();
-        return result.places || [];
     };
 
     try {
@@ -285,25 +243,18 @@ export async function searchNearbySpots(lat: number, lng: number, radiusMeters: 
         if (allFoundSpotsRaw.length < 3 && maxStage >= 4) {
             console.log(`Places API: Stage 4 (Last Resort) Text Search...`);
             // 現在地周辺の「観光スポット」というキーワードで広域検索
-            const textSearchUrl = `https://places.googleapis.com/v1/places:searchText`;
-            const tsResponse = await fetch(textSearchUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Goog-Api-Key': API_KEY,
-                    'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.types,places.formattedAddress,places.photos,places.editorialSummary,places.priceLevel,places.businessStatus',
-                },
-                body: JSON.stringify({
-                    textQuery: "観光スポット 飲食店",
-                    locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: maxRadius } },
-                    languageCode: 'ja'
-                }),
-            });
-            if (tsResponse.ok) {
-                const tsResult = await tsResponse.json();
+            try {
+                const tsResult = await apiPost<{ places?: any[] }>('/places/searchText', {
+                    textQuery: '観光スポット 飲食店',
+                    bias: { lat, lng },
+                    radius: maxRadius,
+                    detailed: true,
+                });
                 const tsPlaces = tsResult.places || [];
                 const existingIds = new Set(allFoundSpotsRaw.map(s => s.id));
                 tsPlaces.forEach((s: any) => { if (!existingIds.has(s.id)) allFoundSpotsRaw.push(s); });
+            } catch (e) {
+                console.warn('Stage 4 text search failed:', e);
             }
         }
 
@@ -409,36 +360,13 @@ export async function searchRouteSpots(originObj: { lat: number, lng: number }, 
  */
 export async function getAutocompleteSuggestions(input: string, lat?: number, lng?: number): Promise<AutocompleteResult[]> {
     if (!input.trim()) return [];
-    const url = `https://places.googleapis.com/v1/places:autocomplete`;
-    
-    const data: any = {
-        input,
-        languageCode: 'ja',
-        regionCode: 'JP'
-    };
-
-    if (lat !== undefined && lng !== undefined) {
-        data.locationBias = {
-            circle: {
-                center: { latitude: lat, longitude: lng },
-                radius: 10000 // 10km bias
-            }
-        };
-    }
 
     try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': API_KEY,
-            },
-            body: JSON.stringify(data),
+        const result = await apiPost<{ suggestions?: any[] }>('/places/autocomplete', {
+            input,
+            bias: (lat !== undefined && lng !== undefined) ? { lat, lng } : undefined,
         });
 
-        if (!response.ok) return [];
-        const result = await response.json();
-        
         return (result.suggestions || []).map((s: any) => ({
             placeId: s.placePrediction.placeId,
             description: s.placePrediction.text.text,
@@ -455,21 +383,11 @@ export async function getAutocompleteSuggestions(input: string, lat?: number, ln
  * Place ID から緯度経度を取得する (GetDetails)
  */
 export async function getPlaceLatLng(placeId: string): Promise<{ lat: number; lng: number; name: string } | null> {
-    const url = `https://places.googleapis.com/v1/places/${placeId}`;
-    
     try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'location,displayName',
-            }
-        });
+        const result = await apiGet<{ place?: any }>('/places/details', { placeId });
+        const place = result.place;
+        if (!place?.location) return null;
 
-        if (!response.ok) return null;
-        const place = await response.json();
-        
         return {
             lat: place.location.latitude,
             lng: place.location.longitude,
@@ -486,10 +404,7 @@ export async function getPlaceLatLng(placeId: string): Promise<{ lat: number; ln
  */
 export async function reverseGeocode(lat: number, lng: number): Promise<string> {
     try {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&language=ja&result_type=sublocality|locality&key=${API_KEY}`;
-        const response = await fetch(url);
-        if (!response.ok) return '';
-        const data = await response.json();
+        const data = await apiGet<{ results?: any[] }>('/geocode', { lat, lng });
         if (data.results && data.results.length > 0) {
             const result = data.results[0];
             const name = result.formatted_address

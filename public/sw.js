@@ -76,13 +76,19 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-    const { type, title, body, icon } = event.data || {};
+    // 同一オリジンのクライアントからのメッセージのみ受け付ける
+    if (event.origin && event.origin !== self.location.origin) return;
+
+    const { type, title, body } = event.data || {};
+
+    // 通知本文は長さを制限し、アイコンはメッセージ側から指定させない（固定のローカル資産のみ）
+    const clamp = (v, max) => (typeof v === 'string' && v.length > 0 ? v.slice(0, max) : undefined);
 
     if (type === 'GENERATION_COMPLETE') {
         if (self.registration && Notification.permission === 'granted') {
-            self.registration.showNotification(title || 'Meguru - コース完成！', {
-                body: body || 'コースが完成しました。タップして確認しましょう。',
-                icon: icon || '/pwa-192x192.png',
+            self.registration.showNotification(clamp(title, 100) || 'Meguru - コース完成！', {
+                body: clamp(body, 200) || 'コースが完成しました。タップして確認しましょう。',
+                icon: '/pwa-192x192.png',
                 tag: 'meguru-generation-complete',
                 badge: '/pwa-192x192.png',
                 vibrate: [200, 100, 200],

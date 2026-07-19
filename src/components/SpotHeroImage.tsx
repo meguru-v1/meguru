@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, Camera, Building, Crown, Globe, Landmark } from 'lucide-react';
+import { buildPlacePhotoUrl, buildStreetViewUrl } from '../lib/safeUrl';
 
 interface SpotHeroImageProps {
     spotName: string;
@@ -38,11 +39,13 @@ export default function SpotHeroImage({
     useEffect(() => {
         setIsLoading(true);
         setHasError(false);
-        if (viewMode === 'photo' && googlePhotoRef) {
-            setImgUrl(`https://places.googleapis.com/v1/${googlePhotoRef}/media?maxWidthPx=1200&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
+        // photo参照が不正な形式なら外観モードにフォールバック
+        const photoUrl = viewMode === 'photo' ? buildPlacePhotoUrl(googlePhotoRef, 1200) : undefined;
+        if (photoUrl) {
+            setImgUrl(photoUrl);
         } else {
             // 外観モード（ストリートビュー API）
-            setImgUrl(`https://maps.googleapis.com/maps/api/streetview?size=1200x800&location=${lat},${lng}&fov=90&heading=235&pitch=10&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`);
+            setImgUrl(buildStreetViewUrl(lat, lng) ?? null);
         }
     }, [viewMode, googlePhotoRef, lat, lng]);
 

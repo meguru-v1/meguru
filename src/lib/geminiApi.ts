@@ -1,10 +1,7 @@
-// Cloud Functions エンドポイント（Gemini APIキーはサーバー側で管理）
-export const PROXY_URL = (import.meta.env.VITE_GEMINI_PROXY_URL as string)
-    || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
+// Cloud Functions エンドポイント（APIキーはサーバー側で管理）
+import { apiPost, API_BASE } from './apiClient';
 
-if (import.meta.env.DEV && !import.meta.env.VITE_GEMINI_PROXY_URL) {
-    console.warn('[Meguru] VITE_GEMINI_PROXY_URL not set — using fallback production endpoint.');
-}
+export const PROXY_URL = API_BASE;
 
 // Cloud Functions 経由でAI生成を実行
 export const callGeminiProxy = async (
@@ -12,18 +9,7 @@ export const callGeminiProxy = async (
     model: string,
     jsonMode: boolean = false
 ): Promise<string> => {
-    const response = await fetch(PROXY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model, jsonMode }),
-    });
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        const err = new Error(errorData.error || `Proxy error: ${response.status}`) as Error & { status?: number };
-        err.status = response.status;
-        throw err;
-    }
-    const data = await response.json();
+    const data = await apiPost<{ text: string }>('/gemini', { prompt, model, jsonMode });
     return data.text;
 };
 

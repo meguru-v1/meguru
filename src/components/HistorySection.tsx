@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Clock, MapPin, X, History as HistoryIcon } from 'lucide-react';
 import type { Course } from '../types';
 import { getHistory, removeHistory, type HistoryEntry } from '../lib/history';
+import { buildPlacePhotoUrl } from '../lib/safeUrl';
 
 interface HistorySectionProps {
     onSelect: (course: Course) => void;
@@ -53,9 +54,9 @@ const HistorySection: React.FC<HistorySectionProps> = ({ onSelect, refreshKey })
                         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
                     >
                         <div className="relative h-20 overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
-                            {entry.thumbnailUrl ? (
+                            {buildPlacePhotoUrl(entry.thumbnailRef, 400) ? (
                                 <img
-                                    src={entry.thumbnailUrl}
+                                    src={buildPlacePhotoUrl(entry.thumbnailRef, 400)}
                                     alt={entry.course.title}
                                     className="w-full h-full object-cover"
                                     loading="lazy"

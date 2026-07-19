@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Map, AdvancedMarker, Pin, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import type { Spot } from '../types';
+import { buildPlacePhotoUrl, safeImageUrl } from '../lib/safeUrl';
 
 const CATEGORY_STYLES: Record<string, { icon: string, color: string, background: string }> = {
     'グルメ': { icon: '🍽️', color: '#fff', background: '#F59E0B' }, // amber-500
@@ -193,7 +194,7 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
                                         {(spot.tags.photo || (spot.photos && spot.photos.length > 0)) && (
                                             <div className="w-full h-24 mb-2 rounded-lg overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>
                                                 <img
-                                                    src={spot.photos?.[0] ? `https://places.googleapis.com/v1/${spot.photos[0]}/media?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&maxWidthPx=400` : spot.tags.photo}
+                                                    src={buildPlacePhotoUrl(spot.photos?.[0], 400) ?? safeImageUrl(spot.tags.photo)}
                                                     alt={spot.name}
                                                     className="w-full h-full object-cover"
                                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}

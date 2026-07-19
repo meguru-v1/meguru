@@ -1,6 +1,5 @@
 import type { Spot, TravelMode } from '../types';
-
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+import { apiPost } from './apiClient';
 
 const TRAVEL_MODE_MAP: Record<TravelMode, string> = {
     walk: 'WALK',
@@ -21,48 +20,20 @@ export async function computeRoute(
     spots: Spot[],
     travelMode: TravelMode = 'walk'
 ): Promise<RouteComputeResult | null> {
-    if (!API_KEY) return null;
     if (spots.length < 2) return null;
 
     const origin = spots[0];
     const destination = spots[spots.length - 1];
     const intermediates = spots.slice(1, -1);
 
-    const body: any = {
-        origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lon } } },
-        destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lon } } },
-        travelMode: TRAVEL_MODE_MAP[travelMode] || 'WALK',
-    };
-
-    if (intermediates.length > 0) {
-        body.intermediates = intermediates.map(s => ({
-            location: { latLng: { latitude: s.lat, longitude: s.lon } },
-        }));
-    }
-
-    // TRANSIT/WALK の場合は routingPreference 不可
-    if (travelMode === 'car') {
-        body.routingPreference = 'TRAFFIC_AWARE';
-    }
-
     try {
-        const response = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters',
-            },
-            body: JSON.stringify(body),
+        // 経路計算はプロキシ経由（APIキーはサーバー側）
+        const data = await apiPost<{ routes?: any[] }>('/routes', {
+            origin: { lat: origin.lat, lng: origin.lon },
+            destination: { lat: destination.lat, lng: destination.lon },
+            intermediates: intermediates.map(s => ({ lat: s.lat, lng: s.lon })),
+            travelMode: TRAVEL_MODE_MAP[travelMode] || 'WALK',
         });
-
-        if (!response.ok) {
-            const errText = await response.text().catch(() => '');
-            console.warn(`[directions] Routes API failed (${response.status}):`, errText);
-            return null;
-        }
-
-        const data = await response.json();
         const route = data.routes?.[0];
         if (!route || !route.legs) return null;
 

@@ -1,12 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Send, Sparkles, Loader2, MessageCircle } from 'lucide-react';
 import type { Course, Spot } from '../types';
-
-const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL as string
-    || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
-if (import.meta.env.DEV && !import.meta.env.VITE_GEMINI_PROXY_URL) {
-    console.warn('[Meguru] VITE_GEMINI_PROXY_URL not set — using fallback production endpoint.');
-}
+import { callGeminiProxy } from '../lib/geminiApi';
 
 interface Message {
     role: 'user' | 'ai';
@@ -100,13 +95,8 @@ ${spotInfo}
 
             const prompt = `${buildSystemContext()}\n\n会話履歴:\n${history}\n\nユーザー: ${text}\n\nAI:`;
 
-            const res = await fetch(PROXY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, model: 'gemini-2.5-flash-lite', jsonMode: false }),
-            });
-            const data = await res.json();
-            const reply = data.text || '申し訳ありません、うまく答えられませんでした。';
+            const aiText = await callGeminiProxy(prompt, 'gemini-2.5-flash-lite', false);
+            const reply = aiText || '申し訳ありません、うまく答えられませんでした。';
             setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { role: 'ai', text: reply } : m));
         } catch {
             setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { role: 'ai', text: 'エラーが発生しました。もう一度お試しください。' } : m));
@@ -210,7 +200,7 @@ ${spotInfo}
                         className="flex-1 rounded-xl px-4 py-2.5 text-sm outline-none transition-all"
                         style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1.5px solid var(--border-input)' }}
                     />
-                    <button onClick={sendMessage} disabled={!input.trim() || isSending}
+                    <button onClick={() => sendMessage()} disabled={!input.trim() || isSending}
                         className="w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 disabled:opacity-40"
                         style={{ background: 'var(--wa-accent)' }}>
                         {isSending ? <Loader2 size={16} className="text-white animate-spin" /> : <Send size={16} className="text-white" />}

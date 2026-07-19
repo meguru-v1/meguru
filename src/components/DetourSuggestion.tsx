@@ -2,12 +2,9 @@ import React, { useState } from 'react';
 import { MapPin, Footprints, Loader2, X, Plus } from 'lucide-react';
 import type { Spot } from '../types';
 import { searchNearbySpots } from '../lib/places';
+import { mapPlaceToSpot } from '../lib/placeMapper';
+import { callGeminiProxy, extractJsonString } from '../lib/geminiApi';
 
-const PROXY_URL = import.meta.env.VITE_GEMINI_PROXY_URL as string
-    || 'https://asia-northeast1-project-6f8c0b7f-7452-4e63-a48.cloudfunctions.net/gemini-proxy';
-if (import.meta.env.DEV && !import.meta.env.VITE_GEMINI_PROXY_URL) {
-    console.warn('[Meguru] VITE_GEMINI_PROXY_URL not set — using fallback production endpoint.');
-}
 
 interface DetourSuggestionProps {
     currentPosition: { lat: number; lng: number } | null;
@@ -39,9 +36,11 @@ export default function DetourSuggestion({ currentPosition, currentCourseSpots, 
         try {
             // 現在地周辺300mのスポットを検索
             const nearbySpots = await searchNearbySpots(currentPosition.lat, currentPosition.lng, 300, { maxStage: 2 });
+            // PlaceDetails → Spot に正規化してから扱う
+            const nearbyAsSpots = nearbySpots.map(mapPlaceToSpot);
             // 既にコースにあるスポットを除外
             const existingIds = new Set(currentCourseSpots.map(s => s.id));
-            const candidates = nearbySpots.filter(s => !existingIds.has(s.id)).slice(0, 10);
+            const candidates = nearbyAsSpots.filter(s => !existingIds.has(s.id)).slice(0, 10);
 
             if (candidates.length === 0) {
                 setError('周辺に追加できるスポットが見つかりませんでした。');
@@ -60,15 +59,9 @@ ${candidates.map(s => `- ${s.name}（${s.category}）`).join('\n')}
 [{"name": "スポット名", "reason": "コースに合う理由（1文）", "walkMinutes": 推定徒歩分数}]
 理由は「〜だから」の形で具体的に20文字以内で。JSON ONLY。`;
 
-            const res = await fetch(PROXY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, model: 'gemini-2.5-flash-lite', jsonMode: true }),
-            });
-            const data = await res.json();
-            const parsed: { name: string; reason: string; walkMinutes: number }[] = JSON.parse(
-                data.text.replace(/```json?/g, '').replace(/```/g, '').trim()
-            );
+            const raw = await callGeminiProxy(prompt, 'gemini-2.5-flash-lite', true);
+            const parsed: { name: string; reason: string; walkMinutes: number }[] =
+                JSON.parse(extractJsonString(raw));
 
             const result: DetourSpot[] = parsed.map(p => {
                 const spot = candidates.find(c => c.name === p.name)

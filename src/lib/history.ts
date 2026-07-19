@@ -1,4 +1,5 @@
 import type { Course, HistoryEntry, HistoryStore } from '../types';
+import { safePhotoRef } from './safeUrl';
 export type { HistoryEntry };
 
 const STORAGE_KEY = 'meguru:history:v1';
@@ -32,13 +33,9 @@ const safeWrite = (store: HistoryStore): void => {
     }
 };
 
-const buildThumbnail = (course: Course): string | undefined => {
-    const firstSpot = course.spots?.[0];
-    const photoRef = firstSpot?.photos?.[0];
-    if (!photoRef) return undefined;
-    const key = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY;
-    if (!key) return undefined;
-    return `https://places.googleapis.com/v1/${photoRef}/media?maxWidthPx=400&key=${key}`;
+// APIキーを含む完成URLではなく photo reference のみを保存する（localStorageへのキー残留を防ぐ）
+const buildThumbnailRef = (course: Course): string | undefined => {
+    return safePhotoRef(course.spots?.[0]?.photos?.[0]);
 };
 
 export function pushHistory(course: Course, query: string): void {
@@ -51,7 +48,7 @@ export function pushHistory(course: Course, query: string): void {
         course,
         query,
         viewedAt: Date.now(),
-        thumbnailUrl: buildThumbnail(course),
+        thumbnailRef: buildThumbnailRef(course),
     };
     const next: HistoryStore = {
         version: 1,

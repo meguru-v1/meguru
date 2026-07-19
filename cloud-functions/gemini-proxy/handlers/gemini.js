@@ -23,10 +23,17 @@ export async function generate(req, res) {
 
   try {
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const aiModel = genAI.getGenerativeModel({
-      model: selectedModel,
-      generationConfig: body.jsonMode ? { responseMimeType: "application/json" } : {},
-    });
+    const aiModel = genAI.getGenerativeModel(
+      {
+        model: selectedModel,
+        generationConfig: body.jsonMode ? { responseMimeType: "application/json" } : {},
+      },
+      {
+        // Gemini APIキーにはHTTPリファラ制限が掛かっているため、
+        // サーバーからの呼び出しでも Referer を明示する必要がある（削除すると403になる）
+        customHeaders: { Referer: "https://meguru-v1.github.io/" },
+      }
+    );
 
     const result = await aiModel.generateContent(prompt);
     const text = (await result.response).text();

@@ -320,8 +320,10 @@ export async function searchRouteSpots(originObj: { lat: number, lng: number }, 
     const dy = (originObj.lng - destObj.lng) * 111000 * Math.cos(originObj.lat * Math.PI / 180);
     const directDist = Math.sqrt(dx * dx + dy * dy);
 
-    // サンプル点数を距離に応じて決定
-    const numPoints = directDist < 2000 ? 3 : directDist < 5000 ? 4 : 6;
+    // サンプル点数は「検索円が無駄に重ならない間隔」から決める。
+    // 距離だけで決めると半径が大きいとき同じ場所を何度も検索して課金だけ増える。
+    const spacing = Math.max(radiusMeters, 500) * 1.5;
+    const numPoints = Math.min(Math.max(Math.ceil(directDist / spacing) + 1, 2), 5);
     const points: { lat: number, lng: number }[] = Array.from({ length: numPoints }, (_, i) => {
         const t = i / (numPoints - 1);
         return {

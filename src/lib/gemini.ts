@@ -2,6 +2,7 @@ import type { Spot, Course, PersonaId, ExploreMode, WeatherTag } from '../types'
 import { getSeasonalPromptContext } from './seasonal';
 import {
     callGeminiProxy,
+    callGeminiWithRetry,
     sleep,
     waitRateLimit,
     stripThinkingBlock,
@@ -356,35 +357,7 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 `;
 
         const modelName = selectModel(durationMinutes);
-        let text: string | undefined;
-
-        // 指数バックオフ付きリトライ
-        const MAX_RETRIES = 3;
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-            try {
-                const currentModel = attempt === 0 ? modelName : "gemini-2.5-flash";
-                await waitRateLimit(currentModel, 2000);
-                const useJsonMode = attempt > 0;
-                text = await callGeminiProxy(promptTemplate, currentModel, useJsonMode);
-                break; // 成功したらループ脱出
-            } catch (err) {
-                const e = err as Error & { status?: number };
-                const is429 = e?.status === 429 || e?.message?.includes('429') || e?.message?.includes('RESOURCE_EXHAUSTED');
-                if (is429 && attempt < MAX_RETRIES) {
-                    const backoffMs = Math.min(2000 * Math.pow(2, attempt), 30000);
-                    console.warn(`[Gemini API] 429 Rate Limited. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-                    await sleep(backoffMs);
-                    continue;
-                }
-                if (attempt < MAX_RETRIES) {
-                    console.warn(`[Gemini API] Model failed (attempt ${attempt + 1}), trying fallback:`, err);
-                    continue;
-                }
-                console.error(`[Gemini API] All ${MAX_RETRIES + 1} attempts failed:`, err);
-                throw err;
-            }
-        }
-
+        const text = await callGeminiWithRetry(promptTemplate, modelName, 'Gemini');
         if (!text) return [];
 
         const jsonStr = extractJsonString(text);
@@ -540,35 +513,12 @@ ${userPreferenceContext ? `- User Preference: ${userPreferenceContext}` : ''}
 `;
 
     const modelName = selectModel(durationMinutes);
-    let text: string | undefined;
-
-    // 指数バックオフ付きリトライ
-    const MAX_RETRIES = 3;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            const currentModel = attempt === 0 ? modelName : "gemini-2.5-flash";
-            await waitRateLimit(currentModel, 2000);
-            const useJsonMode = attempt > 0;
-            text = await callGeminiProxy(prompt, currentModel, useJsonMode);
-            break;
-        } catch (err) {
-            const e = err as Error & { status?: number };
-            const is429 = e?.status === 429 || e?.message?.includes('429') || e?.message?.includes('RESOURCE_EXHAUSTED');
-            if (is429 && attempt < MAX_RETRIES) {
-                const backoffMs = Math.min(2000 * Math.pow(2, attempt), 30000);
-                console.warn(`[Remix] 429 Rate Limited. Retrying in ${backoffMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-                await sleep(backoffMs);
-                continue;
-            }
-            if (attempt < MAX_RETRIES) {
-                console.warn(`[Remix] Model failed (attempt ${attempt + 1}), trying fallback:`, err);
-                continue;
-            }
-            console.warn(`[Remix] All attempts failed`);
-        }
+    let text: string;
+    try {
+        text = await callGeminiWithRetry(prompt, modelName, 'Remix');
+    } catch {
+        throw new Error("AIによるリミックスに失敗しました。時間をおいて再度お試しください。");
     }
-
-    if (!text) throw new Error("AIによるリミックスに失敗しました。時間をおいて再度お試しください。");
 
     try {
         const jsonStr = extractJsonString(text);
@@ -622,11 +572,20 @@ export interface WaitingScreenContent {
     }[];
 }
 
+// 待ち画面の演出テキストは同じ条件なら使い回す（生成のたびに課金しない）
+const waitingScreenCache = new Map<string, WaitingScreenContent>();
+const WAITING_CACHE_LIMIT = 30;
+
 export const generateWaitingScreenContent = async (
     locationName: string,
     weatherContext: string = "不明",
     persona?: PersonaId
 ): Promise<WaitingScreenContent | null> => {
+    const now0 = new Date();
+    const cacheKey = `${locationName}|${weatherContext}|${persona ?? ''}|${now0.getMonth()}|${Math.floor(now0.getHours() / 3)}`;
+    const cached = waitingScreenCache.get(cacheKey);
+    if (cached) return cached;
+
     const personaContext = persona && PERSONA_INSTRUCTIONS[persona]
         ? `選ばれたガイド: 【${PERSONA_INSTRUCTIONS[persona].kanji}】${PERSONA_INSTRUCTIONS[persona].label}。このガイドの視点でチップスを書いてください。`
         : '';
@@ -650,21 +609,21 @@ ${personaContext}
   "interaction": [{"question": "旅の気分を高める質問", "options": [{"id": "a", "label": "選択肢"}]}]
 }
 JSON ONLY.`;
+    // 演出用なので失敗しても静的なフォールバック表示で足りる。
+    // ここで高いモデルに切り替える価値はないため flash-lite の一発勝負にする
     const modelName = "gemini-2.5-flash-lite";
     try {
         await waitRateLimit(modelName, 5000);
         const text = await callGeminiProxy(prompt, modelName, true);
-        return JSON.parse(stripThinkingBlock(text)) as WaitingScreenContent;
-    } catch (err) {
-        console.warn(`Sub-AI (Flash-Lite) failed, trying Flash:`, err);
-        try {
-            const fbModel = "gemini-2.5-flash";
-            await waitRateLimit(fbModel, 7000);
-            const text = await callGeminiProxy(prompt, fbModel, true);
-            return JSON.parse(stripThinkingBlock(text)) as WaitingScreenContent;
-        } catch (fbErr) {
-            console.warn(`Sub-AI (Flash) also failed:`, fbErr);
-            return null;
+        const content = JSON.parse(stripThinkingBlock(text)) as WaitingScreenContent;
+        if (waitingScreenCache.size >= WAITING_CACHE_LIMIT) {
+            const oldest = waitingScreenCache.keys().next().value;
+            if (oldest !== undefined) waitingScreenCache.delete(oldest);
         }
+        waitingScreenCache.set(cacheKey, content);
+        return content;
+    } catch (err) {
+        console.warn('待ち画面コンテンツの生成に失敗（フォールバック表示を使う）:', err);
+        return null;
     }
 };

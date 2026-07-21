@@ -49,6 +49,16 @@ export async function generate(req, res) {
       res.status(429).json({ error: "AI service rate limited. Please retry later." });
       return;
     }
+
+    // 一時的な過負荷（503/500/502/504）は 503 として返す。
+    // 500 に丸めるとクライアントが「モデルが悪い」と誤認して高いモデルに切り替え、
+    // 待ち時間なしで叩き直すため無駄な課金が発生する。
+    const upstream = err?.status ?? (String(err?.message || "").match(/\b(50[0234])\b/)?.[1] | 0);
+    if ([500, 502, 503, 504].includes(Number(upstream))) {
+      res.status(503).json({ error: "AI service temporarily unavailable. Please retry." });
+      return;
+    }
+
     // 内部エラーの詳細（内部URL・Google側のエラー本文）はクライアントに返さない
     res.status(500).json({ error: "AI generation failed" });
   }

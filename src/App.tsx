@@ -12,61 +12,70 @@ import CourseCard from './components/CourseCard';
 import { useFavorites } from './hooks/useFavorites';
 import { useNavigation } from './hooks/useNavigation';
 import { useSwipe } from './hooks/useSwipe';
-import { searchNearbySpots, searchRouteSpots, reverseGeocode } from './lib/places';
-import { generateSmartCourses, remixCourse, generateWaitingScreenContent } from './lib/gemini';
-import type { WaitingScreenContent } from './lib/gemini';
+import { useRoutePath } from './hooks/useRoutePath';
+import { useCourseSearch } from './hooks/useCourseSearch';
+import { remixCourse } from './lib/gemini';
 import { decodeShareUrl, clearShareParam, encodeCourseToUrl, copyToClipboard } from './lib/shareLink';
-import { getCurrentWeather, getCurrentWeatherDetailed } from './lib/weather';
+import { getCurrentWeather } from './lib/weather';
 import { pushHistory, getHistory } from './lib/history';
-import { buildPlacePhotoUrl } from './lib/safeUrl';
 import { buildPreferenceContext } from './lib/preferences';
 import { pickReplacementSpot, pickInsertionSpot } from './lib/spotPicker';
-import { useRoutePath } from './hooks/useRoutePath';
 import { applyTravelTimes } from './lib/travelTime';
 import { getGoogleMapsUrl } from './lib/mapUrl';
-import { sendCompletionNotification, requestNotificationPermissionOnFirstInteraction } from './lib/notifications';
-import { geocodeWithBias } from './lib/geocoding';
-import { mapPlaceToSpot } from './lib/placeMapper';
-import { getDistance } from 'geolib';
+import { requestNotificationPermissionOnFirstInteraction } from './lib/notifications';
 import {
     Loader2, Footprints, Clock, MapPin, Star, Sparkles, Heart, Trash2, Search,
     Navigation, AlertCircle, Map as MapIcon, ArrowLeft, Bike, Train, Car, Lightbulb, RefreshCw, Smile, Zap, Send,
     Share2, MessageCircle, CheckCircle2, Route as RouteIcon, Shuffle, Plus
 } from 'lucide-react';
-import type { Course, Spot, SearchParams, TabId, TravelMode, ExploreMode } from './types';
+import type { Course, Spot, TabId } from './types';
 
 function App() {
-    const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
-    const [radius, setRadius] = useState(1000);
-    const [courses, setCourses] = useState<Course[]>([]);
+    // ===== 表示まわりの状態 =====
     const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
     const [focusedSpot, setFocusedSpot] = useState<Spot | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [status, setStatus] = useState('');
-    const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabId>('search');
-    const [searchCandidates, setSearchCandidates] = useState<Spot[]>([]);
     const [isRemixing, setIsRemixing] = useState(false);
     const [customRemixInput, setCustomRemixInput] = useState('');
-    const [showGenScreen, setShowGenScreen] = useState(false);
-    const [searchLocationName, setSearchLocationName] = useState('');
-    const [subAiContent, setSubAiContent] = useState<WaitingScreenContent | null>(null);
-    const [generationImages, setGenerationImages] = useState<string[]>([]);
     const [activeDayIndex, setActiveDayIndex] = useState(0);
     const [showAiChat, setShowAiChat] = useState(false);
     const [shareToastVisible, setShareToastVisible] = useState(false);
     const [routeToastMsg, setRouteToastMsg] = useState<string | null>(null);
-    const [lastSearchDuration, setLastSearchDuration] = useState(120);
-    const [lastSearchMood, setLastSearchMood] = useState('不明');
-    const [lastSearchBudget, setLastSearchBudget] = useState('不明');
-    const [lastSearchGroupSize, setLastSearchGroupSize] = useState('不明');
-    const [lastExploreMode, setLastExploreMode] = useState<ExploreMode | undefined>(undefined);
-    const [lastSearchQuery, setLastSearchQuery] = useState('');
-
     const [favTrimToastVisible, setFavTrimToastVisible] = useState(false);
+
     const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites(() => {
         setFavTrimToastVisible(true);
         setTimeout(() => setFavTrimToastVisible(false), 3000);
+    });
+
+    // お気に入り + 履歴から好み傾向を抽出 (お気に入りを優先)
+    const getPreferenceContext = (): string => {
+        const historyCourses = getHistory().slice(0, 10).map(e => e.course);
+        // お気に入りを前に、履歴を後ろに連結。同一 ID は除外
+        const seen = new Set<string>();
+        const combined = [...favorites, ...historyCourses].filter(c => {
+            if (seen.has(c.id)) return false;
+            seen.add(c.id);
+            return true;
+        });
+        return buildPreferenceContext(combined);
+    };
+
+    // ===== 検索とコース生成（状態と手続きは useCourseSearch が持つ） =====
+    const {
+        center, setCenter, radius,
+        courses, setCourses, searchCandidates,
+        loading, status, error,
+        showGenScreen, setShowGenScreen, searchLocationName, subAiContent, generationImages,
+        remixContext,
+        search: handleSearch,
+    } = useCourseSearch({
+        getPreferenceContext,
+        onCoursesReady: () => setActiveTab('courses'),
+        onSearchStart: () => {
+            setSelectedCourse(null);
+            setActiveDayIndex(0); // 連泊タブをリセット
+        },
     });
 
     const navSpots = selectedCourse?.spots ?? [];
@@ -104,7 +113,7 @@ function App() {
     // コース表示時に履歴へ自動push
     useEffect(() => {
         if (selectedCourse) {
-            const label = lastSearchQuery || selectedCourse.title || '名称未設定';
+            const label = remixContext.query || selectedCourse.title || '名称未設定';
             pushHistory(selectedCourse, label);
         }
     }, [selectedCourse?.id]);
@@ -126,340 +135,6 @@ function App() {
         setCourses(prev => prev.map(c => c.id === updated.id ? updated : c));
     };
 
-    // お気に入り + 履歴から好み傾向を抽出 (お気に入りを優先)
-    const getPreferenceContext = (): string => {
-        const historyCourses = getHistory().slice(0, 10).map(e => e.course);
-        // お気に入りを前に、履歴を後ろに連結。同一 ID は除外
-        const seen = new Set<string>();
-        const combined = [...favorites, ...historyCourses].filter(c => {
-            if (seen.has(c.id)) return false;
-            seen.add(c.id);
-            return true;
-        });
-        return buildPreferenceContext(combined);
-    };
-
-    // ===== 検索ハンドラ =====
-    const handleSearch = async (params: SearchParams) => {
-        setLoading(true);
-        let hasError = false; // クロージャ問題を避けるためのローカルフラグ
-        setError(null);
-        setSubAiContent(null);
-        setCourses([]);
-        setSelectedCourse(null);
-        setStatus('場所を検索中...');
-
-        try {
-            const { searchMode, query, destination, radius: r, duration, travelMode, mood, budget, groupSize, queryPlaceId, destinationPlaceId, persona, startTime, exploreMode, daysCount } = params;
-            
-            // リミックス用に条件を保存
-            setLastSearchDuration(duration);
-            setLastSearchMood(mood || '不明');
-            setLastSearchBudget(budget || '不明');
-            setLastSearchGroupSize(groupSize || '不明');
-            setLastExploreMode(exploreMode);
-            setLastSearchQuery(query);
-            setActiveDayIndex(0); // 連泊タブリセット
-
-            if (searchMode === 'route' && destination) {
-                // ===== ルート検索 =====
-                const [startGeo, endGeo] = await Promise.all([
-                    geocodeWithBias(query, queryPlaceId),
-                    geocodeWithBias(destination, destinationPlaceId)
-                ]);
-                if (!startGeo) throw new Error(`「${query}」が見つかりませんでした。`);
-                if (!endGeo) throw new Error(`「${destination}」が見つかりませんでした。`);
-
-                // 2点間の距離を算出 (メートル)
-                const midLat = (startGeo.lat + endGeo.lat) / 2;
-                const midLon = (startGeo.lon + endGeo.lon) / 2;
-                const dx = (startGeo.lat - endGeo.lat) * 111000;
-                const dy = (startGeo.lon - endGeo.lon) * 111000 * Math.cos(midLat * Math.PI / 180);
-                const directDist = Math.sqrt(dx * dx + dy * dy);
-
-                // 移動方法ごとの速度制限チェック (km/h)
-                const maxSpeeds: Record<string, { limit: number; label: string }> = {
-                    walk: { limit: 20, label: '徒歩' },
-                    bicycle: { limit: 40, label: '自転車' },
-                    transit: { limit: 200, label: '公共交通' },
-                    car: { limit: 200, label: '車' },
-                };
-                const routeMode = travelMode || 'walk';
-                const distKm = directDist / 1000;
-                const timeHours = duration / 60;
-                const requiredSpeed = distKm / timeHours;
-
-                if (requiredSpeed > maxSpeeds[routeMode].limit) {
-                    throw new Error(
-                        `${maxSpeeds[routeMode].label}では無理な距離です（直線${distKm.toFixed(1)}km、必要速度 ${requiredSpeed.toFixed(0)}km/h）。時間を増やすか、移動方法を変更してください。`
-                    );
-                }
-
-                setCenter({ lat: midLat, lon: midLon });
-                const searchRadius = Math.max(Math.min(directDist * 0.4, 2000), 500);
-                setRadius(searchRadius);
-
-                setStatus(`ルート周辺のスポットを探しています...`);
-                const allSpotsRaw = await searchRouteSpots(
-                    { lat: startGeo.lat, lng: startGeo.lon },
-                    { lat: endGeo.lat, lng: endGeo.lon },
-                    searchRadius
-                );
-
-                // Spot型にマッピング
-                const allSpots: Spot[] = allSpotsRaw.map(mapPlaceToSpot);
-
-                if (allSpots.length < 3) throw new Error("ルート周辺に見どころとなるスポットがあまり見つかりませんでした。検索範囲や時間を大きくしてみてください。");
-
-                setStatus('AIが最適なルートコースを生成中...');
-                setShowGenScreen(true);
-                setSearchLocationName(query);
-                const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
-                const candidates = shuffled.slice(0, 150);
-                setSearchCandidates(candidates);
-
-                // --- 待ち画面（GenerationScreen）用画像の取得 ---
-                const googleUrls = candidates
-                    .map(c => buildPlacePhotoUrl(c.photos?.[0], 1600))
-                    .filter((u): u is string => !!u);
-                
-                setGenerationImages(googleUrls.slice(0, 10));
-
-                const now = new Date();
-                const timeContext = startTime || `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
-                const weatherInfo = await getCurrentWeatherDetailed(midLat, midLon);
-                const weatherContext = weatherInfo.text;
-
-                console.log("AI Generation Context:", { time: timeContext, weather: weatherContext, tag: weatherInfo.tag, center: { midLat, midLon } });
-
-                // コース拡張ロジック（ルート検索用）
-                const routeTravelMode = travelMode || 'walk';
-                const enhanceRouteCourses = (rawCourses: Course[]) => rawCourses.map(course => {
-                    let spots = [...course.spots];
-
-                    // 【14】ルート発着固定: 出発地・目的地を配列の先頭・末尾に固定
-                    const startPin: Spot = {
-                        id: `pin-start-${Date.now()}`, lat: startGeo.lat, lon: startGeo.lon,
-                        name: startGeo.name || query, category: 'starting_point',
-                        tags: {}, travel_time_minutes: 0,
-                        aiDescription: `ここから旅が始まります。${startGeo.name || query}を出発しましょう。`
-                    };
-                    const endPin: Spot = {
-                        id: `pin-end-${Date.now()}`, lat: endGeo.lat, lon: endGeo.lon,
-                        name: endGeo.name || destination, category: 'destination',
-                        tags: {},
-                        aiDescription: `旅のゴール地点、${endGeo.name || destination}に到着です。`
-                    };
-
-                    // 先頭が出発地から500m以上離れていたら挿入
-                    if (spots.length > 0) {
-                        const firstDist = getDistance(
-                            { latitude: startGeo.lat, longitude: startGeo.lon },
-                            { latitude: spots[0].lat, longitude: spots[0].lon }
-                        );
-                        if (firstDist > 500) spots.unshift(startPin);
-                    }
-
-                    // 末尾が目的地から500m以上離れていたら挿入
-                    if (spots.length > 0) {
-                        const lastSpot = spots[spots.length - 1];
-                        const lastDist = getDistance(
-                            { latitude: endGeo.lat, longitude: endGeo.lon },
-                            { latitude: lastSpot.lat, longitude: lastSpot.lon }
-                        );
-                        if (lastDist > 500) spots.push(endPin);
-                    }
-
-                    return {
-                        ...course,
-                        travelMode: routeTravelMode,
-                        spots: applyTravelTimes(spots, routeTravelMode)
-                    };
-                });
-
-                // メインAIとサブAIを並列で呼び出し
-                const mainPromise = generateSmartCourses(
-                    candidates,
-                    { lat: midLat, lon: midLon },
-                    duration,
-                    timeContext,
-                    weatherContext,
-                    mood,
-                    budget,
-                    groupSize,
-                    getPreferenceContext(),
-                    persona,
-                    exploreMode,
-                    daysCount ?? 1,
-                    (partialCourses) => {
-                        const enhanced = enhanceRouteCourses(partialCourses);
-                        setCourses(enhanced);
-                        if (enhanced.length > 0) {
-                            setShowGenScreen(false);
-                            setActiveTab('courses');
-                        }
-                    },
-                    weatherInfo.tag,
-                    weatherInfo.temperatureC
-                );
-
-                // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
-                setTimeout(() => {
-                    generateWaitingScreenContent(query, weatherContext, persona)
-                        .then(content => { if (content) setSubAiContent(content); })
-                        .catch(() => { /* フォールバックで対応 */ });
-                }, 200);
-
-                let generatedCourses: Course[] = [];
-                try {
-                    console.log("App: Awaiting mainPromise (generateSmartCourses)...");
-                    generatedCourses = await mainPromise;
-                    if (!generatedCourses || generatedCourses.length === 0) {
-                        throw new Error("AIがコース案を作成できませんでした。別の条件で試してみてください。");
-                    }
-                }
-                catch (e) {
-                    console.error("App: generateSmartCourses failed:", e);
-                    setError(e instanceof Error ? e.message : "AIコース生成中にエラーが発生しました。");
-                    throw e; 
-                }
-
-                const enhancedCourses = enhanceRouteCourses(generatedCourses);
-                setCourses(enhancedCourses);
-                if (enhancedCourses.length > 0) sendCompletionNotification(enhancedCourses[0].title, enhancedCourses.length);
-                setActiveTab('courses');
-
-            } else {
-                // ===== エリア検索 (従来) =====
-                const { query, queryPlaceId, radius: r, duration, travelMode, mood, budget, groupSize } = params;
-
-                // GPS座標文字列の検出（"35.xxx,135.xxx" 形式 = 「今すぐ未知へ」ボタン経由）
-                const coordMatch = query.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
-                let startGeo: { lat: number; lon: number; name: string } | null;
-
-                if (coordMatch) {
-                    // 座標直指定 → geocode不要、逆ジオコーディングでエリア名取得
-                    const lat = parseFloat(coordMatch[1]);
-                    const lon = parseFloat(coordMatch[2]);
-                    const areaName = await reverseGeocode(lat, lon);
-                    startGeo = { lat, lon, name: areaName || '現在地' };
-                } else {
-                    startGeo = await geocodeWithBias(query, queryPlaceId);
-                }
-                if (!startGeo) throw new Error(`「${query}」が見つかりませんでした。スペルや表記を見直すか、より具体的な地名（例:「京都駅」）でお試しください。`);
-
-                setCenter({ lat: startGeo.lat, lon: startGeo.lon });
-                setRadius(r);
-
-                setStatus(`周辺スポットを見極めています...`);
-                const allSpotsRaw = await searchNearbySpots(startGeo.lat, startGeo.lon, r);
-                console.log(`Spots found: ${allSpotsRaw.length}.`);
-
-                // Spot型にマッピング
-                const allSpots: Spot[] = allSpotsRaw.map(mapPlaceToSpot);
-
-                if (allSpots.length === 0) throw new Error("周辺に見どころとなるスポットが見つかりませんでした。別の場所や、検索範囲を広くして試してみてください。");
-
-                setStatus('AIが最適なコースを生成中...');
-                setShowGenScreen(true);
-                setSearchLocationName(startGeo.name || '現在地周辺');
-                const shuffled = [...allSpots].sort(() => Math.random() - 0.5);
-                const candidates = shuffled.slice(0, 150);
-                setSearchCandidates(candidates);
-
-                // --- 待ち画面（GenerationScreen）用画像の取得 ---
-                const googleUrls = candidates
-                    .map(c => buildPlacePhotoUrl(c.photos?.[0], 1600))
-                    .filter((u): u is string => !!u);
-                
-                setGenerationImages(googleUrls.slice(0, 10));
-
-                const now = new Date();
-                const timeContext = startTime || `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
-                const weatherInfo = await getCurrentWeatherDetailed(startGeo.lat, startGeo.lon);
-                const weatherContext = weatherInfo.text;
-
-                // コース拡張ロジック（エリア検索用）
-                const areaTravelMode = travelMode || 'walk';
-                const enhanceAreaCourses = (rawCourses: Course[]) => rawCourses.map(course => ({
-                    ...course,
-                    travelMode: areaTravelMode,
-                    spots: applyTravelTimes(course.spots, areaTravelMode)
-                }));
-
-                // メインAIとサブAIを並列で呼び出し
-                const mainPromise = generateSmartCourses(
-                    candidates,
-                    { lat: startGeo.lat, lon: startGeo.lon },
-                    duration,
-                    timeContext,
-                    weatherContext,
-                    mood,
-                    budget,
-                    groupSize,
-                    getPreferenceContext(),
-                    persona,
-                    exploreMode,
-                    daysCount ?? 1,
-                    (partialCourses) => {
-                        const enhanced = enhanceAreaCourses(partialCourses);
-                        setCourses(enhanced);
-                        if (enhanced.length > 0) {
-                            setShowGenScreen(false);
-                            setActiveTab('courses');
-                        }
-                    },
-                    weatherInfo.tag,
-                    weatherInfo.temperatureC
-                );
-
-                // サブAI: 待ち画面コンテンツを並列生成（メインより少し遅らせて負荷分散 - Paid Tier Optimized）
-                setTimeout(() => {
-                    generateWaitingScreenContent(startGeo.name || '現在地周辺', weatherContext, persona)
-                        .then(content => { if (content) setSubAiContent(content); })
-                        .catch(() => { /* フォールバックで対応 */ });
-                }, 300);
-
-                let generatedCourses: Course[] = [];
-                try {
-                    console.log("App: Awaiting mainPromise (generateSmartCourses) for Area Search...");
-                    generatedCourses = await mainPromise;
-                    if (!generatedCourses || generatedCourses.length === 0) {
-                        throw new Error("AIがコース案を作成できませんでした。別の条件で試してみてください。");
-                    }
-                }
-                catch (e) {
-                    console.error("App: generateSmartCourses failed (Area):", e);
-                    setError(e instanceof Error ? e.message : "AIコース生成中にエラーが発生しました。");
-                    throw e;
-                }
-
-                const enhancedCourses = enhanceAreaCourses(generatedCourses);
-                setCourses(enhancedCourses);
-                if (enhancedCourses.length > 0) sendCompletionNotification(enhancedCourses[0].title, enhancedCourses.length);
-                setActiveTab('courses');
-            }
-        } catch (err) {
-            console.error(err);
-            setError(err instanceof Error ? err.message : "検索中にエラーが発生しました。");
-            hasError = true;
-        } finally {
-            setLoading(false);
-            // エラー時も1秒後に生成画面を閉じる（エラーメッセージはstatusPanelで表示される）
-            if (hasError) {
-                setTimeout(() => {
-                    setShowGenScreen(false);
-                    setSubAiContent(null);
-                    setStatus('');
-                }, 1500);
-            } else {
-                setShowGenScreen(false);
-                setSubAiContent(null);
-                setStatus('');
-            }
-        }
-    };
-
     const handleTabChange = (tab: TabId) => {
         setActiveTab(tab);
     };
@@ -479,12 +154,12 @@ function App() {
                 searchCandidates,
                 instruction,
                 center || { lat: 0, lon: 0 },
-                lastSearchDuration,
+                remixContext.duration,
                 timeContext,
                 weatherContext,
-                lastSearchMood,
-                lastSearchBudget,
-                lastSearchGroupSize,
+                remixContext.mood,
+                remixContext.budget,
+                remixContext.groupSize,
                 getPreferenceContext()
             );
 

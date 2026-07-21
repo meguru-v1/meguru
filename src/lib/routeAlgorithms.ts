@@ -177,3 +177,52 @@ export const buildSmartItinerary = (
     // 6. 連続食事の最終ガード
     return separateConsecutiveMeals(result);
 };
+
+// ===== 時間枠への適合 =====
+
+/** スポット1件の滞在時間（分） */
+export const getStayMinutes = (spot: Spot): number =>
+    spot.stayTime ?? spot.estimatedStayTime ?? getStayTimeByType(spot.category);
+
+/** 滞在時間＋移動時間の実合計（分） */
+export const computeTotalMinutes = (spots: Spot[]): number =>
+    spots.reduce((acc, s) => acc + getStayMinutes(s) + (s.travel_time_minutes || 0), 0);
+
+/**
+ * 時間枠に収まらないコースからスポットを削って収める。
+ *
+ * AIには「滞在＋移動を積み上げて指定時間に収めろ」と指示しているが、
+ * 多数のスポットの足し算は苦手で、長時間のプランほど超過が積み上がる。
+ * 生成結果を鵜呑みにせず、こちら側で検算して落とす。
+ *
+ * 落とすのは評価の低いものから。ルート検索の発着地点は行程の前提なので落とさない。
+ */
+const FIXED_CATEGORIES = new Set(['starting_point', 'destination']);
+export const fitToTimeBudget = (
+    spots: Spot[],
+    durationMin: number,
+    applyTimes: (spots: Spot[]) => Spot[],
+    minSpots = 1,
+    tolerance = 1.15
+): Spot[] => {
+    let current = applyTimes(spots);
+    const limit = durationMin * tolerance;
+
+    while (current.length > minSpots && computeTotalMinutes(current) > limit) {
+        // 先頭と発着地点以外で、最も評価の低いものを落とす
+        let worstIndex = -1;
+        let worstScore = Infinity;
+        for (let i = 1; i < current.length; i++) {
+            if (FIXED_CATEGORIES.has(current[i].category)) continue;
+            const score = ratingScore(current[i]);
+            if (score < worstScore) {
+                worstScore = score;
+                worstIndex = i;
+            }
+        }
+        if (worstIndex < 0) break;
+        current = applyTimes(current.filter((_, i) => i !== worstIndex));
+    }
+
+    return current;
+};

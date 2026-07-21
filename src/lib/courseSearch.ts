@@ -3,6 +3,8 @@ import { searchNearbySpots, searchRouteSpots, reverseGeocode } from './places';
 import { geocodeWithBias } from './geocoding';
 import { mapPlaceToSpot } from './placeMapper';
 import { applyTravelTimes } from './travelTime';
+import { fitToTimeBudget, computeTotalMinutes } from './routeAlgorithms';
+import { getMinSpotCount } from './geminiPrompts';
 import { buildPlacePhotoUrl } from './safeUrl';
 import type { Course, Spot, SearchParams, TravelMode } from '../types';
 
@@ -84,6 +86,20 @@ function toImages(candidates: Spot[]): string[] {
         .slice(0, GENERATION_IMAGE_COUNT);
 }
 
+/**
+ * AIが出したコースを時間枠に収め、合計時間を実測値で入れ直す。
+ * AI側の申告値をそのまま信じると、指定時間に収まらないコースが出てくる。
+ */
+function finalizeCourse(course: Course, spots: Spot[], durationMin: number, mode: TravelMode): Course {
+    const fitted = fitToTimeBudget(
+        spots,
+        durationMin,
+        (s) => applyTravelTimes(s, mode),
+        getMinSpotCount(durationMin)
+    );
+    return { ...course, travelMode: mode, spots: fitted, totalTime: computeTotalMinutes(fitted) };
+}
+
 /** 出発地・目的地のピンを作る */
 function makePin(
     kind: 'start' | 'end',
@@ -156,7 +172,7 @@ async function planRouteSearch(
                 );
                 if (lastDist > PIN_INSERT_THRESHOLD_M) spots.push(makePin('end', endGeo, destination!));
             }
-            return { ...course, travelMode: mode, spots: applyTravelTimes(spots, mode) };
+            return finalizeCourse(course, spots, duration, mode);
         });
 
     return { center, radius, candidates, images: toImages(candidates), locationName: query, enhance };
@@ -200,11 +216,7 @@ async function planAreaSearch(
         images: toImages(candidates),
         locationName: startGeo.name || '現在地周辺',
         enhance: (courses) =>
-            courses.map((course) => ({
-                ...course,
-                travelMode: mode,
-                spots: applyTravelTimes(course.spots, mode),
-            })),
+            courses.map((course) => finalizeCourse(course, course.spots, params.duration, mode)),
     };
 }
 

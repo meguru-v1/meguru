@@ -32,9 +32,43 @@ export function inferIsIndoor(types?: string[]): boolean | null {
     return null;
 }
 
-// ===== セッションキャッシュ（5分有効） =====
-const CACHE_TTL = 5 * 60 * 1000; // 5分
+// ===== スポット検索キャッシュ =====
+// Places の Nearby Search は1回 $0.04（Enterprise + Atmosphere 階層）で、
+// 1回の生成コストの大半を占める。店や公園の情報は数日で変わらないので、
+// localStorage に持たせて同じエリアの再検索を丸ごと省く。
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7日
+const STORAGE_KEY = 'meguru.placesCache.v1';
+const MAX_ENTRIES = 40;
+
 const placesCache = new Map<string, { data: any; timestamp: number }>();
+
+// 起動時に前回の内容を復元する
+try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        for (const [key, entry] of Object.entries(JSON.parse(saved) as Record<string, { data: any; timestamp: number }>)) {
+            if (Date.now() - entry.timestamp < CACHE_TTL) placesCache.set(key, entry);
+        }
+    }
+} catch { /* 壊れていたら無視して作り直す */ }
+
+const persist = () => {
+    try {
+        // 古いものから捨てて上限に収める
+        while (placesCache.size > MAX_ENTRIES) {
+            const oldest = placesCache.keys().next().value;
+            if (oldest === undefined) break;
+            placesCache.delete(oldest);
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(placesCache)));
+    } catch {
+        // 容量超過などで書けないときは古い分を捨てて諦める（メモリ上には残る）
+        try {
+            placesCache.clear();
+            localStorage.removeItem(STORAGE_KEY);
+        } catch { /* localStorage 自体が使えない環境 */ }
+    }
+};
 
 const getCached = (key: string) => {
     const entry = placesCache.get(key);
@@ -48,6 +82,7 @@ const getCached = (key: string) => {
 
 const setCache = (key: string, data: any) => {
     placesCache.set(key, { data, timestamp: Date.now() });
+    persist();
 };
 
 /**

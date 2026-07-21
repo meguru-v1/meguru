@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: 型チェック
+        run: npx tsc -b --noEmit
+
+      - name: テスト
+        run: npx vitest run
+
+      # 本番デプロイは Vercel の Git 連携が行うため、ここではビルドが通ることだけ確認する
+      - name: ビルド確認
+        run: npm run build
+        env:
+          VITE_GOOGLE_MAPS_API_KEY: dummy-key-for-build-check

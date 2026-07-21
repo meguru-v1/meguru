@@ -4,6 +4,9 @@ import { Map, AdvancedMarker, Pin, useMap, useMapsLibrary } from '@vis.gl/react-
 import type { Spot } from '../types';
 import { buildPlacePhotoUrl, safeImageUrl } from '../lib/safeUrl';
 
+// Cloud ベースの地図スタイルを使う場合は VITE_MAP_ID を設定する
+const MAP_ID = import.meta.env.VITE_MAP_ID || 'DEMO_MAP_ID';
+
 const CATEGORY_STYLES: Record<string, { icon: string, color: string, background: string }> = {
     'グルメ': { icon: '🍽️', color: '#fff', background: '#F59E0B' }, // amber-500
     'カフェ': { icon: '☕', color: '#fff', background: '#D97706' }, // amber-600
@@ -34,66 +37,32 @@ const getCategoryStyle = (category: string) => {
     return style;
 };
 
-// Route component connecting points via Directions API
-const DirectionsComponent = ({ spots, travelMode, onDirectionsLoaded }: { spots: Spot[], travelMode: string, onDirectionsLoaded?: (res: google.maps.DirectionsResult) => void }) => {
+// プロキシ経由の Routes API が返した経路線を描く。
+// ブラウザから Directions API は叩かない（公開APIキーの権限を最小化し、二重課金も避けるため）
+const RoutePolyline = ({ encodedPolyline }: { encodedPolyline?: string }) => {
     const map = useMap();
-    const routesLibrary = useMapsLibrary('routes');
-    const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService>();
-    const [directionsRenderer, setDirectionsRenderer] = useState<google.maps.DirectionsRenderer>();
-    const [routes, setRoutes] = useState<google.maps.DirectionsRoute[]>([]);
+    const geometry = useMapsLibrary('geometry');
 
-    // Initialize service and renderer
     useEffect(() => {
-        if (!routesLibrary || !map) return;
-        setDirectionsService(new routesLibrary.DirectionsService());
-        setDirectionsRenderer(new routesLibrary.DirectionsRenderer({
+        if (!map || !geometry || !encodedPolyline) return;
+
+        let path: google.maps.LatLng[];
+        try {
+            path = geometry.encoding.decodePath(encodedPolyline);
+        } catch (e) {
+            console.warn('[map] 経路線のデコードに失敗:', e);
+            return;
+        }
+
+        const line = new google.maps.Polyline({
+            path,
             map,
-            suppressMarkers: true, // We draw our own AdvancedMarkers
-            polylineOptions: {
-                strokeColor: '#3a3a3a',
-                strokeWeight: 4,
-                strokeOpacity: 0.8,
-            }
-        }));
-    }, [routesLibrary, map]);
-
-    // Request directions
-    const coordsHash = spots.map(s => `${s.lat},${s.lon}`).join('|');
-    
-    useEffect(() => {
-        if (!directionsService || !directionsRenderer || spots.length < 2) return;
-
-        let googleTravelMode = google.maps.TravelMode.WALKING;
-        if (travelMode === 'bicycle') googleTravelMode = google.maps.TravelMode.BICYCLING;
-        if (travelMode === 'car') googleTravelMode = google.maps.TravelMode.DRIVING;
-        if (travelMode === 'transit') googleTravelMode = google.maps.TravelMode.TRANSIT;
-
-        const origin = { lat: spots[0].lat, lng: spots[0].lon };
-        const destination = { lat: spots[spots.length - 1].lat, lng: spots[spots.length - 1].lon };
-        const waypoints = spots.slice(1, -1).map(spot => ({
-            location: { lat: spot.lat, lng: spot.lon },
-            stopover: true
-        }));
-
-        directionsService.route({
-            origin,
-            destination,
-            waypoints,
-            travelMode: googleTravelMode,
-        }).then((response: google.maps.DirectionsResult) => {
-            directionsRenderer.setDirections(response);
-            setRoutes(response.routes);
-            if (onDirectionsLoaded) {
-                onDirectionsLoaded(response);
-            }
-        }).catch((e: Error) => {
-            console.error('Directions routing failed:', e);
-            // Fallback clear
-            directionsRenderer.setDirections({ routes: [] } as any);
+            strokeColor: '#3a3a3a',
+            strokeWeight: 4,
+            strokeOpacity: 0.8,
         });
-
-        return () => { directionsRenderer.setDirections({ routes: [] } as any); }
-    }, [directionsService, directionsRenderer, coordsHash, travelMode]);
+        return () => { line.setMap(null); };
+    }, [map, geometry, encodedPolyline]);
 
     return null;
 };
@@ -103,11 +72,11 @@ interface MapVisualizationProps {
     radius: number; // For circle around center
     spots: Spot[];
     focusedSpot: Spot | null;
-    travelMode?: string;
-    onDirectionsLoaded?: (result: google.maps.DirectionsResult) => void;
+    /** Routes API 由来の経路線。未取得なら線は描かれない */
+    encodedPolyline?: string;
 }
 
-const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spots, focusedSpot, travelMode = "walk", onDirectionsLoaded }) => {
+const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spots, focusedSpot, encodedPolyline }) => {
     const defaultCenter = { lat: 35.6762, lng: 139.6503 }; // Tokyo default
     const mapCenter = center ? { lat: center.lat, lng: center.lon } : defaultCenter;
 
@@ -138,7 +107,7 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
             <Map
                 defaultZoom={14}
                 defaultCenter={mapCenter}
-                mapId="DEMO_MAP_ID" // Must have Map ID for AdvancedMarker!
+                mapId={MAP_ID} // AdvancedMarker には Map ID が必須
                 gestureHandling={'greedy'}
                 disableDefaultUI={false}
                 className="w-full h-full z-0"
@@ -228,7 +197,7 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({ center, radius, spo
                     );
                 })}
 
-                <DirectionsComponent spots={spots} travelMode={travelMode} onDirectionsLoaded={onDirectionsLoaded} />
+                <RoutePolyline encodedPolyline={encodedPolyline} />
             </Map>
         </div>
     );

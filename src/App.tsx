@@ -21,7 +21,7 @@ import { pushHistory, getHistory } from './lib/history';
 import { buildPlacePhotoUrl } from './lib/safeUrl';
 import { buildPreferenceContext } from './lib/preferences';
 import { pickReplacementSpot, pickInsertionSpot } from './lib/spotPicker';
-import { computeRoute } from './lib/directions';
+import { useRoutePath } from './hooks/useRoutePath';
 import { applyTravelTimes } from './lib/travelTime';
 import { getGoogleMapsUrl } from './lib/mapUrl';
 import { sendCompletionNotification, requestNotificationPermissionOnFirstInteraction } from './lib/notifications';
@@ -55,7 +55,6 @@ function App() {
     const [activeDayIndex, setActiveDayIndex] = useState(0);
     const [showAiChat, setShowAiChat] = useState(false);
     const [shareToastVisible, setShareToastVisible] = useState(false);
-    const [recomputingRoute, setRecomputingRoute] = useState(false);
     const [routeToastMsg, setRouteToastMsg] = useState<string | null>(null);
     const [lastSearchDuration, setLastSearchDuration] = useState(120);
     const [lastSearchMood, setLastSearchMood] = useState('不明');
@@ -72,6 +71,9 @@ function App() {
 
     const navSpots = selectedCourse?.spots ?? [];
     const { nav, startNavigation, stopNavigation, goToSpot } = useNavigation(navSpots);
+
+    // 経路（所要時間・距離・地図の線）は Routes API が唯一の情報源
+    const { route, loading: routeLoading, refresh: refreshRoute } = useRoutePath(navSpots, selectedCourse?.travelMode ?? 'walk');
 
     // 【05】離脱警告: 生成中にタブを閉じようとすると警告
     useEffect(() => {
@@ -529,48 +531,36 @@ function App() {
         </div>
     ) : null;
 
-    // ===== Directions API からのコールバック =====
-    const handleDirectionsLoaded = (result: google.maps.DirectionsResult) => {
-        if (!selectedCourse || !result.routes || result.routes.length === 0) return;
+    // ===== Routes API の実測値をコースに反映 =====
+    // 以前はこれをブラウザの Directions API でも別途行っていたため、
+    // 表示される所要時間と地図上の経路線が食い違うことがあった
+    useEffect(() => {
+        if (!route || !selectedCourse || selectedCourse.spots.length < 2) return;
 
-        const route = result.routes[0];
         let hasChanges = false;
-        let totalDistanceMeters = 0;
-        let totalTimeMinutes = 0;
-
         const newSpots = selectedCourse.spots.map((spot, index) => {
-            if (index === 0) return { ...spot, travel_time_minutes: 0 };
-            
             // leg は区間を表す。spots[index] に到達するための区間は legs[index - 1]
-            const leg = route.legs[index - 1];
-            if (!leg || !leg.duration || !leg.distance) return spot;
-
-            totalDistanceMeters += leg.distance.value;
-            const newTravelTime = Math.ceil(leg.duration.value / 60);
-            
-            if (spot.travel_time_minutes !== newTravelTime) {
-                hasChanges = true;
-            }
+            const newTravelTime = index === 0 ? 0 : route.legs[index - 1]?.durationMin;
+            if (newTravelTime === undefined) return spot;
+            if (spot.travel_time_minutes !== newTravelTime) hasChanges = true;
             return { ...spot, travel_time_minutes: newTravelTime };
         });
+        if (!hasChanges) return;
 
-        if (hasChanges) {
-            // スポットの滞在時間も含めた総時間を再計算
-            const stayTimeSum = newSpots.reduce((acc, spot) => acc + (spot.stayTime || spot.estimatedStayTime || 30), 0);
-            const moveTimeSum = newSpots.reduce((acc, spot) => acc + (spot.travel_time_minutes || 0), 0);
-            const totalDistanceKm = Number((totalDistanceMeters / 1000).toFixed(1));
+        // スポットの滞在時間も含めた総時間を再計算
+        const stayTimeSum = newSpots.reduce((acc, spot) => acc + (spot.stayTime || spot.estimatedStayTime || 30), 0);
+        const moveTimeSum = newSpots.reduce((acc, spot) => acc + (spot.travel_time_minutes || 0), 0);
 
-            const enhancedCourse = {
-                ...selectedCourse,
-                spots: newSpots,
-                totalTime: stayTimeSum + moveTimeSum,
-                totalDistance: totalDistanceKm
-            };
+        const enhancedCourse: Course = {
+            ...selectedCourse,
+            spots: newSpots,
+            totalTime: stayTimeSum + moveTimeSum,
+            totalDistance: Number((route.totalDistanceM / 1000).toFixed(1)),
+        };
 
-            setSelectedCourse(enhancedCourse);
-            setCourses(prev => prev.map(c => c.id === enhancedCourse.id ? enhancedCourse : c));
-        }
-    };
+        setSelectedCourse(enhancedCourse);
+        setCourses(prev => prev.map(c => c.id === enhancedCourse.id ? enhancedCourse : c));
+    }, [route, selectedCourse]);
 
     // CourseCard のお気に入りトグル
     const toggleFavorite = (course: Course) => {
@@ -578,37 +568,19 @@ function App() {
         else addFavorite(course);
     };
 
-    // 実移動時間で再計算（Routes API）
+    // 実移動時間で再計算（キャッシュを無視して取り直す）。コースへの反映は上の useEffect が行う
     const handleRecomputeRoute = async () => {
         if (!selectedCourse || selectedCourse.spots.length < 2) return;
-        setRecomputingRoute(true);
-        try {
-            const result = await computeRoute(selectedCourse.spots, selectedCourse.travelMode || 'walk');
-            if (!result) {
-                setRouteToastMsg('実移動時間の取得に失敗しました');
-                setTimeout(() => setRouteToastMsg(null), 2500);
-                return;
-            }
-            const newSpots = selectedCourse.spots.map((spot, i) => {
-                if (i === 0) return { ...spot, travel_time_minutes: 0 };
-                const leg = result.legs[i - 1];
-                return leg ? { ...spot, travel_time_minutes: leg.durationMin } : spot;
-            });
-            const stayTimeSum = newSpots.reduce((acc, s) => acc + (s.stayTime || s.estimatedStayTime || 30), 0);
-            const moveTimeSum = newSpots.reduce((acc, s) => acc + (s.travel_time_minutes || 0), 0);
-            const updated: Course = {
-                ...selectedCourse,
-                spots: newSpots,
-                totalTime: stayTimeSum + moveTimeSum,
-                totalDistance: Number((result.totalDistanceM / 1000).toFixed(1)),
-            };
-            setSelectedCourse(updated);
-            setCourses(prev => prev.map(c => c.id === updated.id ? updated : c));
-            setRouteToastMsg(`実移動時間で更新（合計 ${updated.totalTime}分 / ${updated.totalDistance}km）`);
+        const result = await refreshRoute();
+        if (!result) {
+            setRouteToastMsg('実移動時間の取得に失敗しました');
             setTimeout(() => setRouteToastMsg(null), 2500);
-        } finally {
-            setRecomputingRoute(false);
+            return;
         }
+        const stayTimeSum = selectedCourse.spots.reduce((acc, s) => acc + (s.stayTime || s.estimatedStayTime || 30), 0);
+        const totalKm = (result.totalDistanceM / 1000).toFixed(1);
+        setRouteToastMsg(`実移動時間で更新（合計 ${stayTimeSum + result.totalDurationMin}分 / ${totalKm}km）`);
+        setTimeout(() => setRouteToastMsg(null), 2500);
     };
 
     // スポットを並び替え（D&D後の確定）
@@ -920,10 +892,10 @@ function App() {
                                 className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95">
                                 <MapIcon size={14} /> 地図で見る
                             </button>
-                            <button onClick={handleRecomputeRoute} disabled={recomputingRoute}
+                            <button onClick={handleRecomputeRoute} disabled={routeLoading}
                                 className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95 disabled:opacity-50">
-                                {recomputingRoute ? <Loader2 size={14} className="animate-spin" /> : <RouteIcon size={14} />}
-                                {recomputingRoute ? '計算中...' : '実移動時間'}
+                                {routeLoading ? <Loader2 size={14} className="animate-spin" /> : <RouteIcon size={14} />}
+                                {routeLoading ? '計算中...' : '実移動時間'}
                             </button>
                         </div>
                     </div>
@@ -1108,10 +1080,9 @@ function App() {
             <MapVisualization 
                 center={center} 
                 radius={radius} 
-                spots={selectedCourse ? selectedCourse.spots : []} 
-                focusedSpot={focusedSpot} 
-                travelMode={selectedCourse?.travelMode} 
-                onDirectionsLoaded={handleDirectionsLoaded}
+                spots={selectedCourse ? selectedCourse.spots : []}
+                focusedSpot={focusedSpot}
+                encodedPolyline={route?.encodedPolyline}
             />
         </div>
     );

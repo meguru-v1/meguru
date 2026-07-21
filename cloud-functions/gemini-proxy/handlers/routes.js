@@ -42,8 +42,9 @@ export async function computeRoutes(req, res) {
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": MAPS_KEY,
+      // polyline も返す（クライアントで Directions API を別途叩かないため）
       "X-Goog-FieldMask":
-        "routes.duration,routes.distanceMeters,routes.legs.duration,routes.legs.distanceMeters",
+        "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.duration,routes.legs.distanceMeters",
     },
     body: JSON.stringify(payload),
   });

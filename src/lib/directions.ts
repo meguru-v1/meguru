@@ -51,6 +51,7 @@ export async function computeRoute(
             legs,
             totalDurationMin: Math.max(1, Math.ceil(totalDurSec / 60)),
             totalDistanceM: route.distanceMeters || 0,
+            encodedPolyline: route.polyline?.encodedPolyline,
         };
     } catch (e) {
         console.warn('[directions] Compute route exception:', e);

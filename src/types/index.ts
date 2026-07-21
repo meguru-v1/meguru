@@ -161,6 +161,8 @@ export interface RouteComputeResult {
     legs: RouteLegResult[];
     totalDurationMin: number;
     totalDistanceM: number;
+    /** 地図に描く経路線（Routes API のエンコード済みポリライン） */
+    encodedPolyline?: string;
 }
 
 // ===== ナビゲーション =====
